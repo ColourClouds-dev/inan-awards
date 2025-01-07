@@ -165,6 +165,16 @@ const AwardNominations = () => {
     }
 
     try {
+      // Check if this email has already submitted nominations
+      const docRef = doc(db, 'nominations', email);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        setError('You have already submitted your nominations.');
+        setSubmitted(true);
+        return;
+      }
+
       const submission = {
         nominations,
         email,
@@ -172,7 +182,7 @@ const AwardNominations = () => {
       };
 
       // Save to Firestore using email as document ID
-      await setDoc(doc(db, 'nominations', email), submission);
+      await setDoc(docRef, submission);
       
       // Clear local storage and update state
       localStorage.removeItem('nominations');
@@ -182,11 +192,7 @@ const AwardNominations = () => {
       triggerConfetti();
     } catch (error: any) {
       console.error('Error submitting nominations:', error);
-      if (error.code === 'permission-denied') {
-        setError('You have already submitted your nominations.');
-      } else {
-        setError('Failed to submit nominations. Please try again.');
-      }
+      setError('Failed to submit nominations. Please try again.');
     }
   };
 
@@ -205,8 +211,10 @@ const AwardNominations = () => {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="card text-center w-full max-w-md mx-auto">
-          <h2 className="text-3xl font-bold text-red-600 mb-4">Error</h2>
+          <img src="/staff-awards.svg" alt="INAN Logo" className="h-32 mb-8 mx-auto drop-shadow-lg" />
+          <h2 className="text-3xl font-bold text-red-600 mb-4">Already Submitted</h2>
           <p className="text-gray-600 text-lg">{error}</p>
+          <p className="text-gray-500 mt-4">Thank you for your interest in the INAN Awards!</p>
         </div>
       </div>
     );
@@ -242,7 +250,7 @@ const AwardNominations = () => {
               </p>
             </div>
             
-            <form className="space-y-6" onSubmit={(e) => {
+            <form className="space-y-6" onSubmit={async (e) => {
               e.preventDefault();
               const employeeEmail = employees.find(emp => emp.Email.toLowerCase() === email.toLowerCase());
               if (!employeeEmail) {
@@ -253,8 +261,25 @@ const AwardNominations = () => {
                 setEmailError('Please use your INAN company email (@inan.com.ng)');
                 return;
               }
-              setEmailVerified(true);
-              setEmailError(null);
+
+              try {
+                // Check if this email has already submitted nominations
+                const docRef = doc(db, 'nominations', email);
+                const docSnap = await getDoc(docRef);
+                
+                if (docSnap.exists()) {
+                  setError('You have already submitted your nominations.');
+                  setSubmitted(true);
+                  return;
+                }
+
+                // If no previous submission, allow proceeding
+                setEmailVerified(true);
+                setEmailError(null);
+              } catch (error) {
+                console.error('Error checking previous submission:', error);
+                setEmailError('Error verifying email. Please try again.');
+              }
             }}>
               <div className="space-y-2">
                 <Input
