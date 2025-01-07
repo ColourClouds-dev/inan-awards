@@ -1,5 +1,15 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
-import * as XLSX from 'xlsx';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import type { Employee } from '../types';
+import Button from './Button';
+import Input from './Input';
+
+interface Nominations {
+  [key: number]: string;
+}
 
 const categories = [
   {
@@ -9,7 +19,7 @@ const categories = [
   },
   {
     id: 2,
-    title: "Most Customer-Oriented Staff of the Year",
+    title: "Most Customer-Oriented Staff of the Year", 
     description: "Staff who provided exceptional customer service"
   },
   {
@@ -56,38 +66,65 @@ const categories = [
 
 const AwardNominations = () => {
   const [currentStep, setCurrentStep] = useState(0);
-  const [nominations, setNominations] = useState({});
+  const [nominations, setNominations] = useState<Nominations>({});
   const [submitted, setSubmitted] = useState(false);
-  const [employees, setEmployees] = useState([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState('');
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+
+  // Check if user has already submitted when email is verified
+  useEffect(() => {
+    const checkPreviousSubmission = async () => {
+      if (email && emailVerified) {
+        try {
+          const docRef = doc(db, 'nominations', email);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setSubmitted(true);
+            setError('You have already submitted your nominations.');
+          }
+        } catch (error) {
+          console.error('Error checking previous submission:', error);
+        }
+      }
+    };
+
+    checkPreviousSubmission();
+  }, [email, emailVerified]);
 
   useEffect(() => {
     const loadEmployees = async () => {
       try {
-        const response = await window.fs.readFile('employees20250105164648.xlsx');
-        const workbook = XLSX.read(response);
-        const firstSheetName = workbook.SheetNames[0];
-        const employeeList = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName]);
+        const response = await fetch('/employees.json');
+        const employeeList: Employee[] = await response.json();
         
-        // Sort employees by name
         const sortedEmployees = employeeList
-          .filter(emp => emp.Status === 'Active')
-          .sort((a, b) => a.Employee.localeCompare(b.Employee));
+          .filter((emp: Employee) => emp.Status === 'Active')
+          .sort((a: Employee, b: Employee) => a.Employee.localeCompare(b.Employee));
         
         setEmployees(sortedEmployees);
-        setLoading(false);
+        setError(null);
       } catch (error) {
         console.error('Error loading employees:', error);
+        setError('Failed to load employee data. Please try again later.');
+      } finally {
         setLoading(false);
       }
     };
 
     loadEmployees();
 
-    // Load any existing nominations from localStorage
     const savedNominations = localStorage.getItem('nominations');
     if (savedNominations) {
-      setNominations(JSON.parse(savedNominations));
+      try {
+        setNominations(JSON.parse(savedNominations));
+      } catch (error) {
+        console.error('Error parsing saved nominations:', error);
+        localStorage.removeItem('nominations');
+      }
     }
   }, []);
 
@@ -105,25 +142,47 @@ const AwardNominations = () => {
     }
   };
 
-  const handleSubmit = () => {
-    // Store final submission in localStorage with timestamp
-    const submission = {
-      nominations,
-      timestamp: new Date().toISOString()
-    };
-    localStorage.setItem('submittedNominations', JSON.stringify(submission));
-    setSubmitted(true);
-    
-    // Clear the in-progress nominations
-    localStorage.removeItem('nominations');
+  const handleSubmit = async () => {
+    try {
+      const submission = {
+        nominations,
+        email,
+        timestamp: serverTimestamp()
+      };
+
+      // Save to Firestore using email as document ID
+      await setDoc(doc(db, 'nominations', email), submission);
+      
+      // Clear local storage and update state
+      localStorage.removeItem('nominations');
+      setSubmitted(true);
+    } catch (error: any) {
+      console.error('Error submitting nominations:', error);
+      if (error.code === 'permission-denied') {
+        setError('You have already submitted your nominations.');
+      } else {
+        setError('Failed to submit nominations. Please try again.');
+      }
+    }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center p-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="card text-center w-full max-w-md mx-auto">
+          <div className="animate-spin rounded-full h-14 w-14 border-b-3 border-blue-600 mx-auto"></div>
+          <p className="mt-6 text-gray-600 text-xl">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="card text-center w-full max-w-md mx-auto">
+          <h2 className="text-3xl font-bold text-red-600 mb-4">Error</h2>
+          <p className="text-gray-600 text-lg">{error}</p>
         </div>
       </div>
     );
@@ -131,10 +190,11 @@ const AwardNominations = () => {
 
   if (submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center p-8">
-          <h2 className="text-2xl font-bold text-green-600 mb-4">Thank you for your nominations!</h2>
-          <p className="text-gray-600">Your responses have been recorded.</p>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="card text-center w-full max-w-md mx-auto">
+          <img src="/staff-awards.svg" alt="INAN Logo" className="h-32 mb-8 mx-auto drop-shadow-lg" />
+          <h2 className="text-3xl font-bold text-green-600 mb-4">Thank you for your nominations!</h2>
+          <p className="text-gray-600 text-lg">Your nominations have been entered.</p>
         </div>
       </div>
     );
@@ -144,71 +204,126 @@ const AwardNominations = () => {
   const selectedNominee = nominations[currentCategory.id];
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-2xl w-full p-8">
-        <div className="mb-8">
-          <div className="h-2 bg-gray-200 rounded-full">
-            <div 
-              className="h-2 bg-blue-600 rounded-full transition-all duration-300"
-              style={{ width: `${((currentStep + 1) / categories.length) * 100}%` }}
-            />
-          </div>
-          <div className="mt-2 text-sm text-gray-600 text-right">
-            {currentStep + 1} of {categories.length}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <h2 className="text-2xl font-bold mb-2">{currentCategory.title}</h2>
-          <p className="text-gray-600 mb-6">{currentCategory.description}</p>
-
-          <div className="space-y-4">
-            <select
-              value={selectedNominee || ''}
-              onChange={(e) => handleNomination(currentCategory.id, e.target.value)}
-              className="w-full p-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Select an employee</option>
-              {employees.map((emp) => (
-                <option key={emp['Employee ID']} value={emp.Employee}>
-                  {emp.Employee}
-                </option>
-              ))}
-            </select>
-
-            <div className="flex justify-between mt-6">
-              {currentStep > 0 && (
-                <button
-                  onClick={() => setCurrentStep(prev => prev - 1)}
-                  className="px-6 py-2 text-gray-600 hover:text-gray-800"
-                >
-                  Back
-                </button>
-              )}
-              {currentStep === categories.length - 1 ? (
-                <button
-                  onClick={handleSubmit}
-                  disabled={!selectedNominee}
-                  className={`px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ml-auto ${
-                    !selectedNominee ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                >
-                  Submit
-                </button>
-              ) : (
-                <button
-                  onClick={() => setCurrentStep(prev => prev + 1)}
-                  disabled={!selectedNominee}
-                  className={`px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 ml-auto ${
-                    !selectedNominee ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                >
-                  Next
-                </button>
-              )}
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="w-full max-w-2xl mx-auto">
+        {!emailVerified ? (
+          <div className="card max-w-md mx-auto">
+            <div className="flex flex-col items-center mb-10">
+              <img src="/staff-awards.svg" alt="INAN Logo" className="h-32 mb-8 drop-shadow-xl" />
+              <h3 className="text-2xl font-bold text-gray-800 mb-4">Thank you for Your Service.</h3>
+              <p className="text-gray-600 text-center text-xl leading-relaxed">
+                Please enter your INAN company email to proceed with nominations.
+              </p>
             </div>
+            
+            <form className="space-y-6" onSubmit={(e) => {
+              e.preventDefault();
+              const employeeEmail = employees.find(emp => emp.Email.toLowerCase() === email.toLowerCase());
+              if (!employeeEmail) {
+                setEmailError('Email not found in employee records');
+                return;
+              }
+              if (!email.endsWith('@inan.com.ng')) {
+                setEmailError('Please use your INAN company email (@inan.com.ng)');
+                return;
+              }
+              setEmailVerified(true);
+              setEmailError(null);
+            }}>
+              <div className="space-y-2">
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setEmailError(null);
+                  }}
+                  placeholder="Enter your @inan.com.ng email"
+                  error={emailError}
+                  required
+                />
+              </div>
+              <Button type="submit">
+                Verify Email
+              </Button>
+            </form>
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="space-y-8">
+              <div>
+                <div className="progress-bar">
+                  <div 
+                    className="progress-bar-fill"
+                    style={{ width: `${((currentStep + 1) / categories.length) * 100}%` }}
+                  />
+                </div>
+                <div className="mt-3 text-sm text-gray-600 text-right">
+                  {currentStep + 1} of {categories.length}
+                </div>
+              </div>
+
+              <div className="card">
+                <h2 className="text-3xl font-bold mb-3">{currentCategory.title}</h2>
+                <p className="text-gray-600 text-lg leading-relaxed mb-8">
+                  {currentCategory.description}
+                </p>
+
+                <div className="space-y-8">
+                  <Input
+                    as="select"
+                    value={selectedNominee || ''}
+                    onChange={(e) => handleNomination(currentCategory.id, e.target.value)}
+                  >
+                    <option value="">Select an employee</option>
+                    {employees
+                      .filter(emp => {
+                        // For Best Front Desk Staff category, only show front desk staff
+                        if (currentCategory.id === 4) {
+                          return emp.Role === 'Front Desk';
+                        }
+                        // For other categories, exclude wait staff
+                        return emp.Role !== 'Wait Staff';
+                      })
+                      .map((emp) => (
+                        <option key={emp['Employee ID']} value={emp.Employee}>
+                          {emp.Employee} [{emp.Role}]
+                        </option>
+                      ))}
+                  </Input>
+
+                  <div className="flex justify-between items-center space-x-4">
+                    {currentStep > 0 && (
+                      <Button
+                        onClick={() => setCurrentStep(prev => prev - 1)}
+                        variant="secondary"
+                      >
+                        Back
+                      </Button>
+                    )}
+                    {currentStep === categories.length - 1 ? (
+                      <Button
+                        onClick={handleSubmit}
+                        disabled={!selectedNominee}
+                        className="ml-auto"
+                      >
+                        Submit Nominations
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => setCurrentStep(prev => prev + 1)}
+                        disabled={!selectedNominee}
+                        className="ml-auto"
+                      >
+                        Next Category
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

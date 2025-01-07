@@ -1,0 +1,35 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Admin has full access
+    function isAdmin() {
+      return request.auth != null && request.auth.email == 'adminaccess@inan.com.ng';
+    }
+
+    // Check if user has already submitted a nomination
+    function hasNotSubmitted() {
+      return !exists(/databases/$(database)/documents/nominations/$(request.auth.email));
+    }
+
+    // Allow admin full access to all documents
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // Allow authenticated users to read settings
+    match /settings/{document} {
+      allow read: if request.auth != null;
+    }
+
+    // Allow authenticated users to read all nominations for dashboard
+    // But only allow creation if they haven't submitted before
+    match /nominations/{userId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null 
+                   && hasNotSubmitted()
+                   && userId == request.auth.email;
+      allow update, delete: if isAdmin();
+    }
+  }
+}
