@@ -83,8 +83,12 @@ const AwardNominations = () => {
           const docRef = doc(db, 'nominations', email);
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
-            setSubmitted(true);
-            setError('You have already submitted your nominations.');
+            const data = docSnap.data();
+            // Only set as submitted if there's actual nomination data
+            if (data && data.nominations && Object.keys(data.nominations).length > 0) {
+              setSubmitted(true);
+              setError('You have already submitted your nominations.');
+            }
           }
         } catch (error) {
           console.error('Error checking previous submission:', error);
@@ -177,7 +181,7 @@ const AwardNominations = () => {
     );
   }
 
-  if (error) {
+  if (error && submitted) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="card text-center w-full max-w-md mx-auto">
