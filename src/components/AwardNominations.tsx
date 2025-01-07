@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import confetti from 'canvas-confetti';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { Employee } from '../types';
@@ -146,7 +147,47 @@ const AwardNominations = () => {
     }
   };
 
+  const triggerConfetti = useCallback(() => {
+    const duration = 3000;
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+    function randomInRange(min: number, max: number) {
+      return Math.random() * (max - min) + min;
+    }
+
+    const interval: any = setInterval(function() {
+      const timeLeft = duration;
+
+      if (timeLeft <= 0) {
+        return clearInterval(interval);
+      }
+
+      const particleCount = 50;
+
+      confetti({
+        ...defaults,
+        particleCount,
+        origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
+      });
+      confetti({
+        ...defaults,
+        particleCount,
+        origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
+      });
+    }, 250);
+
+    // Cleanup interval after duration
+    setTimeout(() => clearInterval(interval), duration);
+  }, []);
+
   const handleSubmit = async () => {
+    // Verify all nominations are complete
+    const totalNominations = Object.keys(nominations).length;
+    if (totalNominations < categories.length) {
+      setError('Please complete all nominations before submitting.');
+      return;
+    }
+
     try {
       const submission = {
         nominations,
@@ -160,6 +201,9 @@ const AwardNominations = () => {
       // Clear local storage and update state
       localStorage.removeItem('nominations');
       setSubmitted(true);
+      
+      // Trigger confetti celebration
+      triggerConfetti();
     } catch (error: any) {
       console.error('Error submitting nominations:', error);
       if (error.code === 'permission-denied') {
@@ -195,10 +239,12 @@ const AwardNominations = () => {
   if (submitted) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="card text-center w-full max-w-md mx-auto">
+        <div className="card text-center w-full max-w-md mx-auto relative">
+          <div className="absolute inset-0 bg-white/50 backdrop-blur-sm rounded-lg -z-10"></div>
           <img src="/staff-awards.svg" alt="INAN Logo" className="h-32 mb-8 mx-auto drop-shadow-lg" />
           <h2 className="text-3xl font-bold text-green-600 mb-4">Thank you for your nominations!</h2>
-          <p className="text-gray-600 text-lg">Your nominations have been entered.</p>
+          <p className="text-gray-600 text-lg">Your nominations have been successfully submitted.</p>
+          <p className="text-gray-500 mt-4">We appreciate your participation in the INAN Awards!</p>
         </div>
       </div>
     );
