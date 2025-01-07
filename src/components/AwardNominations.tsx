@@ -76,30 +76,6 @@ const AwardNominations = () => {
   const [emailVerified, setEmailVerified] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
 
-  // Check if user has already submitted when email is verified
-  useEffect(() => {
-    const checkPreviousSubmission = async () => {
-      if (email && emailVerified) {
-        try {
-          const docRef = doc(db, 'nominations', email);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            // Only set as submitted if there's actual nomination data
-            if (data && data.nominations && Object.keys(data.nominations).length > 0) {
-              setSubmitted(true);
-              setError('You have already submitted your nominations.');
-            }
-          }
-        } catch (error) {
-          console.error('Error checking previous submission:', error);
-        }
-      }
-    };
-
-    checkPreviousSubmission();
-  }, [email, emailVerified]);
-
   useEffect(() => {
     const loadEmployees = async () => {
       try {
