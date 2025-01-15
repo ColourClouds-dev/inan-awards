@@ -36,12 +36,12 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ user }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-50 flex items-center justify-center px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg">
         <div className="text-center">
-          <div className="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-blue-100">
+          <div className="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-purple-100">
             <svg
-              className="h-8 w-8 text-blue-600"
+              className="h-8 w-8 text-purple-600"
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
@@ -58,16 +58,16 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ user }) => {
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900">Verify your email</h2>
           <p className="mt-2 text-sm text-gray-600">
             We've sent a verification email to{' '}
-            <span className="font-medium text-blue-600">{user.email}</span>
+            <span className="font-medium text-purple-600">{user.email}</span>
           </p>
         </div>
 
         <div className="mt-8 space-y-6">
-          <div className="rounded-md bg-blue-50 p-4">
+          <div className="rounded-md bg-purple-50 p-4">
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg
-                  className="h-5 w-5 text-blue-400"
+                  className="h-5 w-5 text-purple-400"
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 20 20"
                   fill="currentColor"
@@ -80,7 +80,7 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ user }) => {
                 </svg>
               </div>
               <div className="ml-3 flex-1 md:flex md:justify-between">
-                <p className="text-sm text-blue-700">
+                <p className="text-sm text-purple-700">
                   Please check your email and click the verification link to continue.
                 </p>
               </div>
@@ -143,7 +143,7 @@ const EmailVerification: React.FC<EmailVerificationProps> = ({ user }) => {
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-500">
               Contact support at{' '}
-              <a href="mailto:support@inan.com.ng" className="font-medium text-blue-600 hover:text-blue-500">
+              <a href="mailto:support@inan.com.ng" className="font-medium text-purple-600 hover:text-purple-500">
                 support@inan.com.ng
               </a>
             </p>

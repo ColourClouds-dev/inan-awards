@@ -200,7 +200,7 @@ const AwardNominations = () => {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="card text-center w-full max-w-md mx-auto">
-          <div className="animate-spin rounded-full h-14 w-14 border-b-3 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-14 w-14 border-b-3 border-purple-600 mx-auto"></div>
           <p className="mt-6 text-gray-600 text-xl">Loading...</p>
         </div>
       </div>

@@ -86,7 +86,7 @@ export default function FeedbackDashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
       </div>
     );
   }
@@ -137,7 +137,7 @@ export default function FeedbackDashboardPage() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as 'date' | 'location')}
-              className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-10 p-2"
+              className="rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 h-10 p-2"
             >
               <option value="date">Sort by Date</option>
               <option value="location">Sort by Location</option>
@@ -151,7 +151,7 @@ export default function FeedbackDashboardPage() {
             <select
               value={locationFilter}
               onChange={(e) => setLocationFilter(e.target.value)}
-              className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-10 p-2"
+              className="rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 h-10 p-2"
             >
               <option value="all">All Locations</option>
               <option value="Qaras Hotels: House 3">House 3</option>
@@ -188,7 +188,7 @@ export default function FeedbackDashboardPage() {
           <h2 className="text-xl font-semibold mb-4">Active Forms</h2>
           <div className="space-y-4">
             {forms.filter(form => form.isActive).map(form => (
-              <div key={form.id} className="border rounded-lg p-4 hover:border-blue-500 transition-colors">
+              <div key={form.id} className="border rounded-lg p-4 hover:border-purple-500 transition-colors">
                 <h3 className="font-medium">{form.title}</h3>
                 <p className="text-sm text-gray-600 mb-3">{form.location}</p>
                 <div className="flex items-center space-x-4">
@@ -196,7 +196,7 @@ export default function FeedbackDashboardPage() {
                     href={`/feedback/${form.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
+                    className="text-purple-600 hover:text-purple-800 text-sm flex items-center"
                   >
                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -209,7 +209,7 @@ export default function FeedbackDashboardPage() {
                       const url = `${window.location.origin}/feedback/${form.id}`;
                       setShowQR({ id: form.id, url });
                     }}
-                    className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
+                    className="text-purple-600 hover:text-purple-800 text-sm flex items-center"
                   >
                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />

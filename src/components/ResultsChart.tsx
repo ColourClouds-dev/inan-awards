@@ -74,7 +74,7 @@ const ResultsChart = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
       </div>
     );
   }
@@ -107,7 +107,7 @@ const ResultsChart = () => {
           id="category"
           value={selectedCategory}
           onChange={(e) => setSelectedCategory(parseInt(e.target.value))}
-          className="mt-1 block w-full rounded-md bg-slate-50 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 h-12 p-2"
+          className="mt-1 block w-full rounded-md bg-slate-50 border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 h-12 p-2"
         >
           {categories.map((category) => (
             <option key={category.id} value={category.id}>

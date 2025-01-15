@@ -83,7 +83,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
         {form.questions.map((question, index) => (
           <div key={question.id} className="bg-white rounded-lg shadow-lg p-6">
             <div className="flex items-start mb-4">
-              <span className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold">
+              <span className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-semibold">
                 {index + 1}
               </span>
               <div className="ml-4 flex-grow">
@@ -102,7 +102,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
                           onClick={() => handleInputChange(question.id, rating)}
                           className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-medium transition-all transform hover:scale-110
                             ${responses[question.id] === rating
-                              ? 'bg-blue-600 text-white shadow-lg'
+                              ? 'bg-purple-600 text-white shadow-lg'
                               : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                             }`}
                         >
@@ -136,7 +136,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
                         key={optIndex}
                         className={`flex items-center p-3 rounded-lg border-2 transition-all cursor-pointer
                           ${responses[question.id] === option
-                            ? 'border-blue-500 bg-blue-50'
+                            ? 'border-purple-500 bg-purple-50'
                             : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                           }`}
                       >
@@ -146,7 +146,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
                           value={option}
                           checked={responses[question.id] === option}
                           onChange={(e) => handleInputChange(question.id, e.target.value)}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                          className="h-4 w-4 text-purple-600 focus:ring-purple-500"
                           required={question.required}
                         />
                         <span className="ml-3 text-gray-700">{option}</span>

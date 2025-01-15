@@ -173,7 +173,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
                   type="radio"
                   name={question.id}
                   disabled
-                  className="h-4 w-4 text-blue-600"
+                  className="h-4 w-4 text-purple-600"
                 />
                 <span className="text-gray-700">{option}</span>
               </label>
@@ -239,7 +239,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
               <button
                 key={type}
                 onClick={() => addQuestion(type as FeedbackQuestion['type'])}
-                className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors text-left"
+                className="p-4 border-2 border-gray-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors text-left"
               >
                 <div className="text-2xl mb-2">{info.icon}</div>
                 <h3 className="font-medium">{info.label}</h3>
@@ -325,7 +325,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
                       type="checkbox"
                       checked={question.required}
                       onChange={(e) => updateQuestion(question.id, { required: e.target.checked })}
-                      className="h-4 w-4 text-blue-600"
+                      className="h-4 w-4 text-purple-600"
                     />
                     <span className="text-sm text-gray-600">Required question</span>
                   </div>
@@ -373,8 +373,8 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
           <h1 className="text-2xl font-bold">Create Feedback Form</h1>
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
-              <div className={`h-3 w-3 rounded-full ${currentStep === 'basics' ? 'bg-blue-600' : 'bg-gray-300'}`} />
-              <div className={`h-3 w-3 rounded-full ${currentStep === 'questions' ? 'bg-blue-600' : 'bg-gray-300'}`} />
+              <div className={`h-3 w-3 rounded-full ${currentStep === 'basics' ? 'bg-purple-600' : 'bg-gray-300'}`} />
+              <div className={`h-3 w-3 rounded-full ${currentStep === 'questions' ? 'bg-purple-600' : 'bg-gray-300'}`} />
             </div>
           </div>
         </div>

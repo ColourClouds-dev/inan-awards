@@ -21,7 +21,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} font-sans antialiased`}>
-        <div className="min-h-screen bg-gradient-to-br from-blue-100 via-white to-blue-50">
+        <div className="min-h-screen bg-gradient-to-br from-purple-100 via-white to-purple-50">
           <div className="min-h-screen mx-auto relative">
             {children}
             <Link href="/login" className="fixed bottom-4 left-4 p-2 rounded-full bg-white/80 hover:bg-white shadow-md transition-all duration-200">
