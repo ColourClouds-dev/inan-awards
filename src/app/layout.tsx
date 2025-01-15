@@ -9,8 +9,8 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: 'INAN Awards',
-  description: 'INAN Awards Platform',
+  title: 'INAN Feedback',
+  description: 'INAN Feedback Platform',
 };
 
 export default function RootLayout({

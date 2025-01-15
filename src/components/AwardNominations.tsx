@@ -214,7 +214,7 @@ const AwardNominations = () => {
           <img src="/staff-awards.svg" alt="INAN Logo" className="h-32 mb-8 mx-auto drop-shadow-lg" />
           <h2 className="text-3xl font-bold text-red-600 mb-4">Already Submitted</h2>
           <p className="text-gray-600 text-lg">{error}</p>
-          <p className="text-gray-500 mt-4">Thank you for your interest in the INAN Awards!</p>
+          <p className="text-gray-500 mt-4">Thank you for your interest in the INAN Feedback!</p>
         </div>
       </div>
     );
@@ -228,7 +228,7 @@ const AwardNominations = () => {
           <img src="/staff-awards.svg" alt="INAN Logo" className="h-32 mb-8 mx-auto drop-shadow-lg" />
           <h2 className="text-3xl font-bold text-green-600 mb-4">Thank you for your nominations!</h2>
           <p className="text-gray-600 text-lg">Your nominations have been successfully submitted.</p>
-          <p className="text-gray-500 mt-4">We appreciate your participation in the INAN Awards!</p>
+          <p className="text-gray-500 mt-4">We appreciate your participation in the INAN Feedback!</p>
         </div>
       </div>
     );

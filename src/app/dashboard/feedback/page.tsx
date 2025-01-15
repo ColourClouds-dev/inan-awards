@@ -160,16 +160,16 @@ export default function FeedbackDashboardPage() {
           </div>
           <div className="flex space-x-4">
             <Button
-             className="rounded-md h-10 text-sm"
+             className="rounded-md h-10 text-xs"
               onClick={() => {
                 const csvData = formatFeedbackForCSV(responses);
                 exportToCSV(csvData, `feedback-responses-${new Date().toISOString().split('T')[0]}.csv`);
               }}
             >
-              ExportCSV
+              Export CSV
             </Button>
             <Button 
-             className="rounded-md h-10 text-sm"
+             className="rounded-md h-10 text-xs"
              onClick={() => setShowBuilder(true)}>
               New Form
             </Button>
