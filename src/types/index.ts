@@ -1,5 +1,32 @@
 import { Timestamp } from 'firebase/firestore';
 
+export interface FeedbackForm {
+  id: string;
+  title: string;
+  location: string;
+  questions: FeedbackQuestion[];
+  createdAt: Date | Timestamp;
+  isActive: boolean;
+}
+
+export interface FeedbackQuestion {
+  id: string;
+  type: 'rating' | 'text' | 'multiChoice';
+  question: string;
+  options?: string[];
+  required: boolean;
+}
+
+export interface FeedbackResponse {
+  id: string;
+  formId: string;
+  location: string;
+  responses: {
+    [questionId: string]: string | number;
+  };
+  submittedAt: Date | Timestamp;
+}
+
 export interface SurveySettings {
   startDate: Date | Timestamp;
   endDate: Date | Timestamp;
