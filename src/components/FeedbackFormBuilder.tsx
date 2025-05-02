@@ -3,12 +3,21 @@
 import React, { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { QRCodeSVG } from 'qrcode.react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Input from './Input';
 import Button from './Button';
 import type { FeedbackForm, FeedbackQuestion } from '../types';
 
 interface FeedbackFormBuilderProps {
-  onSave: (form: FeedbackForm) => Promise<void>;
+  onSave: (form: FeedbackForm) => Promise<string | null>;
+  initialForm?: FeedbackForm | null;
+}
+
+interface Section {
+  id: string;
+  title: string;
+  description: string;
+  questions: string[]; // Array of question IDs
 }
 
 const QuestionTypeInfo = {
@@ -29,30 +38,86 @@ const QuestionTypeInfo = {
     label: 'Multiple Choice',
     description: 'Let users choose from predefined options',
     placeholder: 'e.g., Which amenities did you use during your stay?'
+  },
+  label: {
+    icon: '🏷️',
+    label: 'Text Label',
+    description: 'Display text without requiring a response',
+    placeholder: 'e.g., Please read the following instructions carefully.'
   }
 };
 
-const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => {
-  const [title, setTitle] = useState('');
-  const [location, setLocation] = useState('');
-  const [questions, setQuestions] = useState<FeedbackQuestion[]>([]);
+const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave, initialForm }) => {
+  const [title, setTitle] = useState(initialForm?.title || '');
+  const [location, setLocation] = useState(initialForm?.location || '');
+  const [questions, setQuestions] = useState<FeedbackQuestion[]>(initialForm?.questions || []);
   const [showQR, setShowQR] = useState(false);
   const [formUrl, setFormUrl] = useState('');
-  const [currentStep, setCurrentStep] = useState<'basics' | 'questions' | 'preview'>('basics');
+  const [currentStep, setCurrentStep] = useState<'basics' | 'questions' | 'sections' | 'preview'>('basics');
   const [previewMode, setPreviewMode] = useState(false);
+  const [isMultiSection, setIsMultiSection] = useState(initialForm?.isMultiSection || false);
+  const [sections, setSections] = useState<Section[]>([]);
+  const [currentSectionId, setCurrentSectionId] = useState<string | null>(null);
+  const [showSectionModal, setShowSectionModal] = useState(false);
+  const [newSectionTitle, setNewSectionTitle] = useState('');
+  const [newSectionDescription, setNewSectionDescription] = useState('');
+  const [formSubmitError, setFormSubmitError] = useState<string | null>(null);
 
   const locations = [
     'Qaras Hotels: House 3',
     'Qaras Hotels: Bluxton'
   ];
 
+  // Initialize sections from questions if form has sections
+  React.useEffect(() => {
+    if (initialForm?.isMultiSection && initialForm.questions.length > 0) {
+      // Create a map of all sections
+      const sectionsMap = new Map<string, Section>();
+      
+      // Extract sections from questions
+      initialForm.questions.forEach(question => {
+        if (question.sectionMetadata) {
+          const { sectionId, sectionTitle, sectionDescription } = question.sectionMetadata;
+          
+          if (!sectionsMap.has(sectionId)) {
+            sectionsMap.set(sectionId, {
+              id: sectionId,
+              title: sectionTitle,
+              description: sectionDescription,
+              questions: []
+            });
+          }
+          
+          // Add the question to the section
+          const section = sectionsMap.get(sectionId);
+          if (section) {
+            section.questions.push(question.id);
+          }
+        }
+      });
+      
+      // Convert map to array
+      const loadedSections = Array.from(sectionsMap.values());
+      setSections(loadedSections);
+      
+      // Set current section if sections exist
+      if (loadedSections.length > 0) {
+        setCurrentSectionId(loadedSections[0].id);
+      }
+    }
+  }, [initialForm]);
+
   const addQuestion = (type: FeedbackQuestion['type']) => {
     const newQuestion: FeedbackQuestion = {
       id: uuidv4(),
       type,
       question: '',
-      required: true,
-      ...(type === 'multiChoice' ? { options: [''] } : {})
+      required: type !== 'label', // Labels are not required by default
+      ...(type === 'multiChoice' ? { 
+        options: [''],
+        multipleSelect: false // Default to single selection (radio buttons)
+      } : {}),
+      sectionId: currentSectionId || undefined
     };
     setQuestions([...questions, newQuestion]);
   };
@@ -65,6 +130,13 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
 
   const removeQuestion = (id: string) => {
     setQuestions(questions.filter(q => q.id !== id));
+    // Remove from sections if multi-section is enabled
+    if (isMultiSection) {
+      setSections(sections.map(section => ({
+        ...section,
+        questions: section.questions.filter(qId => qId !== id)
+      })));
+    }
   };
 
   const moveQuestion = (id: string, direction: 'up' | 'down') => {
@@ -107,87 +179,175 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
     ));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title || !location || questions.length === 0) return;
-
-    const form: FeedbackForm = {
+  const addSection = () => {
+    const newSection: Section = {
       id: uuidv4(),
-      title,
-      location,
-      questions,
-      createdAt: new Date(),
-      isActive: true
+      title: newSectionTitle,
+      description: newSectionDescription,
+      questions: []
     };
+    setSections([...sections, newSection]);
+    setCurrentSectionId(newSection.id);
+    setShowSectionModal(false);
+    setNewSectionTitle('');
+    setNewSectionDescription('');
+  };
 
-    try {
-      try {
-        await onSave(form);
-        const formUrl = `${window.location.origin}/feedback/${form.id}`;
-        setFormUrl(formUrl);
-        setShowQR(true);
-      } catch (error) {
-        console.error('Error saving form:', error);
-        throw error; // Re-throw to be handled by the dashboard
-      }
-    } catch (error) {
-      console.error('Error saving form:', error);
+  const updateSection = (id: string, updates: Partial<Section>) => {
+    setSections(sections.map(s => 
+      s.id === id ? { ...s, ...updates } : s
+    ));
+  };
+
+  const removeSection = (id: string) => {
+    // Keep the questions but unassign them from this section
+    setQuestions(questions.map(q => 
+      q.sectionId === id ? { ...q, sectionId: undefined } : q
+    ));
+    setSections(sections.filter(s => s.id !== id));
+    if (currentSectionId === id) {
+      setCurrentSectionId(sections.length > 1 ? sections[0].id : null);
     }
   };
 
-  const renderQuestionPreview = (question: FeedbackQuestion) => {
+  const assignQuestionToSection = (questionId: string, sectionId: string) => {
+    // Update the question's sectionId
+    setQuestions(questions.map(q => 
+      q.id === questionId ? { ...q, sectionId } : q
+    ));
+    
+    // Add question ID to the section
+    setSections(sections.map(s => 
+      s.id === sectionId 
+        ? { ...s, questions: [...s.questions, questionId] } 
+        : s
+    ));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormSubmitError(null);
+    
+    if (!navigator.onLine) {
+      setFormSubmitError("You're offline. Please connect to the internet to save this form.");
+      return;
+    }
+
+    if (!title || !location || questions.length === 0) {
+      setFormSubmitError("Please fill in all required fields and add at least one question.");
+      return;
+    }
+
+    let finalQuestions = [...questions];
+    // If multi-section, ensure section metadata is properly set
+    if (isMultiSection && sections.length > 0) {
+      finalQuestions = questions.map(q => ({
+        ...q,
+        sectionMetadata: q.sectionId ? {
+          sectionId: q.sectionId,
+          sectionTitle: sections.find(s => s.id === q.sectionId)?.title || '',
+          sectionDescription: sections.find(s => s.id === q.sectionId)?.description || ''
+        } : undefined
+      }));
+    }
+
+    const form: FeedbackForm = {
+      id: initialForm?.id || uuidv4(),
+      title,
+      location,
+      questions: finalQuestions,
+      createdAt: initialForm?.createdAt || new Date(),
+      isActive: true,
+      isMultiSection
+    };
+
+    try {
+      const result = await onSave(form);
+      if (result) {
+        const formUrl = `${window.location.origin}/feedback/${result}`;
+        setFormUrl(formUrl);
+        setShowQR(true);
+      } else {
+        setFormSubmitError("Could not save the form. Please try again later.");
+      }
+    } catch (error: any) {
+      console.error('Error saving form:', error);
+      setFormSubmitError(`Failed to save form: ${error.message || 'Unknown error'}`);
+    }
+  };
+
+  const QuestionPreview = ({ question }: { question: FeedbackQuestion }) => {
     return (
-      <div className="mb-6 p-4 bg-white rounded-lg shadow">
-        <h3 className="text-lg font-medium mb-2">
-          {question.question}
-          {question.required && <span className="text-red-500 ml-1">*</span>}
-        </h3>
-
-        {question.type === 'rating' && (
-          <div className="flex space-x-4">
-            {[1, 2, 3, 4, 5].map((rating) => (
-              <button
-                key={rating}
-                type="button"
-                className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-lg font-medium"
+      <div key={question.id} className="mb-6">
+        {question.type === 'label' ? (
+          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+            <p className="text-gray-700">{question.question || "Text label content will appear here"}</p>
+          </div>
+        ) : (
+          <>
+            <label className="block mb-2 font-medium">
+              {question.question || "Question text"}
+              {question.required && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            
+            {question.type === 'rating' && (
+              <div className="flex space-x-2">
+                {[1, 2, 3, 4, 5].map((rating) => (
+                  <button
+                    key={rating}
+                    className="w-10 h-10 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center hover:bg-purple-100"
+                  >
+                    {rating}
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            {question.type === 'text' && (
+              <textarea
+                className="w-full p-2 border border-gray-300 rounded-md"
+                placeholder="Your answer here..."
                 disabled
-              >
-                {rating}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {question.type === 'text' && (
-          <Input
-            placeholder="User's response will appear here"
-            disabled
-          />
-        )}
-
-        {question.type === 'multiChoice' && question.options && (
-          <div className="space-y-2">
-            {question.options.map((option, index) => (
-              <label key={index} className="flex items-center space-x-2">
-                <input
-                  type="radio"
-                  name={question.id}
-                  disabled
-                  className="h-4 w-4 text-purple-600"
-                />
-                <span className="text-gray-700">{option}</span>
-              </label>
-            ))}
-          </div>
+              ></textarea>
+            )}
+            
+            {question.type === 'multiChoice' && (
+              <div className="space-y-2">
+                {question.options?.map((option, idx) => (
+                  <div key={idx} className="flex items-center">
+                    {question.multipleSelect ? (
+                      <input 
+                        type="checkbox" 
+                        disabled 
+                        className="mr-2 h-4 w-4 text-purple-600" 
+                      />
+                    ) : (
+                      <input 
+                        type="radio" 
+                        disabled 
+                        name={`preview-${question.id}`} 
+                        className="mr-2 h-4 w-4 text-purple-600" 
+                      />
+                    )}
+                    <span>{option || `Option ${idx + 1}`}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     );
-  };
+  }
 
   const renderBasicsStep = () => (
-    <div className="space-y-6">
+    <motion.div 
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 20 }}
+      className="space-y-6"
+    >
       <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-semibold mb-4">Form Details</h2>
         <div className="space-y-4">
           <Input
             label="Form Title"
@@ -208,24 +368,240 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
               <option key={loc} value={loc}>{loc}</option>
             ))}
           </Input>
+          
+          <label className="block mt-6 cursor-pointer">
+            <div className="flex items-center p-4 border rounded-lg border-purple-200 bg-purple-50 hover:bg-purple-100 transition-colors">
+              <input
+                type="checkbox"
+                id="isMultiSection"
+                checked={isMultiSection}
+                onChange={(e) => setIsMultiSection(e.target.checked)}
+                className="h-5 w-5 text-purple-600 rounded accent-purple-600"
+              />
+              <div className="ml-3 flex-1">
+                <span className="font-medium text-purple-800 block">Create Multi-Section Form</span>
+                <p className="text-sm text-purple-700 mt-1">Divide your form into sections with animated transitions</p>
+              </div>
+            </div>
+          </label>
         </div>
       </div>
       <div className="flex justify-end">
         <Button
-          onClick={() => setCurrentStep('questions')}
+          onClick={() => setCurrentStep(isMultiSection ? 'sections' : 'questions')}
           disabled={!title || !location}
+          className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-md flex items-center shadow-md"
         >
-          Next: Add Questions →
+          {isMultiSection ? 'Next: Create Sections' : 'Next: Add Questions'} 
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+          </svg>
         </Button>
       </div>
-    </div>
+    </motion.div>
+  );
+
+  const renderSectionsStep = () => (
+    <motion.div 
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 20 }}
+      className="space-y-6"
+    >
+      <div className="bg-white p-6 rounded-lg shadow">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-semibold text-gray-800">Form Sections</h2>
+          <Button 
+            onClick={() => setShowSectionModal(true)}
+            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md flex items-center shadow-sm"
+          >
+            <span className="mr-2">➕</span> Add Section
+          </Button>
+        </div>
+        
+        {sections.length === 0 ? (
+          <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+            <div className="text-5xl mb-3 text-gray-300">📋</div>
+            <p className="text-gray-500">No sections created yet</p>
+            <Button 
+              onClick={() => setShowSectionModal(true)}
+              className="mt-4 bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              Create Your First Section
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {sections.map((section, index) => (
+              <motion.div 
+                key={section.id} 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className={`border-2 p-4 rounded-lg transition-colors cursor-pointer hover:shadow-md ${
+                  currentSectionId === section.id 
+                    ? 'border-purple-500 bg-purple-50' 
+                    : 'border-gray-200 hover:border-purple-300'
+                }`}
+                onClick={() => setCurrentSectionId(section.id)}
+              >
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="font-medium text-lg">{section.title}</h3>
+                    <p className="text-gray-600">{section.description}</p>
+                    <div className="mt-2 text-sm text-purple-600 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9 2a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V6.414A2 2 0 0016.414 5L14 2.586A2 2 0 0012.586 2H9z" />
+                        <path d="M3 8a2 2 0 012-2v10h8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                      </svg>
+                      {section.questions.length} {section.questions.length === 1 ? 'question' : 'questions'}
+                    </div>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const updatedTitle = prompt('Enter new section title', section.title);
+                        if (updatedTitle) {
+                          updateSection(section.id, { title: updatedTitle });
+                        }
+                      }}
+                      className="p-2 text-blue-600 hover:bg-blue-100 rounded-full"
+                    >
+                      ✏️
+                    </button>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm('Are you sure you want to delete this section?')) {
+                          removeSection(section.id);
+                        }
+                      }}
+                      className="p-2 text-red-600 hover:bg-red-100 rounded-full"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {showSectionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-lg p-6 max-w-md mx-auto shadow-xl"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold text-gray-800">Add New Section</h3>
+              <button
+                onClick={() => setShowSectionModal(false)}
+                className="text-gray-500 hover:text-red-500 p-2 rounded-full hover:bg-gray-100"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+            <div className="space-y-4">
+              <Input
+                label="Section Title"
+                value={newSectionTitle}
+                onChange={(e) => setNewSectionTitle(e.target.value)}
+                placeholder="e.g., About Your Stay"
+                required
+              />
+              <Input
+                label="Section Description"
+                as="textarea"
+                value={newSectionDescription}
+                onChange={(e) => setNewSectionDescription(e.target.value)}
+                placeholder="Short description of this section"
+              />
+            </div>
+            <div className="flex justify-end space-x-4 mt-6">
+              <Button 
+                onClick={() => setShowSectionModal(false)}
+                variant="custom"
+                className="text-red-500 hover:text-red-700 px-3 py-1 rounded-md text-sm hover:bg-gray-100"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={addSection}
+                disabled={!newSectionTitle}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-1 text-sm rounded-md"
+              >
+                Add Section
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+      
+      <div className="flex justify-between">
+        <Button 
+          onClick={() => setCurrentStep('basics')}
+          className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2 rounded-md flex items-center"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+          Back to Details
+        </Button>
+        <Button
+          onClick={() => {
+            if (sections.length === 0) {
+              alert('Please create at least one section');
+              return;
+            }
+            setCurrentStep('questions');
+          }}
+          disabled={sections.length === 0}
+          className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-md flex items-center"
+        >
+          Next: Add Questions
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+          </svg>
+        </Button>
+      </div>
+    </motion.div>
   );
 
   const renderQuestionsStep = () => (
-    <div className="space-y-6">
+    <motion.div 
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 20 }}
+      className="space-y-6"
+    >
       <div className="bg-white p-6 rounded-lg shadow">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-semibold">Questions</h2>
+          <h2 className="text-xl font-semibold">
+            {isMultiSection && currentSectionId ? (
+              <div className="flex items-center">
+                <span>Questions for</span>
+                <select 
+                  value={currentSectionId}
+                  onChange={(e) => setCurrentSectionId(e.target.value)}
+                  className="ml-2 border rounded-md p-1"
+                >
+                  {sections.map(section => (
+                    <option key={section.id} value={section.id}>
+                      {section.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              'Questions'
+            )}
+          </h2>
           <div className="flex items-center space-x-2">
             <Button onClick={() => setPreviewMode(!previewMode)}>
               {previewMode ? 'Edit Mode' : 'Preview Mode'}
@@ -251,12 +627,24 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
 
         {previewMode ? (
           <div className="space-y-6">
-            {questions.map(question => renderQuestionPreview(question))}
+            {(isMultiSection && currentSectionId
+              ? questions.filter(q => q.sectionId === currentSectionId)
+              : questions
+            ).map(question => <QuestionPreview key={question.id} question={question} />)}
           </div>
         ) : (
           <div className="space-y-4">
-            {questions.map((question, index) => (
-              <div key={question.id} className="bg-gray-50 p-4 rounded-lg">
+            {(isMultiSection && currentSectionId 
+              ? questions.filter(q => q.sectionId === currentSectionId)
+              : questions
+            ).map((question, index) => (
+              <motion.div 
+                key={question.id} 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className="bg-gray-50 p-4 rounded-lg"
+              >
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-2">
                     <span className="text-lg">{QuestionTypeInfo[question.type].icon}</span>
@@ -295,6 +683,19 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
 
                   {question.type === 'multiChoice' && (
                     <div className="space-y-2 ml-4">
+                      <div className="flex items-center mb-3">
+                        <input
+                          type="checkbox"
+                          id={`multipleSelect-${question.id}`}
+                          checked={question.multipleSelect}
+                          onChange={(e) => updateQuestion(question.id, { multipleSelect: e.target.checked })}
+                          className="h-4 w-4 text-purple-600"
+                        />
+                        <label htmlFor={`multipleSelect-${question.id}`} className="ml-2 text-sm text-gray-700">
+                          Allow multiple selections (checkboxes)
+                        </label>
+                      </div>
+                      
                       {question.options?.map((option, optIndex) => (
                         <div key={optIndex} className="flex items-center space-x-2">
                           <span className="text-gray-500">•</span>
@@ -320,39 +721,56 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
                     </div>
                   )}
 
-                  <div className="flex items-center space-x-2 mt-2">
-                    <input
-                      type="checkbox"
-                      checked={question.required}
-                      onChange={(e) => updateQuestion(question.id, { required: e.target.checked })}
-                      className="h-4 w-4 text-purple-600"
-                    />
-                    <span className="text-sm text-gray-600">Required question</span>
-                  </div>
+                  {question.type !== 'label' && (
+                    <div className="flex items-center space-x-2 mt-2">
+                      <input
+                        type="checkbox"
+                        checked={question.required}
+                        onChange={(e) => updateQuestion(question.id, { required: e.target.checked })}
+                        className="h-4 w-4 text-purple-600"
+                      />
+                      <span className="text-sm text-gray-600">Required question</span>
+                    </div>
+                  )}
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         )}
       </div>
 
-      <div className="flex justify-between">
-        <Button onClick={() => setCurrentStep('basics')}>
-          ← Back to Details
-        </Button>
-        <Button
-          onClick={handleSubmit}
-          disabled={questions.length === 0}
+      <div className="flex justify-between mt-6">
+        <Button 
+          onClick={() => setCurrentStep(isMultiSection ? 'sections' : 'basics')}
+          className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-1.5 text-sm rounded-md"
         >
-          Create Form
+          {isMultiSection ? '← Back to Sections' : '← Back to Details'}
         </Button>
+        <div className="flex flex-col items-end">
+          {formSubmitError && (
+            <div className="text-red-500 text-sm mb-2">
+              {formSubmitError}
+            </div>
+          )}
+          <Button
+            onClick={handleSubmit}
+            disabled={questions.length === 0}
+            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-1.5 text-sm rounded-md"
+          >
+            Create Form
+          </Button>
+        </div>
       </div>
-    </div>
+    </motion.div>
   );
 
   if (showQR) {
     return (
-      <div className="bg-white p-6 rounded-lg shadow text-center">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white p-6 rounded-lg shadow text-center"
+      >
         <h2 className="text-2xl font-bold mb-2">Form Created Successfully!</h2>
         <p className="text-gray-600 mb-6">Share this QR code or link with your customers</p>
         <div className="flex flex-col items-center space-y-4 mb-8">
@@ -362,25 +780,46 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         <Button onClick={() => window.location.reload()}>
           Create Another Form
         </Button>
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Create Feedback Form</h1>
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <div className={`h-3 w-3 rounded-full ${currentStep === 'basics' ? 'bg-purple-600' : 'bg-gray-300'}`} />
-              <div className={`h-3 w-3 rounded-full ${currentStep === 'questions' ? 'bg-purple-600' : 'bg-gray-300'}`} />
-            </div>
+    <div className="max-w-4xl mx-auto relative">
+      {/* Header section with progress indicators */}
+      <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-lg shadow">
+        <h1 className="text-2xl font-bold text-gray-800">Create Form</h1>
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <div 
+              className={`h-3 w-10 rounded-full ${currentStep === 'basics' ? 'bg-purple-600' : 'bg-gray-300'}`} 
+            />
+            {isMultiSection && (
+              <div 
+                className={`h-3 w-10 rounded-full ${currentStep === 'sections' ? 'bg-purple-600' : 'bg-gray-300'}`} 
+              />
+            )}
+            <div 
+              className={`h-3 w-10 rounded-full ${currentStep === 'questions' ? 'bg-purple-600' : 'bg-gray-300'}`} 
+            />
           </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="text-gray-500 hover:text-red-500 p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+            title="Cancel"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
         </div>
       </div>
 
-      {currentStep === 'basics' ? renderBasicsStep() : renderQuestionsStep()}
+      <AnimatePresence mode="wait">
+        {currentStep === 'basics' && renderBasicsStep()}
+        {currentStep === 'sections' && renderSectionsStep()}
+        {currentStep === 'questions' && renderQuestionsStep()}
+      </AnimatePresence>
     </div>
   );
 };

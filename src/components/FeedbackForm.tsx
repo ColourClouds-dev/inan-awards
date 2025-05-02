@@ -5,22 +5,40 @@ import { addDoc, collection } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import Input from './Input';
 import Button from './Button';
-import type { FeedbackForm, FeedbackResponse } from '../types';
+import type { FeedbackForm, FeedbackQuestion, FeedbackResponse } from '../types';
 
 interface FeedbackFormProps {
   form: FeedbackForm;
 }
 
 const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
-  const [responses, setResponses] = useState<{ [key: string]: string | number }>({});
+  const [responses, setResponses] = useState<{ [key: string]: string | number | string[] }>({});
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleInputChange = (questionId: string, value: string | number) => {
+  const handleInputChange = (questionId: string, value: string | number | string[]) => {
     setResponses(prev => ({
       ...prev,
       [questionId]: value
     }));
+  };
+
+  const handleMultiSelectChange = (questionId: string, option: string, checked: boolean) => {
+    setResponses(prev => {
+      const currentSelections = Array.isArray(prev[questionId]) ? prev[questionId] as string[] : [];
+      
+      if (checked) {
+        return {
+          ...prev,
+          [questionId]: [...currentSelections, option]
+        };
+      } else {
+        return {
+          ...prev,
+          [questionId]: currentSelections.filter(item => item !== option)
+        };
+      }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -30,7 +48,12 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
     // Validate required fields
     const missingRequired = form.questions
       .filter(q => q.required)
-      .some(q => !responses[q.id]);
+      .some(q => {
+        if (Array.isArray(responses[q.id])) {
+          return (responses[q.id] as string[]).length === 0;
+        }
+        return !responses[q.id];
+      });
 
     if (missingRequired) {
       setError('Please fill in all required fields');
@@ -38,11 +61,21 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
     }
 
     try {
+      // Convert array responses to comma-separated strings for storage
+      const processedResponses = Object.fromEntries(
+        Object.entries(responses).map(([key, value]) => {
+          if (Array.isArray(value)) {
+            return [key, value.join(', ')];
+          }
+          return [key, value];
+        })
+      );
+
       const feedbackResponse: FeedbackResponse = {
         id: crypto.randomUUID(),
         formId: form.id,
         location: form.location,
-        responses,
+        responses: processedResponses,
         submittedAt: new Date()
       };
 
@@ -82,80 +115,106 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
       <form onSubmit={handleSubmit} className="space-y-8">
         {form.questions.map((question, index) => (
           <div key={question.id} className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-start mb-4">
-              <span className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-semibold">
-                {index + 1}
-              </span>
-              <div className="ml-4 flex-grow">
-                <h3 className="text-lg font-medium text-gray-900">
-                  {question.question}
-                  {question.required && <span className="text-red-500 ml-1">*</span>}
-                </h3>
+            {question.type === 'label' ? (
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-gray-700">{question.question}</p>
+              </div>
+            ) : (
+              <div className="flex items-start">
+                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-semibold">
+                  {index + 1}
+                </span>
+                <div className="ml-4 flex-grow">
+                  <h3 className="text-lg font-medium text-gray-900">
+                    {question.question}
+                    {question.required && <span className="text-red-500 ml-1">*</span>}
+                  </h3>
 
-                {question.type === 'rating' && (
-                  <div className="mt-4">
-                    <div className="flex space-x-4">
-                      {[1, 2, 3, 4, 5].map((rating) => (
-                        <button
-                          key={rating}
-                          type="button"
-                          onClick={() => handleInputChange(question.id, rating)}
-                          className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-medium transition-all transform hover:scale-110
-                            ${responses[question.id] === rating
-                              ? 'bg-purple-600 text-white shadow-lg'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                            }`}
+                  {question.type === 'rating' && (
+                    <div className="mt-4">
+                      <div className="flex space-x-4">
+                        {[1, 2, 3, 4, 5].map((rating) => (
+                          <button
+                            key={rating}
+                            type="button"
+                            onClick={() => handleInputChange(question.id, rating)}
+                            className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-medium transition-all transform hover:scale-110
+                              ${responses[question.id] === rating
+                                ? 'bg-purple-600 text-white shadow-lg'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              }`}
+                          >
+                            {rating}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex justify-between text-sm text-gray-500 mt-2 px-2">
+                        <span>Poor</span>
+                        <span>Excellent</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {question.type === 'text' && (
+                    <div className="mt-4">
+                      <Input
+                        as="textarea"
+                        value={responses[question.id] as string || ''}
+                        onChange={(e) => handleInputChange(question.id, e.target.value)}
+                        placeholder="Share your thoughts here..."
+                        required={question.required}
+                      />
+                    </div>
+                  )}
+
+                  {question.type === 'multiChoice' && question.options && (
+                    <div className="mt-4 space-y-3">
+                      {question.options.map((option, optIndex) => (
+                        <label
+                          key={optIndex}
+                          className={`flex items-center p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                            question.multipleSelect
+                              ? (Array.isArray(responses[question.id]) && 
+                                 (responses[question.id] as string[])?.includes(option))
+                                ? 'border-purple-500 bg-purple-50'
+                                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                              : responses[question.id] === option
+                                ? 'border-purple-500 bg-purple-50'
+                                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
                         >
-                          {rating}
-                        </button>
+                          {question.multipleSelect ? (
+                            <input
+                              type="checkbox"
+                              name={`${question.id}[]`}
+                              value={option}
+                              checked={Array.isArray(responses[question.id]) && 
+                                      (responses[question.id] as string[])?.includes(option)}
+                              onChange={(e) => handleMultiSelectChange(question.id, option, e.target.checked)}
+                              className="h-4 w-4 text-purple-600 focus:ring-purple-500"
+                              required={question.required && 
+                                      (!Array.isArray(responses[question.id]) || 
+                                      (responses[question.id] as string[])?.length === 0)}
+                            />
+                          ) : (
+                            <input
+                              type="radio"
+                              name={question.id}
+                              value={option}
+                              checked={responses[question.id] === option}
+                              onChange={(e) => handleInputChange(question.id, e.target.value)}
+                              className="h-4 w-4 text-purple-600 focus:ring-purple-500"
+                              required={question.required}
+                            />
+                          )}
+                          <span className="ml-3 text-gray-700">{option}</span>
+                        </label>
                       ))}
                     </div>
-                    <div className="flex justify-between text-sm text-gray-500 mt-2 px-2">
-                      <span>Poor</span>
-                      <span>Excellent</span>
-                    </div>
-                  </div>
-                )}
-
-                {question.type === 'text' && (
-                  <div className="mt-4">
-                    <Input
-                      as="input"
-                      value={responses[question.id] as string || ''}
-                      onChange={(e) => handleInputChange(question.id, e.target.value)}
-                      placeholder="Share your thoughts here..."
-                      required={question.required}
-                    />
-                  </div>
-                )}
-
-                {question.type === 'multiChoice' && question.options && (
-                  <div className="mt-4 space-y-3">
-                    {question.options.map((option, optIndex) => (
-                      <label
-                        key={optIndex}
-                        className={`flex items-center p-3 rounded-lg border-2 transition-all cursor-pointer
-                          ${responses[question.id] === option
-                            ? 'border-purple-500 bg-purple-50'
-                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                          }`}
-                      >
-                        <input
-                          type="radio"
-                          name={question.id}
-                          value={option}
-                          checked={responses[question.id] === option}
-                          onChange={(e) => handleInputChange(question.id, e.target.value)}
-                          className="h-4 w-4 text-purple-600 focus:ring-purple-500"
-                          required={question.required}
-                        />
-                        <span className="ml-3 text-gray-700">{option}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         ))}
 

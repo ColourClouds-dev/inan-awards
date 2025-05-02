@@ -7,14 +7,24 @@ export interface FeedbackForm {
   questions: FeedbackQuestion[];
   createdAt: Date | Timestamp;
   isActive: boolean;
+  isMultiSection?: boolean;
+}
+
+interface SectionMetadata {
+  sectionId: string;
+  sectionTitle: string;
+  sectionDescription: string;
 }
 
 export interface FeedbackQuestion {
   id: string;
-  type: 'rating' | 'text' | 'multiChoice';
+  type: 'rating' | 'text' | 'multiChoice' | 'label';
   question: string;
   options?: string[];
   required: boolean;
+  multipleSelect?: boolean;
+  sectionId?: string;
+  sectionMetadata?: SectionMetadata;
 }
 
 export interface FeedbackResponse {

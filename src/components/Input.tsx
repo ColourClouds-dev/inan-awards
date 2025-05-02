@@ -1,10 +1,10 @@
 import React from 'react';
 
-interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement | HTMLSelectElement>, 'className'> {
+interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>, 'className'> {
   label?: string;
   error?: string | null;
   fullWidth?: boolean;
-  as?: 'input' | 'select';
+  as?: 'input' | 'select' | 'textarea';
   className?: string;
 }
 
@@ -38,6 +38,11 @@ const Input: React.FC<InputProps> = ({
         >
           {children}
         </select>
+      ) : as === 'textarea' ? (
+        <textarea
+          className={`${inputStyles} ${widthClass} ${className} min-h-[100px]`}
+          {...(props as React.TextareaHTMLAttributes<HTMLTextAreaElement>)}
+        />
       ) : (
         <input
           className={`${inputStyles} ${widthClass} ${className}`}
