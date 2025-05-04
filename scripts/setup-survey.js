@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, Timestamp } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, Timestamp, getDoc } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 
 // Initialize Firebase with correct config from Firebase console
@@ -22,42 +22,72 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function setupSurveySettings() {
   try {
-    // Sign in as admin
-    const userCredential = await signInWithEmailAndPassword(auth, 'adminaccess@inan.com.ng', process.env.ADMIN_PASSWORD);
-    console.log('Admin authenticated successfully');
-    
-    // Wait for auth state to propagate
-    console.log('Waiting for auth state to propagate...');
-    await wait(2000);
-    
-    console.log('Current user:', auth.currentUser?.email);
-    
+    // Check if settings document already exists
+    const settingsRef = doc(db, 'settings', 'survey');
+    const settingsSnapshot = await getDoc(settingsRef);
+
+    if (settingsSnapshot.exists()) {
+      console.log('Survey settings already exist. Not overwriting.');
+      return;
+    }
+
     // Set default survey settings
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setMonth(endDate.getMonth() + 1); // Set end date to 1 month from now
+    const now = new Date();
+    const nextMonth = new Date();
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
 
     const settingsData = {
-      startDate: Timestamp.fromDate(startDate),
-      endDate: Timestamp.fromDate(endDate),
+      startDate: Timestamp.fromDate(now),
+      endDate: Timestamp.fromDate(nextMonth),
       isActive: true,
-      bannerImageUrl: '' // Optional banner image URL
+      bannerImageUrl: '',
+      
+      // New settings
+      appearance: {
+        primaryColor: '#6366F1',
+        secondaryColor: '#8B5CF6',
+        logoUrl: '',
+        customCss: ''
+      },
+      
+      responseManagement: {
+        dataRetentionDays: 0, // Keep indefinitely
+        autoArchiveAfterDays: 90,
+        responseLimit: 0 // No limit
+      },
+      
+      notifications: {
+        emailNotifications: false,
+        notificationEmail: '',
+        alertThreshold: 10,
+        dailyDigest: false
+      },
+      
+      security: {
+        enableRecaptcha: false,
+        allowedIpRanges: [],
+        requireVerification: false
+      },
+      
+      integrations: {
+        apiKeys: {},
+        webhookUrl: '',
+        exportFormat: 'csv'
+      },
+      
+      defaults: {
+        defaultExpiryDays: 30,
+        footerText: '© 2023 Inan Awards. All rights reserved.',
+        disclaimer: 'Your privacy is important to us. All responses are confidential and will be used only for the intended purpose.'
+      }
     };
 
     console.log('Attempting to write settings:', settingsData);
-    
+
     await setDoc(doc(db, 'settings', 'survey'), settingsData);
     console.log('Survey settings created successfully!');
-    
-    // Wait before exiting to ensure write completes
-    await wait(1000);
-    process.exit(0);
   } catch (error) {
-    console.error('Error:', error);
-    if (error.code) {
-      console.error('Error code:', error.code);
-    }
-    process.exit(1);
+    console.error('Error setting up survey settings:', error);
   }
 }
 

@@ -18,8 +18,8 @@ const inter = Inter({
 });
 
 export const metadata = {
-  title: 'INAN Feedback',
-  description: 'INAN Feedback Platform',
+  title: 'INAN Forms',
+  description: 'INAN Forms Platform',
 };
 
 export default function RootLayout({

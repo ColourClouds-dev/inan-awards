@@ -37,11 +37,91 @@ export interface FeedbackResponse {
   submittedAt: Date | Timestamp;
 }
 
+export interface Questionnaire {
+  id: string;
+  title: string;
+  description: string;
+  location: string;
+  questions: QuestionnaireQuestion[];
+  createdAt: Date | Timestamp;
+  isActive: boolean;
+  isMultiSection?: boolean;
+  category?: string;
+  targetAudience?: string;
+}
+
+export interface QuestionnaireQuestion {
+  id: string;
+  type: 'rating' | 'text' | 'multiChoice' | 'label';
+  question: string;
+  options?: string[];
+  required: boolean;
+  multipleSelect?: boolean;
+  sectionId?: string;
+  sectionMetadata?: SectionMetadata;
+}
+
+export interface QuestionnaireResponse {
+  id: string;
+  questionnaireId: string;
+  respondent?: string;
+  location: string;
+  responses: {
+    [questionId: string]: string | number | string[];
+  };
+  submittedAt: Date | Timestamp;
+}
+
 export interface SurveySettings {
+  // Basic timing settings
   startDate: Date | Timestamp;
   endDate: Date | Timestamp;
   isActive: boolean;
   bannerImageUrl?: string;
+  
+  // Appearance settings
+  appearance?: {
+    primaryColor?: string;
+    secondaryColor?: string; 
+    logoUrl?: string;
+    customCss?: string;
+  };
+  
+  // Response management
+  responseManagement?: {
+    dataRetentionDays?: number; // How many days to keep responses
+    autoArchiveAfterDays?: number; // Auto-archive forms after X days
+    responseLimit?: number; // Max responses per form
+  };
+  
+  // Notification settings
+  notifications?: {
+    emailNotifications?: boolean;
+    notificationEmail?: string;
+    alertThreshold?: number; // Notify after X responses
+    dailyDigest?: boolean;
+  };
+  
+  // Security settings
+  security?: {
+    enableRecaptcha?: boolean;
+    allowedIpRanges?: string[];
+    requireVerification?: boolean;
+  };
+  
+  // Integration settings
+  integrations?: {
+    apiKeys?: Record<string, string>;
+    webhookUrl?: string;
+    exportFormat?: 'csv' | 'json' | 'excel';
+  };
+  
+  // Default form values
+  defaults?: {
+    defaultExpiryDays?: number;
+    footerText?: string;
+    disclaimer?: string;
+  };
 }
 
 export interface Employee {
@@ -80,4 +160,25 @@ export interface Category {
   id: number;
   title: string;
   description: string;
+}
+
+export interface Poll {
+  id: string;
+  title: string;
+  question: string;
+  description?: string;
+  options: string[];
+  location: string;
+  createdAt: Date | Timestamp;
+  endDate?: Date | Timestamp;
+  isActive: boolean;
+}
+
+export interface PollResponse {
+  id: string;
+  pollId: string;
+  respondent: string;
+  selectedOption: string;
+  location: string;
+  submittedAt: Date | Timestamp;
 }

@@ -19,8 +19,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   const navigationItems = [
     { href: '/dashboard', label: 'Overview', path: '/dashboard' },
-    { href: '/dashboard/results', label: 'Results', path: '/dashboard/results' },
     { href: '/dashboard/feedback', label: 'Feedback', path: '/dashboard/feedback' },
+    { href: '/dashboard/polls', label: 'Polls', path: '/dashboard/polls' },
+    { href: '/dashboard/questionnaires', label: 'Questionnaires', path: '/dashboard/questionnaires' },
     { href: '/dashboard/settings', label: 'Settings', path: '/dashboard/settings' }
   ];
 
@@ -45,7 +46,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           <div className="flex justify-between h-16">
             <div className="flex">
               <div className="flex-shrink-0 flex items-center">
-                <h1 className="text-xl font-bold text-gray-800">Inan Feedback</h1>
+                <h1 className="text-xl font-bold text-gray-800">Inan Forms</h1>
               </div>
               {/* Desktop Navigation */}
               <div className="hidden sm:ml-6 sm:flex sm:space-x-8">

@@ -8,8 +8,10 @@ import type { FeedbackForm, FeedbackResponse } from '../../types';
 interface Stats {
   totalFeedback: number;
   totalPolls: number;
+  totalQuestionnaires: number;
   activePolls: number;
   activeFeedbackForms: number;
+  activeQuestionnaires: number;
   recentResponses: number;
   averageRating: number;
 }
@@ -18,8 +20,10 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<Stats>({
     totalFeedback: 0,
     totalPolls: 0,
+    totalQuestionnaires: 0,
     activePolls: 0,
     activeFeedbackForms: 0,
+    activeQuestionnaires: 0,
     recentResponses: 0,
     averageRating: 0
   });
@@ -29,6 +33,8 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
+        setLoading(true);
+        
         // Fetch feedback forms
         const formsQuery = query(collection(db, 'feedback-forms'));
         const formsSnapshot = await getDocs(formsQuery);
@@ -38,6 +44,11 @@ export default function DashboardPage() {
         const pollsQuery = query(collection(db, 'polls'));
         const pollsSnapshot = await getDocs(pollsQuery);
         const activePolls = pollsSnapshot.docs.filter(doc => doc.data().isActive).length;
+
+        // Fetch questionnaires
+        const questionnairesQuery = query(collection(db, 'questionnaires'));
+        const questionnairesSnapshot = await getDocs(questionnairesQuery);
+        const activeQuestionnaires = questionnairesSnapshot.docs.filter(doc => doc.data().isActive).length;
 
         // Fetch recent responses (last 30 days)
         const thirtyDaysAgo = new Date();
@@ -50,9 +61,19 @@ export default function DashboardPage() {
         );
         const responsesSnapshot = await getDocs(responsesQuery);
         
+        // Fetch questionnaire responses
+        const questionnaireResponsesQuery = query(
+          collection(db, 'questionnaire-responses'),
+          where('submittedAt', '>=', thirtyDaysAgo),
+          orderBy('submittedAt', 'desc')
+        );
+        const questionnaireResponsesSnapshot = await getDocs(questionnaireResponsesQuery);
+        
         // Calculate average rating from responses
         let totalRating = 0;
         let ratingCount = 0;
+        
+        // Process feedback responses for ratings
         responsesSnapshot.docs.forEach(doc => {
           const data = doc.data();
           Object.values(data.responses).forEach(response => {
@@ -62,13 +83,28 @@ export default function DashboardPage() {
             }
           });
         });
+        
+        // Process questionnaire responses for ratings
+        questionnaireResponsesSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          Object.values(data.responses).forEach(response => {
+            if (typeof response === 'number' && response >= 1 && response <= 5) {
+              totalRating += response;
+              ratingCount++;
+            }
+          });
+        });
+
+        const totalResponses = responsesSnapshot.size + questionnaireResponsesSnapshot.size;
 
         setStats({
           totalFeedback: formsSnapshot.size,
           totalPolls: pollsSnapshot.size,
+          totalQuestionnaires: questionnairesSnapshot.size,
           activePolls,
           activeFeedbackForms,
-          recentResponses: responsesSnapshot.size,
+          activeQuestionnaires,
+          recentResponses: totalResponses,
           averageRating: ratingCount > 0 ? Math.round((totalRating / ratingCount) * 10) / 10 : 0
         });
       } catch (error) {
@@ -103,7 +139,7 @@ export default function DashboardPage() {
       <h1 className="text-2xl font-bold text-gray-900">Dashboard Overview</h1>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Active Forms Card */}
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center">
@@ -133,6 +169,22 @@ export default function DashboardPage() {
               <h2 className="text-lg font-semibold text-gray-900">Active Polls</h2>
               <p className="text-3xl font-bold text-green-600">{stats.activePolls}</p>
               <p className="text-sm text-gray-500">Out of {stats.totalPolls} total polls</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Active Questionnaires Card */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-3 rounded-full bg-blue-100">
+              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <h2 className="text-lg font-semibold text-gray-900">Active Questionnaires</h2>
+              <p className="text-3xl font-bold text-blue-600">{stats.activeQuestionnaires}</p>
+              <p className="text-sm text-gray-500">Out of {stats.totalQuestionnaires} total questionnaires</p>
             </div>
           </div>
         </div>
@@ -173,7 +225,7 @@ export default function DashboardPage() {
       {/* Quick Actions */}
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <a
             href="/dashboard/feedback"
             className="flex items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
@@ -184,13 +236,22 @@ export default function DashboardPage() {
             Create Feedback Form
           </a>
           <a
-            href="/dashboard/polls/new"
+            href="/dashboard/polls"
             className="flex items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
           >
             <svg className="w-6 h-6 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Create Poll
+          </a>
+          <a
+            href="/dashboard/questionnaires"
+            className="flex items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+          >
+            <svg className="w-6 h-6 text-blue-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Create Questionnaire
           </a>
           <a
             href="/dashboard/feedback"
@@ -210,6 +271,16 @@ export default function DashboardPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
             View Poll Results
+          </a>
+          <a
+            href="/dashboard/questionnaires"
+            className="flex items-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+          >
+            <svg className="w-6 h-6 text-blue-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            View Questionnaires
           </a>
         </div>
       </div>
