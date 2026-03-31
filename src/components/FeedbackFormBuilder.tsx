@@ -336,7 +336,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         )}
       </div>
 
-      <div className="flex justify-between">
+      <div className="flex justify-between gap-8">
         <Button onClick={() => setCurrentStep('basics')}>
           ← Back to Details
         </Button>

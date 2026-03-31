@@ -1,12 +1,28 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { signInWithEmailAndPassword, onAuthStateChanged, User } from 'firebase/auth';
+import { signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { useRouter } from 'next/navigation';
-import EmailVerification from '../../components/EmailVerification';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
+
+function getErrorMessage(error: { code?: string } | null | undefined): string {
+  switch (error?.code) {
+    case 'auth/invalid-email':
+      return 'Invalid email address format.';
+    case 'auth/user-disabled':
+      return 'This account has been disabled.';
+    case 'auth/user-not-found':
+      return 'No account found with this email.';
+    case 'auth/wrong-password':
+      return 'Incorrect password.';
+    case 'auth/too-many-requests':
+      return 'Too many failed attempts. Please try again later.';
+    default:
+      return 'Failed to sign in. Please check your credentials.';
+  }
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -14,43 +30,19 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [unverifiedUser, setUnverifiedUser] = useState<User | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        if (user.emailVerified) {
-          router.push('/dashboard');
-        } else {
-          setUnverifiedUser(user);
-          setIsCheckingAuth(false);
-        }
+        router.push('/dashboard');
       } else {
-        setUnverifiedUser(null);
         setIsCheckingAuth(false);
       }
     });
 
     return () => unsubscribe();
   }, [router]);
-
-  const getErrorMessage = (error: any) => {
-    switch (error?.code) {
-      case 'auth/invalid-email':
-        return 'Invalid email address format.';
-      case 'auth/user-disabled':
-        return 'This account has been disabled.';
-      case 'auth/user-not-found':
-        return 'No account found with this email.';
-      case 'auth/wrong-password':
-        return 'Incorrect password.';
-      case 'auth/too-many-requests':
-        return 'Too many failed attempts. Please try again later.';
-      default:
-        return 'Failed to sign in. Please check your credentials.';
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,10 +65,6 @@ export default function LoginPage() {
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
       </div>
     );
-  }
-
-  if (unverifiedUser) {
-    return <EmailVerification user={unverifiedUser} />;
   }
 
   return (

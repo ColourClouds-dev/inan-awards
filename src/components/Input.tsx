@@ -8,7 +8,7 @@ interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement | H
   className?: string;
 }
 
-const Input: React.FC<InputProps> = ({
+const Input = React.forwardRef<HTMLInputElement, InputProps>(({
   label,
   error,
   fullWidth = true,
@@ -16,7 +16,7 @@ const Input: React.FC<InputProps> = ({
   className = '',
   children,
   ...props
-}) => {
+}, ref) => {
   const baseStyles = 'px-4 py-3 text-lg rounded-lg border-2 bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200';
   const widthClass = fullWidth ? 'w-full' : 'w-auto';
   
@@ -40,6 +40,7 @@ const Input: React.FC<InputProps> = ({
         </select>
       ) : (
         <input
+          ref={ref}
           className={`${inputStyles} ${widthClass} ${className}`}
           {...(props as React.InputHTMLAttributes<HTMLInputElement>)}
         />
@@ -51,6 +52,8 @@ const Input: React.FC<InputProps> = ({
       )}
     </div>
   );
-};
+});
+
+Input.displayName = 'Input';
 
 export default Input;

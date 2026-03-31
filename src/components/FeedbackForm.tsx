@@ -1,58 +1,72 @@
 'use client';
 
-import React, { useState } from 'react';
-import { addDoc, collection } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import React, { useState, useMemo } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import Input from './Input';
 import Button from './Button';
-import type { FeedbackForm, FeedbackResponse } from '../types';
+import { submitFeedback } from '../lib/firestore';
+import type { FeedbackForm } from '../types';
 
 interface FeedbackFormProps {
   form: FeedbackForm;
 }
 
 const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
-  const [responses, setResponses] = useState<{ [key: string]: string | number }>({});
   const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const handleInputChange = (questionId: string, value: string | number) => {
-    setResponses(prev => ({
-      ...prev,
-      [questionId]: value
-    }));
-  };
+  // Build zod schema dynamically from form.questions
+  const schema = useMemo(() => {
+    const schemaShape = form.questions.reduce((acc, q) => {
+      const base = q.type === 'rating'
+        ? z.number().min(1).max(5)
+        : z.string().min(1);
+      acc[q.id] = q.required ? base : base.optional();
+      return acc;
+    }, {} as Record<string, z.ZodTypeAny>);
+    return z.object(schemaShape);
+  }, [form.questions]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
+  type FormValues = z.infer<typeof schema>;
 
-    // Validate required fields
-    const missingRequired = form.questions
-      .filter(q => q.required)
-      .some(q => !responses[q.id]);
+  const {
+    register,
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+  });
 
-    if (missingRequired) {
-      setError('Please fill in all required fields');
-      return;
-    }
-
+  const onSubmit = async (data: FormValues) => {
+    setSubmitError(null);
     try {
-      const feedbackResponse: FeedbackResponse = {
+      const feedbackResponse = {
         id: crypto.randomUUID(),
         formId: form.id,
         location: form.location,
-        responses,
-        submittedAt: new Date()
+        responses: data as { [key: string]: string | number },
+        submittedAt: new Date(),
       };
-
-      await addDoc(collection(db, 'feedback-responses'), feedbackResponse);
+      await submitFeedback(feedbackResponse);
       setSubmitted(true);
-    } catch (error) {
-      console.error('Error submitting feedback:', error);
-      setError('Failed to submit feedback. Please try again.');
+    } catch (err) {
+      console.error('Error submitting feedback:', err);
+      setSubmitError('Failed to submit feedback. Please try again.');
     }
   };
+
+  if (!form.isActive) {
+    return (
+      <div className="max-w-2xl mx-auto p-6">
+        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+          <p className="text-gray-600 text-lg">This form is no longer active.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (submitted) {
     return (
@@ -79,9 +93,9 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {form.questions.map((question, index) => (
-          <div key={question.id} className="bg-white rounded-lg shadow-lg p-6">
+          <div key={question.id} className="bg-white rounded-lg shadow-lg p-6" data-testid="question-block">
             <div className="flex items-start mb-4">
               <span className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-semibold">
                 {index + 1}
@@ -94,26 +108,39 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
 
                 {question.type === 'rating' && (
                   <div className="mt-4">
-                    <div className="flex space-x-4">
-                      {[1, 2, 3, 4, 5].map((rating) => (
-                        <button
-                          key={rating}
-                          type="button"
-                          onClick={() => handleInputChange(question.id, rating)}
-                          className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-medium transition-all transform hover:scale-110
-                            ${responses[question.id] === rating
-                              ? 'bg-purple-600 text-white shadow-lg'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                            }`}
-                        >
-                          {rating}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex justify-between text-sm text-gray-500 mt-2 px-2">
-                      <span>Poor</span>
-                      <span>Excellent</span>
-                    </div>
+                    <Controller
+                      name={question.id as never}
+                      control={control}
+                      render={({ field }) => (
+                        <div>
+                          <div className="flex space-x-4" data-testid={`rating-group-${question.id}`}>
+                            {[1, 2, 3, 4, 5].map((rating) => (
+                              <button
+                                key={rating}
+                                type="button"
+                                onClick={() => field.onChange(rating)}
+                                className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-medium transition-all transform hover:scale-110
+                                  ${field.value === rating
+                                    ? 'bg-purple-600 text-white shadow-lg'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                  }`}
+                              >
+                                {rating}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="flex justify-between text-sm text-gray-500 mt-2 px-2">
+                            <span>Poor</span>
+                            <span>Excellent</span>
+                          </div>
+                        </div>
+                      )}
+                    />
+                    {errors[question.id as keyof FormValues] && (
+                      <p className="mt-2 text-sm text-red-600" role="alert">
+                        {String((errors[question.id as keyof FormValues] as { message?: string })?.message ?? 'This field is required')}
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -121,11 +148,14 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
                   <div className="mt-4">
                     <Input
                       as="input"
-                      value={responses[question.id] as string || ''}
-                      onChange={(e) => handleInputChange(question.id, e.target.value)}
+                      {...register(question.id as never)}
                       placeholder="Share your thoughts here..."
-                      required={question.required}
                     />
+                    {errors[question.id as keyof FormValues] && (
+                      <p className="mt-2 text-sm text-red-600" role="alert">
+                        {String((errors[question.id as keyof FormValues] as { message?: string })?.message ?? 'This field is required')}
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -134,24 +164,22 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
                     {question.options.map((option, optIndex) => (
                       <label
                         key={optIndex}
-                        className={`flex items-center p-3 rounded-lg border-2 transition-all cursor-pointer
-                          ${responses[question.id] === option
-                            ? 'border-purple-500 bg-purple-50'
-                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                          }`}
+                        className="flex items-center p-3 rounded-lg border-2 transition-all cursor-pointer border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                       >
                         <input
                           type="radio"
-                          name={question.id}
                           value={option}
-                          checked={responses[question.id] === option}
-                          onChange={(e) => handleInputChange(question.id, e.target.value)}
+                          {...register(question.id as never)}
                           className="h-4 w-4 text-purple-600 focus:ring-purple-500"
-                          required={question.required}
                         />
                         <span className="ml-3 text-gray-700">{option}</span>
                       </label>
                     ))}
+                    {errors[question.id as keyof FormValues] && (
+                      <p className="mt-2 text-sm text-red-600" role="alert">
+                        {String((errors[question.id as keyof FormValues] as { message?: string })?.message ?? 'This field is required')}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -159,7 +187,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
           </div>
         ))}
 
-        {error && (
+        {submitError && (
           <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">
             <div className="flex">
               <div className="flex-shrink-0">
@@ -168,7 +196,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
                 </svg>
               </div>
               <div className="ml-3">
-                <p className="text-sm text-red-600">{error}</p>
+                <p className="text-sm text-red-600">{submitError}</p>
               </div>
             </div>
           </div>
