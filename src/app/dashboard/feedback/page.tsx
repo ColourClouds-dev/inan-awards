@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { getAllForms, getAllResponses, saveForm } from '../../../lib/firestore';
+import { getAllForms, getAllResponses, saveForm, deactivateForm } from '../../../lib/firestore';
 import { exportToExcel } from '../../../lib/exportToExcel';
 import FeedbackFormBuilder from '../../../components/FeedbackFormBuilder';
 import ResponsesTable from '../../../components/ResponsesTable';
@@ -12,6 +12,8 @@ export default function FeedbackDashboardPage() {
   const [responses, setResponses] = useState<FeedbackResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [deactivating, setDeactivating] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -43,6 +45,27 @@ export default function FeedbackDashboardPage() {
 
   const handleExport = () => {
     exportToExcel(responses, forms);
+  };
+
+  const handleCopyLink = (formId: string) => {
+    const url = `${window.location.origin}/feedback/${formId}`;
+    navigator.clipboard.writeText(url);
+    setCopiedId(formId);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleDeactivate = async (formId: string) => {
+    if (!confirm('Deactivate this form? Guests will no longer be able to submit responses.')) return;
+    setDeactivating(formId);
+    try {
+      await deactivateForm(formId);
+      setForms(prev => prev.map(f => f.id === formId ? { ...f, isActive: false } : f));
+    } catch (err) {
+      console.error('Error deactivating form:', err);
+      alert('Failed to deactivate form. Please try again.');
+    } finally {
+      setDeactivating(null);
+    }
   };
 
   if (loading) {
@@ -77,6 +100,70 @@ export default function FeedbackDashboardPage() {
     <div className="p-6 space-y-10">
       <section>
         <FeedbackFormBuilder onSave={handleSaveForm} />
+      </section>
+
+      {/* Feedback Forms List */}
+      <section>
+        <h2 className="text-xl font-semibold mb-4">Feedback Forms</h2>
+        {forms.length === 0 ? (
+          <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">
+            No forms created yet. Use the builder above to create your first form.
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {forms.map(form => {
+                  const createdAt = form.createdAt instanceof Date
+                    ? form.createdAt
+                    : new Date((form.createdAt as any).seconds * 1000);
+                  return (
+                    <tr key={form.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 text-sm font-medium text-gray-900">{form.title}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{form.location}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">{createdAt.toLocaleDateString()}</td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          form.isActive
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {form.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm space-x-3">
+                        <button
+                          onClick={() => handleCopyLink(form.id)}
+                          className="text-purple-600 hover:text-purple-800 font-medium"
+                        >
+                          {copiedId === form.id ? 'Copied!' : 'Copy Link'}
+                        </button>
+                        {form.isActive && (
+                          <button
+                            onClick={() => handleDeactivate(form.id)}
+                            disabled={deactivating === form.id}
+                            className="text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
+                          >
+                            {deactivating === form.id ? 'Deactivating...' : 'Deactivate'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <section>

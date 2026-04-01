@@ -20,8 +20,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navigationItems = [
     { href: '/dashboard', label: 'Overview', path: '/dashboard' },
     { href: '/dashboard/results', label: 'Results', path: '/dashboard/results' },
+    { href: '/dashboard/polls', label: 'Nominations', path: '/dashboard/polls' },
     { href: '/dashboard/feedback', label: 'Feedback', path: '/dashboard/feedback' },
-    { href: '/dashboard/settings', label: 'Settings', path: '/dashboard/settings' }
+    { href: '/dashboard/settings', label: 'Settings', path: '/dashboard/settings' },
   ];
 
   const handleSignOut = async () => {

@@ -298,12 +298,18 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
                       {question.options?.map((option, optIndex) => (
                         <div key={optIndex} className="flex items-center space-x-2">
                           <span className="text-gray-500">•</span>
-                          <Input
-                            value={option}
-                            onChange={(e) => updateOption(question.id, optIndex, e.target.value)}
-                            placeholder={`Option ${optIndex + 1}`}
-                            required
-                          />
+                          {option === '__others__' ? (
+                            <span className="text-sm text-gray-500 italic px-2 py-1 bg-gray-100 rounded">
+                              Others (Please Specify) — text input shown to guest
+                            </span>
+                          ) : (
+                            <Input
+                              value={option}
+                              onChange={(e) => updateOption(question.id, optIndex, e.target.value)}
+                              placeholder={`Option ${optIndex + 1}`}
+                              required
+                            />
+                          )}
                           <Button
                             onClick={() => removeOption(question.id, optIndex)}
                           >
@@ -311,12 +317,22 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
                           </Button>
                         </div>
                       ))}
-                      <Button
-                        onClick={() => addOption(question.id)}
-                        className="ml-4"
-                      >
-                        Add Option
-                      </Button>
+                      <div className="flex items-center space-x-2 ml-4">
+                        <Button onClick={() => addOption(question.id)}>
+                          Add Option
+                        </Button>
+                        {!question.options?.includes('__others__') && (
+                          <Button
+                            onClick={() =>
+                              updateQuestion(question.id, {
+                                options: [...(question.options || []), '__others__'],
+                              })
+                            }
+                          >
+                            + Others (Please Specify)
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   )}
 

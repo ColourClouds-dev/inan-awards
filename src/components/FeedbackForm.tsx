@@ -20,9 +20,18 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
   // Build zod schema dynamically from form.questions
   const schema = useMemo(() => {
     const schemaShape = form.questions.reduce((acc, q) => {
-      const base = q.type === 'rating'
-        ? z.number().min(1).max(5)
-        : z.string().min(1);
+      let base: z.ZodTypeAny;
+      if (q.type === 'rating') {
+        base = z.number().min(1).max(5);
+      } else if (q.type === 'multiChoice' && q.options?.includes('__others__')) {
+        // If "Others" is selected, the value must not be the sentinel — guest must type something
+        base = z.string().min(1).refine(
+          (val) => val !== '__others__',
+          { message: 'Please specify your answer in the "Others" field' }
+        );
+      } else {
+        base = z.string().min(1);
+      }
       acc[q.id] = q.required ? base : base.optional();
       return acc;
     }, {} as Record<string, z.ZodTypeAny>);
@@ -161,20 +170,68 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
 
                 {question.type === 'multiChoice' && question.options && (
                   <div className="mt-4 space-y-3">
-                    {question.options.map((option, optIndex) => (
-                      <label
-                        key={optIndex}
-                        className="flex items-center p-3 rounded-lg border-2 transition-all cursor-pointer border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                      >
-                        <input
-                          type="radio"
-                          value={option}
-                          {...register(question.id as never)}
-                          className="h-4 w-4 text-purple-600 focus:ring-purple-500"
-                        />
-                        <span className="ml-3 text-gray-700">{option}</span>
-                      </label>
-                    ))}
+                    <Controller
+                      name={question.id as never}
+                      control={control}
+                      render={({ field }) => (
+                        <>
+                          {question.options!.map((option, optIndex) => {
+                            if (option === '__others__') {
+                              const fixedOptions = question.options!.filter(o => o !== '__others__');
+                              const isSelected = field.value === '__others__' || (
+                                typeof field.value === 'string' &&
+                                field.value !== '' &&
+                                !fixedOptions.includes(field.value as string)
+                              );
+                              const othersText = isSelected && field.value !== '__others__' ? field.value as string : '';
+                              return (
+                                <label
+                                  key={optIndex}
+                                  className="flex items-center p-3 rounded-lg border-2 transition-all cursor-pointer border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                                >
+                                  <input
+                                    type="radio"
+                                    name={question.id}
+                                    value="__others__"
+                                    checked={isSelected}
+                                    onChange={() => field.onChange('__others__')}
+                                    className="h-4 w-4 text-purple-600 focus:ring-purple-500"
+                                  />
+                                  <span className="ml-3 text-gray-700 mr-3">Others</span>
+                                  {isSelected && (
+                                    <input
+                                      type="text"
+                                      placeholder="Please specify..."
+                                      value={othersText}
+                                      onChange={(e) => field.onChange(e.target.value || '__others__')}
+                                      className="flex-1 border-b border-gray-400 focus:outline-none focus:border-purple-500 text-sm py-1"
+                                      autoFocus
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  )}
+                                </label>
+                              );
+                            }
+                            return (
+                              <label
+                                key={optIndex}
+                                className="flex items-center p-3 rounded-lg border-2 transition-all cursor-pointer border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                              >
+                                <input
+                                  type="radio"
+                                  name={question.id}
+                                  value={option}
+                                  checked={field.value === option}
+                                  onChange={() => field.onChange(option)}
+                                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
+                                />
+                                <span className="ml-3 text-gray-700">{option}</span>
+                              </label>
+                            );
+                          })}
+                        </>
+                      )}
+                    />
                     {errors[question.id as keyof FormValues] && (
                       <p className="mt-2 text-sm text-red-600" role="alert">
                         {String((errors[question.id as keyof FormValues] as { message?: string })?.message ?? 'This field is required')}

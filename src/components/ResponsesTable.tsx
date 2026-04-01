@@ -39,6 +39,17 @@ export default function ResponsesTable({ responses, forms, onExport }: Responses
     return map;
   }, [forms]);
 
+  // Map questionId → question text across all forms
+  const questionTextMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const form of forms) {
+      for (const q of form.questions) {
+        map[q.id] = q.question;
+      }
+    }
+    return map;
+  }, [forms]);
+
   // Collect all unique question IDs across all responses
   const questionIds = useMemo(() => {
     const ids = new Set<string>();
@@ -93,13 +104,13 @@ export default function ResponsesTable({ responses, forms, onExport }: Responses
     const dynamicCols = questionIds.map((qId) =>
       columnHelper.accessor(qId, {
         id: qId,
-        header: qId,
+        header: questionTextMap[qId] ?? qId,
         cell: (info) => info.getValue() ?? '',
       })
     );
 
     return [...staticCols, ...dynamicCols];
-  }, [questionIds]);
+  }, [questionIds, questionTextMap]);
 
   const table = useReactTable({
     data,

@@ -19,15 +19,24 @@ export async function submitFeedback(response: FeedbackResponse): Promise<void> 
 }
 
 export async function getAllResponses(): Promise<FeedbackResponse[]> {
-  const q = query(collection(db, 'feedback-responses'), orderBy('submittedAt', 'desc'));
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeedbackResponse));
+  const snapshot = await getDocs(collection(db, 'feedback-responses'));
+  const responses = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeedbackResponse));
+  return responses.sort((a, b) => {
+    const aTime = a.submittedAt instanceof Date ? a.submittedAt.getTime() : (a.submittedAt as any)?.seconds ?? 0;
+    const bTime = b.submittedAt instanceof Date ? b.submittedAt.getTime() : (b.submittedAt as any)?.seconds ?? 0;
+    return bTime - aTime;
+  });
 }
 
 export async function getAllForms(): Promise<FeedbackForm[]> {
-  const q = query(collection(db, 'feedback-forms'), orderBy('createdAt', 'desc'));
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeedbackForm));
+  const snapshot = await getDocs(collection(db, 'feedback-forms'));
+  const forms = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeedbackForm));
+  // Sort client-side to avoid Firestore index requirements
+  return forms.sort((a, b) => {
+    const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : (a.createdAt as any)?.seconds ?? 0;
+    const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : (b.createdAt as any)?.seconds ?? 0;
+    return bTime - aTime;
+  });
 }
 
 export async function getFormById(formId: string): Promise<FeedbackForm | null> {
