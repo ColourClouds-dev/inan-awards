@@ -79,9 +79,6 @@ export default function SettingsPage() {
     if (startDate >= endDate) {
       return 'Start date must be before end date';
     }
-    if (startDate < new Date(Date.now() - 86400000)) { // Don't allow dates more than 1 day in the past
-      return 'Start date cannot be in the past';
-    }
     return null;
   };
 

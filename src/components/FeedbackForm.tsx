@@ -122,7 +122,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
                       control={control}
                       render={({ field }) => (
                         <div>
-                          <div className="flex space-x-4" data-testid={`rating-group-${question.id}`}>
+                          <div className="flex gap-3 flex-wrap" data-testid={`rating-group-${question.id}`}>
                             {[1, 2, 3, 4, 5].map((rating) => (
                               <button
                                 key={rating}
@@ -138,7 +138,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
                               </button>
                             ))}
                           </div>
-                          <div className="flex justify-between text-sm text-gray-500 mt-2 px-2">
+                          <div className="flex justify-between text-sm text-gray-500 mt-2" style={{ width: 'calc(5 * 3rem + 4 * 0.75rem)' }}>
                             <span>Poor</span>
                             <span>Excellent</span>
                           </div>
