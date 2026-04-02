@@ -25,6 +25,13 @@ export interface FeedbackResponse {
     [questionId: string]: string | number;
   };
   submittedAt: Date | Timestamp;
+  // Visitor metadata
+  visitorIp?: string;
+  visitorCity?: string;
+  visitorRegion?: string;
+  visitorCountry?: string;
+  visitorIsp?: string;
+  visitorAccessedAt?: string;
 }
 
 export interface SurveySettings {

@@ -1,13 +1,19 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import Input from './Input';
 import Button from './Button';
+import Toast from './Toast';
+import { useToast } from '../hooks/useToast';
 import { submitFeedback } from '../lib/firestore';
+import { hasIpSubmittedForm } from '../lib/firestore';
+import { getVisitorInfo } from '../lib/visitorInfo';
 import type { FeedbackForm } from '../types';
+import type { VisitorInfo } from '../lib/visitorInfo';
 
 interface FeedbackFormProps {
   form: FeedbackForm;
@@ -16,6 +22,28 @@ interface FeedbackFormProps {
 const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [visitorInfo, setVisitorInfo] = useState<VisitorInfo | null>(null);
+  const [duplicateIp, setDuplicateIp] = useState(false);
+  const [checkingIp, setCheckingIp] = useState(true);
+  const { toasts, showToast, dismissToast } = useToast();
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const info = await getVisitorInfo();
+        setVisitorInfo(info);
+        if (info.ip !== 'unknown') {
+          const isDuplicate = await hasIpSubmittedForm(form.id, info.ip);
+          setDuplicateIp(isDuplicate);
+        }
+      } catch {
+        // proceed without blocking
+      } finally {
+        setCheckingIp(false);
+      }
+    };
+    init();
+  }, [form.id]);
 
   // Build zod schema dynamically from form.questions
   const schema = useMemo(() => {
@@ -58,11 +86,21 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
         location: form.location,
         responses: data as { [key: string]: string | number },
         submittedAt: new Date(),
+        ...(visitorInfo ? {
+          visitorIp: visitorInfo.ip,
+          visitorCity: visitorInfo.city,
+          visitorRegion: visitorInfo.region,
+          visitorCountry: visitorInfo.country,
+          visitorIsp: visitorInfo.isp,
+          visitorAccessedAt: visitorInfo.accessedAt,
+        } : {}),
       };
       await submitFeedback(feedbackResponse);
+      showToast('Your feedback has been submitted successfully!', 'success');
       setSubmitted(true);
     } catch (err) {
       console.error('Error submitting feedback:', err);
+      showToast('Failed to submit feedback. Please try again.', 'error');
       setSubmitError('Failed to submit feedback. Please try again.');
     }
   };
@@ -72,6 +110,28 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
       <div className="max-w-2xl mx-auto p-6">
         <div className="bg-white rounded-lg shadow-lg p-8 text-center">
           <p className="text-gray-600 text-lg">This form is no longer active.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (checkingIp) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+      </div>
+    );
+  }
+
+  if (duplicateIp) {
+    return (
+      <div className="max-w-2xl mx-auto p-6">
+        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+          <svg className="w-12 h-12 text-yellow-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">Already Submitted</h2>
+          <p className="text-gray-600">You have already submitted a response for this form. Only one submission per device is allowed.</p>
         </div>
       </div>
     );
@@ -88,6 +148,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
+      <Toast toasts={toasts} onDismiss={dismissToast} />
       <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
         <h1 className="text-3xl font-bold mb-2">{form.title}</h1>
         <div className="flex items-center text-gray-600 mb-6">

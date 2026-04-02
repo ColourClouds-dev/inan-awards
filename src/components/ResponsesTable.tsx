@@ -22,6 +22,11 @@ type RowData = {
   formTitle: string;
   location: string;
   submittedAt: string;
+  visitorIp: string;
+  visitorCity: string;
+  visitorCountry: string;
+  visitorIsp: string;
+  visitorAccessedAt: string;
   [questionId: string]: string;
 };
 
@@ -75,10 +80,20 @@ export default function ResponsesTable({ responses, forms, onExport }: Responses
         formTitle: formsMap[response.formId] ?? response.formId,
         location: response.location,
         submittedAt,
+        visitorIp: (response as any).visitorIp ?? '—',
+        visitorCity: (response as any).visitorCity ?? '—',
+        visitorCountry: (response as any).visitorCountry ?? '—',
+        visitorIsp: (response as any).visitorIsp ?? '—',
+        visitorAccessedAt: (response as any).visitorAccessedAt
+          ? new Date((response as any).visitorAccessedAt).toLocaleString()
+          : '—',
       };
 
       for (const qId of questionIds) {
-        row[qId] = response.responses[qId] !== undefined ? String(response.responses[qId]) : '';
+        const val = response.responses[qId];
+        row[qId] = val !== undefined
+          ? (String(val) === '__others__' ? '' : String(val))
+          : '';
       }
 
       return row;
@@ -99,12 +114,32 @@ export default function ResponsesTable({ responses, forms, onExport }: Responses
         header: 'Submitted At',
         cell: (info) => info.getValue(),
       }),
+      columnHelper.accessor('visitorIp', {
+        header: 'IP Address',
+        cell: (info) => info.getValue(),
+      }),
+      columnHelper.accessor('visitorCity', {
+        header: 'City',
+        cell: (info) => info.getValue(),
+      }),
+      columnHelper.accessor('visitorCountry', {
+        header: 'Country',
+        cell: (info) => info.getValue(),
+      }),
+      columnHelper.accessor('visitorIsp', {
+        header: 'ISP',
+        cell: (info) => info.getValue(),
+      }),
+      columnHelper.accessor('visitorAccessedAt', {
+        header: 'Accessed At',
+        cell: (info) => info.getValue(),
+      }),
     ];
 
     const dynamicCols = questionIds.map((qId) =>
       columnHelper.accessor(qId, {
         id: qId,
-        header: questionTextMap[qId] ?? qId,
+        header: questionTextMap[qId] ?? `Question (${qId.slice(0, 8)}…)`,
         cell: (info) => info.getValue() ?? '',
       })
     );

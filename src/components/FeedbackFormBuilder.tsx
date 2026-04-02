@@ -5,6 +5,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { QRCodeSVG } from 'qrcode.react';
 import Input from './Input';
 import Button from './Button';
+import Toast from './Toast';
+import { useToast } from '../hooks/useToast';
 import type { FeedbackForm, FeedbackQuestion } from '../types';
 
 interface FeedbackFormBuilderProps {
@@ -52,6 +54,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
   const [formUrl, setFormUrl] = useState('');
   const [currentStep, setCurrentStep] = useState<'basics' | 'questions' | 'preview'>('basics');
   const [previewMode, setPreviewMode] = useState(false);
+  const { toasts, showToast, dismissToast } = useToast();
 
   const locations = [
     'Qaras Hotels: House 3',
@@ -137,10 +140,12 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         await onSave(form);
         const formUrl = `${window.location.origin}/feedback/${form.id}`;
         setFormUrl(formUrl);
+        showToast('Form created successfully!', 'success');
         setShowQR(true);
       } catch (error) {
         console.error('Error saving form:', error);
-        throw error; // Re-throw to be handled by the dashboard
+        showToast('Failed to create form. Please try again.', 'error');
+        throw error;
       }
     } catch (error) {
       console.error('Error saving form:', error);
@@ -187,7 +192,9 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
                   disabled
                   className="h-4 w-4 text-purple-600"
                 />
-                <span className="text-gray-700">{option}</span>
+                <span className="text-gray-700">
+                  {option === '__others__' ? 'Others (Please Specify)' : option}
+                </span>
               </label>
             ))}
           </div>
@@ -381,6 +388,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
   if (showQR) {
     return (
       <div className="bg-white p-6 rounded-lg shadow text-center">
+        <Toast toasts={toasts} onDismiss={dismissToast} />
         <h2 className="text-2xl font-bold mb-2">Form Created Successfully!</h2>
         <p className="text-gray-600 mb-6">Share this QR code or link with your customers</p>
         <div className="flex flex-col items-center space-y-4 mb-8">
@@ -396,6 +404,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
 
   return (
     <div className="max-w-4xl mx-auto">
+      <Toast toasts={toasts} onDismiss={dismissToast} />
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Create Feedback Form</h1>

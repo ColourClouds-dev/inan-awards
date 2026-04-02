@@ -1,8 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Only use static export during `next build` (e.g. Vercel deployment).
-  // Omitting it in dev allows dynamic routes like /feedback/[formId] to work normally.
-  ...(process.env.NODE_ENV === 'production' ? { output: 'export' } : {}),
   reactStrictMode: true,
   images: { unoptimized: true },
   env: {

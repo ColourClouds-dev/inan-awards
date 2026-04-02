@@ -1,19 +1,23 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { getAllForms, getAllResponses, saveForm, deactivateForm } from '../../../lib/firestore';
+import { getAllForms, getAllResponses, saveForm, deactivateForm, deleteForm } from '../../../lib/firestore';
 import { exportToExcel } from '../../../lib/exportToExcel';
 import FeedbackFormBuilder from '../../../components/FeedbackFormBuilder';
 import ResponsesTable from '../../../components/ResponsesTable';
+import Toast from '../../../components/Toast';
+import { useToast } from '../../../hooks/useToast';
 import type { FeedbackForm, FeedbackResponse } from '../../../types';
 
 export default function FeedbackDashboardPage() {
+  const { toasts, showToast, dismissToast } = useToast();
   const [forms, setForms] = useState<FeedbackForm[]>([]);
   const [responses, setResponses] = useState<FeedbackResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deactivating, setDeactivating] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -51,6 +55,7 @@ export default function FeedbackDashboardPage() {
     const url = `${window.location.origin}/feedback/${formId}`;
     navigator.clipboard.writeText(url);
     setCopiedId(formId);
+    showToast('Link copied to clipboard!', 'success');
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -60,11 +65,27 @@ export default function FeedbackDashboardPage() {
     try {
       await deactivateForm(formId);
       setForms(prev => prev.map(f => f.id === formId ? { ...f, isActive: false } : f));
+      showToast('Form deactivated successfully.', 'success');
     } catch (err) {
       console.error('Error deactivating form:', err);
-      alert('Failed to deactivate form. Please try again.');
+      showToast('Failed to deactivate form. Please try again.', 'error');
     } finally {
       setDeactivating(null);
+    }
+  };
+
+  const handleDelete = async (formId: string) => {
+    if (!confirm('Permanently delete this form? This cannot be undone.')) return;
+    setDeleting(formId);
+    try {
+      await deleteForm(formId);
+      setForms(prev => prev.filter(f => f.id !== formId));
+      showToast('Form deleted successfully.', 'success');
+    } catch (err) {
+      console.error('Error deleting form:', err);
+      showToast('Failed to delete form. Please try again.', 'error');
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -98,6 +119,7 @@ export default function FeedbackDashboardPage() {
 
   return (
     <div className="p-6 space-y-10">
+      <Toast toasts={toasts} onDismiss={dismissToast} />
       <section>
         <FeedbackFormBuilder onSave={handleSaveForm} />
       </section>
@@ -154,6 +176,15 @@ export default function FeedbackDashboardPage() {
                             className="text-red-500 hover:text-red-700 font-medium disabled:opacity-50"
                           >
                             {deactivating === form.id ? 'Deactivating...' : 'Deactivate'}
+                          </button>
+                        )}
+                        {!form.isActive && (
+                          <button
+                            onClick={() => handleDelete(form.id)}
+                            disabled={deleting === form.id}
+                            className="text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+                          >
+                            {deleting === form.id ? 'Deleting...' : 'Delete'}
                           </button>
                         )}
                       </td>

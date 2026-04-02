@@ -9,8 +9,10 @@ import {
   addDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   orderBy,
   query,
+  where,
 } from 'firebase/firestore';
 import type { FeedbackForm, FeedbackResponse } from '../types';
 
@@ -54,4 +56,20 @@ export async function deactivateForm(formId: string): Promise<void> {
 export async function saveForm(form: FeedbackForm): Promise<void> {
   const docRef = doc(db, 'feedback-forms', form.id);
   await setDoc(docRef, form);
+}
+
+export async function deleteForm(formId: string): Promise<void> {
+  const docRef = doc(db, 'feedback-forms', formId);
+  await deleteDoc(docRef);
+}
+
+/** Check if an IP has already submitted a response for a specific form */
+export async function hasIpSubmittedForm(formId: string, ip: string): Promise<boolean> {
+  const q = query(
+    collection(db, 'feedback-responses'),
+    where('formId', '==', formId),
+    where('visitorIp', '==', ip)
+  );
+  const snapshot = await getDocs(q);
+  return !snapshot.empty;
 }

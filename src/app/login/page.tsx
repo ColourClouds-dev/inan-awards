@@ -4,8 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
+import Toast from '../../components/Toast';
+import { useToast } from '../../hooks/useToast';
 
 function getErrorMessage(error: { code?: string } | null | undefined): string {
   switch (error?.code) {
@@ -30,6 +33,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const { toasts, showToast, dismissToast } = useToast();
   const router = useRouter();
 
   useEffect(() => {
@@ -51,9 +55,12 @@ export default function LoginPage() {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.push('/dashboard');
+      showToast('Signed in successfully!', 'success');
+      setTimeout(() => router.push('/dashboard'), 1000);
     } catch (err: any) {
-      setError(getErrorMessage(err));
+      const msg = getErrorMessage(err);
+      setError(msg);
+      showToast(msg, 'error');
     } finally {
       setLoading(false);
     }
@@ -69,10 +76,17 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <Toast toasts={toasts} onDismiss={dismissToast} />
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="text-center">
+          <Link href="/" className="inline-flex items-center text-sm text-purple-600 hover:text-purple-800 mb-4">
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Home
+          </Link>
           <h1 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to View Results
+            INAN Admin Feedback System
           </h1>
         </div>
       </div>
