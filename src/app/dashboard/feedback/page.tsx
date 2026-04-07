@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { getAllForms, getAllResponses, saveForm, deactivateForm, deleteForm } from '../../../lib/firestore';
 import { exportToExcel } from '../../../lib/exportToExcel';
 import FeedbackFormBuilder from '../../../components/FeedbackFormBuilder';
 import ResponsesTable from '../../../components/ResponsesTable';
 import Toast from '../../../components/Toast';
+import FormAnalyticsPanel from '../../../components/FormAnalyticsPanel';
 import { useToast } from '../../../hooks/useToast';
 import type { FeedbackForm, FeedbackResponse } from '../../../types';
 
@@ -89,6 +91,26 @@ export default function FeedbackDashboardPage() {
     }
   };
 
+  const handleDownloadQR = (formId: string, formTitle: string) => {
+    const container = document.getElementById(`qr-hidden-${formId}`);
+    const svg = container?.querySelector('svg') as SVGElement | null;
+    if (!svg) return;
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const canvas = document.createElement('canvas');
+    canvas.width = 400;
+    canvas.height = 400;
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.onload = () => {
+      ctx?.drawImage(img, 0, 0, 400, 400);
+      const a = document.createElement('a');
+      a.download = `${formTitle.replace(/\s+/g, '-').toLowerCase()}-qr.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+    };
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
@@ -149,7 +171,8 @@ export default function FeedbackDashboardPage() {
                     ? form.createdAt
                     : new Date((form.createdAt as any).seconds * 1000);
                   return (
-                    <tr key={form.id} className="hover:bg-gray-50">
+                    <React.Fragment key={form.id}>
+                    <tr className="hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">{form.title}</td>
                       <td className="px-6 py-4 text-sm text-gray-500">{form.location}</td>
                       <td className="px-6 py-4 text-sm text-gray-500">{createdAt.toLocaleDateString()}</td>
@@ -169,6 +192,12 @@ export default function FeedbackDashboardPage() {
                         >
                           {copiedId === form.id ? 'Copied!' : 'Copy Link'}
                         </button>
+                        <button
+                          onClick={() => handleDownloadQR(form.id, form.title)}
+                          className="text-purple-600 hover:text-purple-800 font-medium"
+                        >
+                          Download QR
+                        </button>
                         {form.isActive && (
                           <button
                             onClick={() => handleDeactivate(form.id)}
@@ -187,8 +216,18 @@ export default function FeedbackDashboardPage() {
                             {deleting === form.id ? 'Deleting...' : 'Delete'}
                           </button>
                         )}
+                        {/* Hidden QR node for download */}
+                        <div id={`qr-hidden-${form.id}`} className="hidden">
+                          <QRCodeSVG value={`${typeof window !== 'undefined' ? window.location.origin : ''}/feedback/${form.id}`} size={400} />
+                        </div>
                       </td>
                     </tr>
+                    <tr key={`analytics-${form.id}`}>
+                      <td colSpan={5} className="px-6 pb-4">
+                        <FormAnalyticsPanel form={form} responses={responses} />
+                      </td>
+                    </tr>
+                    </React.Fragment>
                   );
                 })}
               </tbody>

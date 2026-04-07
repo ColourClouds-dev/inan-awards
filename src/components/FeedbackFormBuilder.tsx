@@ -7,7 +7,7 @@ import Input from './Input';
 import Button from './Button';
 import Toast from './Toast';
 import { useToast } from '../hooks/useToast';
-import type { FeedbackForm, FeedbackQuestion } from '../types';
+import type { FeedbackForm, FeedbackQuestion, CustomTagRule } from '../types';
 
 interface FeedbackFormBuilderProps {
   onSave: (form: FeedbackForm) => Promise<void>;
@@ -52,8 +52,9 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
   const [questions, setQuestions] = useState<FeedbackQuestion[]>([]);
   const [showQR, setShowQR] = useState(false);
   const [formUrl, setFormUrl] = useState('');
-  const [currentStep, setCurrentStep] = useState<'basics' | 'questions' | 'preview'>('basics');
+  const [currentStep, setCurrentStep] = useState<'basics' | 'questions' | 'tags' | 'preview'>('basics');
   const [previewMode, setPreviewMode] = useState(false);
+  const [customTagRules, setCustomTagRules] = useState<CustomTagRule[]>([]);
   const { toasts, showToast, dismissToast } = useToast();
 
   const locations = [
@@ -132,7 +133,8 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
       location,
       questions,
       createdAt: new Date(),
-      isActive: true
+      isActive: true,
+      customTagRules: customTagRules.length > 0 ? customTagRules : undefined,
     };
 
     try {
@@ -187,7 +189,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
             {question.options.map((option, index) => (
               <label key={index} className="flex items-center space-x-2">
                 <input
-                  type="radio"
+                  type={question.multiSelect ? 'checkbox' : 'radio'}
                   name={question.id}
                   disabled
                   className="h-4 w-4 text-purple-600"
@@ -197,6 +199,9 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
                 </span>
               </label>
             ))}
+            {question.multiSelect && question.minSelections && (
+              <p className="text-xs text-gray-400 mt-1">Select at least {question.minSelections}</p>
+            )}
           </div>
         )}
       </div>
@@ -314,9 +319,51 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
 
                   {question.type === 'multiChoice' && (
                     <div className="space-y-2 ml-4">
+                      {/* Single / Multiple answer toggle */}
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-sm text-gray-600">Answer type:</span>
+                        <button
+                          type="button"
+                          onClick={() => updateQuestion(question.id, { multiSelect: false, minSelections: undefined })}
+                          className={`px-3 py-1 text-xs rounded-full font-medium border transition-colors ${
+                            !question.multiSelect
+                              ? 'bg-purple-600 text-white border-purple-600'
+                              : 'bg-white text-gray-600 border-gray-300 hover:border-purple-400'
+                          }`}
+                        >
+                          Single answer
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateQuestion(question.id, { multiSelect: true, minSelections: 1 })}
+                          className={`px-3 py-1 text-xs rounded-full font-medium border transition-colors ${
+                            question.multiSelect
+                              ? 'bg-purple-600 text-white border-purple-600'
+                              : 'bg-white text-gray-600 border-gray-300 hover:border-purple-400'
+                          }`}
+                        >
+                          Multiple answers
+                        </button>
+                      </div>
+
+                      {/* Min selections input */}
+                      {question.multiSelect && (
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-sm text-gray-600">Min selections required:</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={question.options?.filter(o => o !== '__others__').length || 1}
+                            value={question.minSelections ?? 1}
+                            onChange={e => updateQuestion(question.id, { minSelections: Math.max(1, parseInt(e.target.value) || 1) })}
+                            className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          />
+                        </div>
+                      )}
+
                       {question.options?.map((option, optIndex) => (
                         <div key={optIndex} className="flex items-center space-x-2">
-                          <span className="text-gray-500">•</span>
+                          <span className="text-gray-400 text-xs">{question.multiSelect ? '☐' : '○'}</span>
                           {option === '__others__' ? (
                             <span className="text-sm text-gray-500 italic px-2 py-1 bg-gray-100 rounded">
                               Others (Please Specify) — text input shown to guest
@@ -329,17 +376,11 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
                               required
                             />
                           )}
-                          <Button
-                            onClick={() => removeOption(question.id, optIndex)}
-                          >
-                            Remove
-                          </Button>
+                          <Button onClick={() => removeOption(question.id, optIndex)}>Remove</Button>
                         </div>
                       ))}
                       <div className="flex items-center space-x-2 ml-4">
-                        <Button onClick={() => addOption(question.id)}>
-                          Add Option
-                        </Button>
+                        <Button onClick={() => addOption(question.id)}>Add Option</Button>
                         {!question.options?.includes('__others__') && (
                           <Button
                             onClick={() =>
@@ -376,24 +417,86 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
           ← Back to Details
         </Button>
         <Button
-          onClick={handleSubmit}
+          onClick={() => setCurrentStep('tags')}
           disabled={questions.length === 0}
         >
-          Create Form
+          Next: Logic Tags →
         </Button>
       </div>
     </div>
   );
 
   if (showQR) {
+    const handleDownloadQR = () => {
+      const svg = document.querySelector('#qr-code-svg svg') as SVGElement;
+      if (!svg) return;
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const canvas = document.createElement('canvas');
+      canvas.width = 400;
+      canvas.height = 400;
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      img.onload = () => {
+        ctx?.drawImage(img, 0, 0, 400, 400);
+        const a = document.createElement('a');
+        a.download = 'feedback-form-qr.png';
+        a.href = canvas.toDataURL('image/png');
+        a.click();
+      };
+      img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+    };
+
+    const handleDownloadLink = () => {
+      const blob = new Blob([formUrl], { type: 'text/plain' });
+      const a = document.createElement('a');
+      a.download = 'feedback-form-link.txt';
+      a.href = URL.createObjectURL(blob);
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+
+    const handleCopyLink = () => {
+      navigator.clipboard.writeText(formUrl);
+      showToast('Link copied to clipboard!', 'success');
+    };
+
     return (
       <div className="bg-white p-6 rounded-lg shadow text-center">
         <Toast toasts={toasts} onDismiss={dismissToast} />
         <h2 className="text-2xl font-bold mb-2">Form Created Successfully!</h2>
         <p className="text-gray-600 mb-6">Share this QR code or link with your customers</p>
-        <div className="flex flex-col items-center space-y-4 mb-8">
+        <div className="flex flex-col items-center space-y-4 mb-6" id="qr-code-svg">
           <QRCodeSVG value={formUrl} size={200} />
           <p className="text-sm text-gray-600 break-all">{formUrl}</p>
+        </div>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-6">
+          <button
+            onClick={handleDownloadQR}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Download QR Code (PNG)
+          </button>
+          <button
+            onClick={handleDownloadLink}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Download Link (TXT)
+          </button>
+          <button
+            onClick={handleCopyLink}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            Copy Link
+          </button>
         </div>
         <Button onClick={() => window.location.reload()}>
           Create Another Form
@@ -401,6 +504,128 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
       </div>
     );
   }
+
+  const renderTagsStep = () => {
+    const colorOptions: CustomTagRule['color'][] = ['green', 'yellow', 'red', 'blue', 'gray'];
+    const operatorOptions: CustomTagRule['condition']['operator'][] = ['contains', 'equals', 'less_than', 'greater_than'];
+    const operatorLabels: Record<string, string> = {
+      contains: 'contains text',
+      equals: 'equals',
+      less_than: 'is less than',
+      greater_than: 'is greater than',
+    };
+
+    const addRule = () => {
+      if (questions.length === 0) return;
+      setCustomTagRules(prev => [...prev, {
+        id: uuidv4(),
+        label: '',
+        color: 'blue',
+        condition: { questionId: questions[0].id, operator: 'contains', value: '' },
+      }]);
+    };
+
+    const updateRule = (id: string, updates: Partial<CustomTagRule>) => {
+      setCustomTagRules(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
+    };
+
+    const updateCondition = (id: string, updates: Partial<CustomTagRule['condition']>) => {
+      setCustomTagRules(prev => prev.map(r =>
+        r.id === id ? { ...r, condition: { ...r.condition, ...updates } } : r
+      ));
+    };
+
+    const removeRule = (id: string) => {
+      setCustomTagRules(prev => prev.filter(r => r.id !== id));
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-white p-6 rounded-lg shadow">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-xl font-semibold">Logic Tags</h2>
+              <p className="text-sm text-gray-500 mt-1">Define custom tags that auto-apply to responses based on conditions.</p>
+            </div>
+            <Button onClick={addRule} disabled={questions.length === 0}>+ Add Tag Rule</Button>
+          </div>
+
+          {customTagRules.length === 0 ? (
+            <p className="text-sm text-gray-400 italic">No custom tag rules yet. Click "Add Tag Rule" to create one.</p>
+          ) : (
+            <div className="space-y-4">
+              {customTagRules.map(rule => (
+                <div key={rule.id} className="bg-gray-50 p-4 rounded-lg space-y-3">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex-1 min-w-[140px]">
+                      <label className="text-xs text-gray-500 mb-1 block">Tag Label</label>
+                      <input
+                        type="text"
+                        value={rule.label}
+                        onChange={e => updateRule(rule.id, { label: e.target.value })}
+                        placeholder="e.g. Needs Follow-up"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">Colour</label>
+                      <select
+                        value={rule.color}
+                        onChange={e => updateRule(rule.id, { color: e.target.value as CustomTagRule['color'] })}
+                        className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      >
+                        {colorOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <button onClick={() => removeRule(rule.id)} className="text-red-500 hover:text-red-700 text-sm mt-4">Remove</button>
+                  </div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex-1 min-w-[160px]">
+                      <label className="text-xs text-gray-500 mb-1 block">If question</label>
+                      <select
+                        value={rule.condition.questionId}
+                        onChange={e => updateCondition(rule.id, { questionId: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      >
+                        {questions.map(q => (
+                          <option key={q.id} value={q.id}>{q.question || `Question (${q.type})`}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">Operator</label>
+                      <select
+                        value={rule.condition.operator}
+                        onChange={e => updateCondition(rule.id, { operator: e.target.value as CustomTagRule['condition']['operator'] })}
+                        className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      >
+                        {operatorOptions.map(op => <option key={op} value={op}>{operatorLabels[op]}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex-1 min-w-[120px]">
+                      <label className="text-xs text-gray-500 mb-1 block">Value</label>
+                      <input
+                        type="text"
+                        value={rule.condition.value}
+                        onChange={e => updateCondition(rule.id, { value: e.target.value })}
+                        placeholder="e.g. dirty or 3"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-between gap-8">
+          <Button onClick={() => setCurrentStep('questions')}>← Back to Questions</Button>
+          <Button onClick={handleSubmit}>Create Form</Button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -412,12 +637,15 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
             <div className="flex items-center space-x-2">
               <div className={`h-3 w-3 rounded-full ${currentStep === 'basics' ? 'bg-purple-600' : 'bg-gray-300'}`} />
               <div className={`h-3 w-3 rounded-full ${currentStep === 'questions' ? 'bg-purple-600' : 'bg-gray-300'}`} />
+              <div className={`h-3 w-3 rounded-full ${currentStep === 'tags' ? 'bg-purple-600' : 'bg-gray-300'}`} />
             </div>
           </div>
         </div>
       </div>
 
-      {currentStep === 'basics' ? renderBasicsStep() : renderQuestionsStep()}
+      {currentStep === 'basics' && renderBasicsStep()}
+      {currentStep === 'questions' && renderQuestionsStep()}
+      {currentStep === 'tags' && renderTagsStep()}
     </div>
   );
 };

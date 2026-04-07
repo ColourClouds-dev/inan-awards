@@ -7,6 +7,7 @@ export interface FeedbackForm {
   questions: FeedbackQuestion[];
   createdAt: Date | Timestamp;
   isActive: boolean;
+  customTagRules?: CustomTagRule[];
 }
 
 export interface FeedbackQuestion {
@@ -15,6 +16,8 @@ export interface FeedbackQuestion {
   question: string;
   options?: string[];
   required: boolean;
+  multiSelect?: boolean;      // true = checkboxes (multiple answers), false/undefined = radio (single answer)
+  minSelections?: number;     // minimum number of selections required when multiSelect is true
 }
 
 export interface FeedbackResponse {
@@ -32,6 +35,26 @@ export interface FeedbackResponse {
   visitorCountry?: string;
   visitorIsp?: string;
   visitorAccessedAt?: string;
+  // Logic tags
+  timeSpentSeconds?: number;
+  tags?: ResponseTag[];
+}
+
+export interface ResponseTag {
+  label: string;
+  type: 'time' | 'sentiment' | 'completion' | 'custom';
+  color: 'green' | 'yellow' | 'red' | 'blue' | 'gray';
+}
+
+export interface CustomTagRule {
+  id: string;
+  label: string;
+  color: 'green' | 'yellow' | 'red' | 'blue' | 'gray';
+  condition: {
+    questionId: string;
+    operator: 'contains' | 'equals' | 'less_than' | 'greater_than';
+    value: string;
+  };
 }
 
 export interface SurveySettings {
