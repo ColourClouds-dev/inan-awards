@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import confetti from 'canvas-confetti';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { Employee } from '../types';
@@ -75,6 +76,7 @@ const AwardNominations = () => {
   const [email, setEmail] = useState('');
   const [emailVerified, setEmailVerified] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const { executeRecaptcha } = useGoogleReCaptcha();
 
   useEffect(() => {
     const loadEmployees = async () => {
@@ -157,7 +159,6 @@ const AwardNominations = () => {
   }, []);
 
   const handleSubmit = async () => {
-    // Verify all nominations are complete
     const totalNominations = Object.keys(nominations).length;
     if (totalNominations < categories.length) {
       setError('Please complete all nominations before submitting.');
@@ -165,7 +166,21 @@ const AwardNominations = () => {
     }
 
     try {
-      // Check if this email has already submitted nominations
+      // reCAPTCHA verification
+      if (executeRecaptcha) {
+        const token = await executeRecaptcha('nominations_submit');
+        const verifyRes = await fetch('/api/verify-recaptcha', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+        const verifyData = await verifyRes.json();
+        if (!verifyData.success) {
+          setError('Bot detection triggered. Submission blocked. Please try again.');
+          return;
+        }
+      }
+
       const docRef = doc(db, 'nominations', email);
       const docSnap = await getDoc(docRef);
       
