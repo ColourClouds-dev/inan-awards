@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { QRCodeSVG } from 'qrcode.react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import Input from './Input';
 import Button from './Button';
 import Toast from './Toast';
 import { useToast } from '../hooks/useToast';
-import type { FeedbackForm, FeedbackQuestion, CustomTagRule } from '../types';
+import type { FeedbackForm, FeedbackQuestion, CustomTagRule, LocationSettings } from '../types';
 
 interface FeedbackFormBuilderProps {
   onSave: (form: FeedbackForm) => Promise<void>;
@@ -48,6 +50,7 @@ const QuestionTypeInfo = {
 
 const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => {
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [questions, setQuestions] = useState<FeedbackQuestion[]>([]);
   const [showQR, setShowQR] = useState(false);
@@ -55,12 +58,31 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
   const [currentStep, setCurrentStep] = useState<'basics' | 'questions' | 'tags' | 'preview'>('basics');
   const [previewMode, setPreviewMode] = useState(false);
   const [customTagRules, setCustomTagRules] = useState<CustomTagRule[]>([]);
+  const [locations, setLocations] = useState<string[]>([]);
   const { toasts, showToast, dismissToast } = useToast();
 
-  const locations = [
+  const FALLBACK_LOCATIONS = [
     'Qaras Hotels: House 3',
-    'Qaras Hotels: Bluxton'
+    'Qaras Hotels: Bluxton',
   ];
+
+  useEffect(() => {
+    const fetchLocations = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'settings', 'locations'));
+        if (snap.exists()) {
+          const fetched = (snap.data() as LocationSettings).locations || [];
+          setLocations(fetched.length > 0 ? fetched : FALLBACK_LOCATIONS);
+        } else {
+          setLocations(FALLBACK_LOCATIONS);
+        }
+      } catch (err) {
+        console.error('Failed to load locations:', err);
+        setLocations(FALLBACK_LOCATIONS);
+      }
+    };
+    fetchLocations();
+  }, []);
 
   const addQuestion = (type: FeedbackQuestion['type']) => {
     const newQuestion: FeedbackQuestion = {
@@ -130,6 +152,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
     const form: FeedbackForm = {
       id: uuidv4(),
       title,
+      description,
       location,
       questions,
       createdAt: new Date(),
@@ -218,6 +241,13 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g., Guest Satisfaction Survey"
+            required
+          />
+           <Input
+            label="Description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe what this form will do..."
             required
           />
           <Input
@@ -643,9 +673,11 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         </div>
       </div>
 
-      {currentStep === 'basics' && renderBasicsStep()}
-      {currentStep === 'questions' && renderQuestionsStep()}
-      {currentStep === 'tags' && renderTagsStep()}
+      <div className="min-h-[600px]">
+        {currentStep === 'basics' && renderBasicsStep()}
+        {currentStep === 'questions' && renderQuestionsStep()}
+        {currentStep === 'tags' && renderTagsStep()}
+      </div>
     </div>
   );
 };

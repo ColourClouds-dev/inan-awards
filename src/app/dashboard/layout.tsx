@@ -2,6 +2,7 @@
 
 import DashboardLayout from '../../components/DashboardLayout';
 import AuthGuard from '../../components/AuthGuard';
+import RecaptchaProvider from '../../components/RecaptchaProvider';
 
 export default function Layout({
   children,
@@ -10,7 +11,9 @@ export default function Layout({
 }) {
   return (
     <AuthGuard>
-      <DashboardLayout>{children}</DashboardLayout>
+      <RecaptchaProvider>
+        <DashboardLayout>{children}</DashboardLayout>
+      </RecaptchaProvider>
     </AuthGuard>
   );
 }

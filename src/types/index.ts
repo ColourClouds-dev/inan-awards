@@ -3,6 +3,7 @@ import { Timestamp } from 'firebase/firestore';
 export interface FeedbackForm {
   id: string;
   title: string;
+  description?: string;
   location: string;
   questions: FeedbackQuestion[];
   createdAt: Date | Timestamp;
@@ -62,6 +63,14 @@ export interface SurveySettings {
   endDate: Date | Timestamp;
   isActive: boolean;
   bannerImageUrl?: string;
+}
+
+export interface LocationSettings {
+  locations: string[];
+}
+
+export interface NotificationSettings {
+  emails: string[];
 }
 
 export interface Employee {

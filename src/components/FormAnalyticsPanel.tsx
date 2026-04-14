@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import type { FeedbackForm, FeedbackResponse, ResponseTag } from '../types';
 
 interface FormAnalyticsPanelProps {
@@ -25,10 +25,8 @@ function TagBadge({ tag }: { tag: ResponseTag }) {
 }
 
 export default function FormAnalyticsPanel({ form, responses }: FormAnalyticsPanelProps) {
-  const [open, setOpen] = useState(false);
-
   const formResponses = responses.filter(r => r.formId === form.id);
-  if (formResponses.length === 0) return null;
+  if (formResponses.length === 0) return <p className="text-sm text-gray-400 italic">No responses yet to analyse.</p>;
 
   // Time stats
   const timings = formResponses.map(r => r.timeSpentSeconds).filter((t): t is number => t !== undefined);
@@ -62,20 +60,8 @@ export default function FormAnalyticsPanel({ form, responses }: FormAnalyticsPan
   const formatTime = (s: number) => `${Math.floor(s / 60)}m ${s % 60}s`;
 
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 text-sm font-medium text-gray-700"
-      >
-        <span>Analytics — {formResponses.length} response{formResponses.length !== 1 ? 's' : ''}</span>
-        <svg className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {open && (
-        <div className="p-4 space-y-5 bg-white">
-          {/* Time */}
+    <div className="space-y-5">
+      {/* Time */}
           {avgTime !== null && (
             <div>
               <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">Avg Completion Time</h4>
@@ -167,7 +153,5 @@ export default function FormAnalyticsPanel({ form, responses }: FormAnalyticsPan
             </div>
           )}
         </div>
-      )}
-    </div>
   );
 }

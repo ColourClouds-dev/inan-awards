@@ -205,6 +205,9 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
           </svg>
           <span>{form.location}</span>
         </div>
+        {form.description && (
+          <p className="text-gray-700 text-sm mb-4">{form.description}</p>
+        )}
         <p className="text-gray-600 text-sm">
           Your feedback helps us improve our services. All responses are anonymous.
         </p>

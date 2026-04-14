@@ -53,6 +53,11 @@ export async function deactivateForm(formId: string): Promise<void> {
   await updateDoc(docRef, { isActive: false });
 }
 
+export async function reactivateForm(formId: string): Promise<void> {
+  const docRef = doc(db, 'feedback-forms', formId);
+  await updateDoc(docRef, { isActive: true });
+}
+
 export async function saveForm(form: FeedbackForm): Promise<void> {
   const docRef = doc(db, 'feedback-forms', form.id);
   await setDoc(docRef, form);

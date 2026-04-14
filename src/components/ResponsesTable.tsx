@@ -182,7 +182,7 @@ export default function ResponsesTable({ responses, forms, onExport }: Responses
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-lg border border-gray-200">
+      <div className="overflow-x-auto rounded-lg border border-gray-200 min-h-[300px]">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50">
             {table.getHeaderGroups().map((headerGroup) => (

@@ -1,18 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { getAdminDb } from '../../../lib/firebaseAdmin';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const ADMIN_EMAIL = 'adminaccess@inan.com.ng';
+
+const FALLBACK_EMAIL = 'adminaccess@inan.com.ng';
+
+async function getNotificationEmails(): Promise<string[]> {
+  try {
+    const snap = await getAdminDb().doc('settings/notifications').get();
+    if (snap.exists) {
+      const emails = (snap.data() as { emails?: string[] }).emails;
+      if (Array.isArray(emails) && emails.length > 0) return emails;
+    }
+  } catch (err) {
+    console.error('Failed to fetch notification emails from Firestore:', err);
+  }
+  return [FALLBACK_EMAIL];
+}
 
 export async function POST(req: NextRequest) {
   try {
     const { formTitle, location, tags, timeSpent, visitorCountry, submittedAt } = await req.json();
-
+    const recipients = await getNotificationEmails();
     const tagLabels = (tags as { label: string }[]).map(t => t.label).join(', ');
 
     await resend.emails.send({
       from: 'INAN Feedback <notifications@inan.com.ng>',
-      to: ADMIN_EMAIL,
+      to: recipients,
       subject: `⚠️ Negative Feedback Alert — ${formTitle}`,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
