@@ -5,12 +5,13 @@ import { doc, setDoc, getDoc, collection, getDocs, deleteDoc } from 'firebase/fi
 import { onAuthStateChanged, updateProfile, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
-import { db, auth } from '../../../lib/firebase';
-import type { LocationSettings, NotificationSettings } from '../../../types';
+import { db, auth, storage } from '../../../lib/firebase';
+import type { LocationSettings, NotificationSettings, SeoSettings } from '../../../types';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import Modal from '../../../components/Modal';
 import Toast from '../../../components/Toast';
+import ImageUpload from '../../../components/ImageUpload';
 import { useToast } from '../../../hooks/useToast';
 
 // ─── Section wrapper ──────────────────────────────────────────────────────────
@@ -58,6 +59,13 @@ export default function SettingsPage() {
   const [newEmail, setNewEmail] = useState('');
   const [notifSaving, setNotifSaving] = useState(false);
 
+  // ── SEO ────────────────────────────────────────────────────────────────────
+  const [seoSiteUrl, setSeoSiteUrl] = useState('');
+  const [seoSiteName, setSeoSiteName] = useState('');
+  const [seoDescription, setSeoDescription] = useState('');
+  const [seoOgImageUrl, setSeoOgImageUrl] = useState('');
+  const [seoSaving, setSeoSaving] = useState(false);
+
   // ── Danger zone ────────────────────────────────────────────────────────────
   const [modalOpen, setModalOpen] = useState(false);
   const [dangerAction, setDangerAction] = useState<'responses' | null>(null);
@@ -71,12 +79,20 @@ export default function SettingsPage() {
       setOriginalDisplayName(user.displayName || '');
       setEmail(user.email || '');
       try {
-        const [locSnap, notifSnap] = await Promise.all([
+        const [locSnap, notifSnap, seoSnap] = await Promise.all([
           getDoc(doc(db, 'settings', 'locations')),
           getDoc(doc(db, 'settings', 'notifications')),
+          getDoc(doc(db, 'settings', 'seo')),
         ]);
         if (locSnap.exists()) setLocations((locSnap.data() as LocationSettings).locations || []);
         if (notifSnap.exists()) setNotifEmails((notifSnap.data() as NotificationSettings).emails || []);
+        if (seoSnap.exists()) {
+          const seo = seoSnap.data() as SeoSettings;
+          setSeoSiteUrl(seo.siteUrl || '');
+          setSeoSiteName(seo.siteName || '');
+          setSeoDescription(seo.defaultDescription || '');
+          setSeoOgImageUrl(seo.ogImageUrl || '');
+        }
       } catch (err) {
         console.error('Error loading settings:', err);
         showToast('Failed to load some settings.', 'error');
@@ -197,6 +213,34 @@ export default function SettingsPage() {
 
   const removeNotifEmail = (em: string) => saveNotifEmails(notifEmails.filter(e => e !== em));
 
+  // ── SEO ────────────────────────────────────────────────────────────────────
+  const handleSeoSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!seoSiteUrl.trim() || !seoSiteName.trim()) {
+      showToast('Site URL and Site Name are required.', 'error');
+      return;
+    }
+    try { new URL(seoSiteUrl); } catch {
+      showToast('Please enter a valid URL (e.g. https://inan.com.ng).', 'error');
+      return;
+    }
+    setSeoSaving(true);
+    try {
+      const payload: SeoSettings = {
+        siteUrl: seoSiteUrl.trim().replace(/\/$/, ''),
+        siteName: seoSiteName.trim(),
+        defaultDescription: seoDescription.trim(),
+        ...(seoOgImageUrl ? { ogImageUrl: seoOgImageUrl } : {}),
+      };
+      await setDoc(doc(db, 'settings', 'seo'), payload);
+      showToast('SEO settings saved.', 'success');
+    } catch {
+      showToast('Failed to save SEO settings.', 'error');
+    } finally {
+      setSeoSaving(false);
+    }
+  };
+
   // ── Danger zone ────────────────────────────────────────────────────────────
   const handleDangerConfirm = async () => {
     if (!dangerAction) return;
@@ -288,7 +332,7 @@ export default function SettingsPage() {
             <Button onClick={addLocation} disabled={!newLocation.trim() || locationSaving}>Add Location</Button>
           </div>
         </div>
-      </Section>t
+      </Section>
 
       {/* ── Notifications ─────────────────────────────────────────────────── */}
       <Section title="Notifications" description="Email addresses that receive alerts when a negative feedback response is submitted.">
@@ -312,6 +356,52 @@ export default function SettingsPage() {
             <Button onClick={addNotifEmail} disabled={!newEmail.trim() || notifSaving}>Add Email</Button>
           </div>
         </div>
+      </Section>
+
+      {/* ── SEO ───────────────────────────────────────────────────────────── */}
+      <Section
+        title="SEO & Open Graph"
+        description="Control how your site appears in search engines and when links are shared on social media."
+      >
+        <form onSubmit={handleSeoSave} className="space-y-4">
+          <Input
+            label="Site URL"
+            value={seoSiteUrl}
+            onChange={e => setSeoSiteUrl(e.target.value)}
+            placeholder="https://inan.com.ng"
+            type="url"
+          />
+          <Input
+            label="Site Name"
+            value={seoSiteName}
+            onChange={e => setSeoSiteName(e.target.value)}
+            placeholder="Inan Feedback"
+          />
+          <div>
+            <Input
+              label="Default Meta Description"
+              value={seoDescription}
+              onChange={e => setSeoDescription(e.target.value)}
+              placeholder="Collect, manage and analyse guest feedback across all Inan hotel locations."
+            />
+            <p className={`text-xs mt-1 text-right ${seoDescription.length > 160 ? 'text-red-500' : 'text-gray-400'}`}>
+              {seoDescription.length}/160 — keep under 160 characters for best results
+            </p>
+          </div>
+          <ImageUpload
+            label="Default OG Image"
+            hint="Shown when your site is shared on WhatsApp, Twitter, LinkedIn etc. Recommended: 1200 × 630 px."
+            currentUrl={seoOgImageUrl}
+            storagePath="seo/og-image"
+            onUploaded={url => setSeoOgImageUrl(url)}
+            onRemoved={() => setSeoOgImageUrl('')}
+          />
+          <div className="flex justify-end">
+            <Button type="submit" disabled={seoSaving} isLoading={seoSaving} fullWidth={false}>
+              Save SEO Settings
+            </Button>
+          </div>
+        </form>
       </Section>
 
       {/* ── Danger Zone ───────────────────────────────────────────────────── */}

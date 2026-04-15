@@ -12,7 +12,7 @@ import { useToast } from '../hooks/useToast';
 import { submitFeedback } from '../lib/firestore';
 import { hasIpSubmittedForm } from '../lib/firestore';
 import { getVisitorInfo } from '../lib/visitorInfo';
-import { computeAllTags, isNegativeResponse } from '../lib/tagEngine';
+import { computeAllTags, isNegativeResponse, hasCustomTags } from '../lib/tagEngine';
 import type { FeedbackForm } from '../types';
 import type { VisitorInfo } from '../lib/visitorInfo';
 
@@ -127,8 +127,8 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
       };
       await submitFeedback(feedbackResponse);
 
-      // Send email notification for negative responses
-      if (isNegativeResponse(tags)) {
+      // Send email notification for negative responses OR any custom tag match
+      if (isNegativeResponse(tags) || hasCustomTags(tags)) {
         fetch('/api/notify-negative', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -186,9 +186,11 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
 
   if (submitted) {
     return (
-      <div className="text-center py-8">
-        <h2 className="text-2xl font-bold text-green-600 mb-4">Thank You!</h2>
-        <p className="text-gray-600">Your feedback has been submitted successfully.</p>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-green-600 mb-4">Thank You!</h2>
+          <p className="text-gray-600">Your feedback has been submitted successfully.</p>
+        </div>
       </div>
     );
   }

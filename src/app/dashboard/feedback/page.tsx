@@ -11,6 +11,14 @@ import Toast from '../../../components/Toast';
 import { useToast } from '../../../hooks/useToast';
 import type { FeedbackForm, FeedbackResponse, ResponseTag } from '../../../types';
 
+// ─── Safe date conversion ─────────────────────────────────────────────────────
+function toDate(value: unknown): Date {
+  if (value instanceof Date) return value;
+  if (value && typeof (value as any).toDate === 'function') return (value as any).toDate();
+  if (value && typeof (value as any).seconds === 'number') return new Date((value as any).seconds * 1000);
+  return new Date();
+}
+
 // ─── Tag badge ────────────────────────────────────────────────────────────────
 const tagColorClasses: Record<string, string> = {
   green: 'bg-green-100 text-green-800',
@@ -148,11 +156,24 @@ function FormCard({
 }) {
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [responsesOpen, setResponsesOpen] = useState(false);
+  const [activeTagFilter, setActiveTagFilter] = useState<string | null>(null);
 
   const formResponses = responses.filter(r => r.formId === form.id);
-  const createdAt = form.createdAt instanceof Date
-    ? form.createdAt
-    : new Date((form.createdAt as any).seconds * 1000);
+
+  // Collect all unique tag labels across this form's responses
+  const allTagLabels = useMemo(() => {
+    const labels = new Set<string>();
+    formResponses.forEach(r => r.tags?.forEach(t => labels.add(t.label)));
+    return Array.from(labels).sort();
+  }, [formResponses]);
+
+  // Apply tag filter
+  const filteredResponses = useMemo(() => {
+    if (!activeTagFilter) return formResponses;
+    return formResponses.filter(r => r.tags?.some(t => t.label === activeTagFilter));
+  }, [formResponses, activeTagFilter]);
+
+  const createdAt = toDate(form.createdAt);
 
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -221,24 +242,69 @@ function FormCard({
           formResponses.length === 0 ? (
             <p className="px-5 py-4 text-sm text-gray-400 italic">No responses yet.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-100 text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Country</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">City</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Tags</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Time Spent</th>
-                    <th className="px-4 py-2" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
-                  {formResponses.map(r => (
-                    <ResponseRow key={r.id} response={r} form={form} />
-                  ))}
-                </tbody>
-              </table>
+            <div>
+              {/* Tag filter pills */}
+              {allTagLabels.length > 0 && (
+                <div className="px-5 py-3 flex flex-wrap gap-2 border-b border-gray-100 bg-gray-50">
+                  <span className="text-xs text-gray-500 self-center mr-1">Filter by tag:</span>
+                  <button
+                    onClick={() => setActiveTagFilter(null)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      activeTagFilter === null
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-white border border-gray-300 text-gray-600 hover:border-purple-400'
+                    }`}
+                  >
+                    All ({formResponses.length})
+                  </button>
+                  {allTagLabels.map(label => {
+                    const count = formResponses.filter(r => r.tags?.some(t => t.label === label)).length;
+                    const tag = formResponses.flatMap(r => r.tags ?? []).find(t => t.label === label);
+                    const colorClass = tag ? tagColorClasses[tag.color] : 'bg-gray-100 text-gray-600';
+                    return (
+                      <button
+                        key={label}
+                        onClick={() => setActiveTagFilter(activeTagFilter === label ? null : label)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
+                          activeTagFilter === label
+                            ? `${colorClass} border-transparent ring-2 ring-offset-1 ring-purple-400`
+                            : `${colorClass} border-transparent opacity-80 hover:opacity-100`
+                        }`}
+                      >
+                        {label} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="overflow-x-auto min-h-[120px]">
+                <table className="min-w-full divide-y divide-gray-100 text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Country</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">City</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Tags</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Time Spent</th>
+                      <th className="px-4 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {filteredResponses.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-400 italic">
+                          No responses match this tag filter.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredResponses.map(r => (
+                        <ResponseRow key={r.id} response={r} form={form} />
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )
         )}
@@ -255,9 +321,7 @@ function FormDetailContent({ form, responseCount, onCopyLink, onDownloadQR, copi
   onDownloadQR: () => void;
   copied: boolean;
 }) {
-  const createdAt = form.createdAt instanceof Date
-    ? form.createdAt
-    : new Date((form.createdAt as any).seconds * 1000);
+  const createdAt = toDate(form.createdAt);
 
   return (
     <div className="space-y-4 text-left">

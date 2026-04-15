@@ -9,6 +9,7 @@ export interface FeedbackForm {
   createdAt: Date | Timestamp;
   isActive: boolean;
   customTagRules?: CustomTagRule[];
+  ogImageUrl?: string;
 }
 
 export interface FeedbackQuestion {
@@ -51,11 +52,52 @@ export interface CustomTagRule {
   id: string;
   label: string;
   color: 'green' | 'yellow' | 'red' | 'blue' | 'gray';
+  // Multi-condition AND logic — all conditions must match
+  conditions?: Array<{
+    questionId: string;
+    operator: 'contains' | 'equals' | 'less_than' | 'greater_than';
+    value: string;
+  }>;
+  // Legacy single condition — kept for backward compatibility
   condition: {
     questionId: string;
     operator: 'contains' | 'equals' | 'less_than' | 'greater_than';
     value: string;
   };
+}
+
+export interface NominationsCategory {
+  id: string;
+  title: string;
+  description?: string;
+  nominees: string[];
+}
+
+export interface NominationsForm {
+  id: string;
+  title: string;
+  description?: string;
+  categories: NominationsCategory[];
+  requireEmail: boolean;
+  openAt: Date | Timestamp;
+  closeAt: Date | Timestamp;
+  isActive: boolean;
+  createdAt: Date | Timestamp;
+}
+
+export interface NominationsVote {
+  id: string;
+  formId: string;
+  categoryVotes: { [categoryId: string]: string };
+  email?: string;
+  submittedAt: Date | Timestamp;
+}
+
+export interface SeoSettings {
+  siteUrl: string;
+  siteName: string;
+  defaultDescription: string;
+  ogImageUrl?: string;
 }
 
 export interface SurveySettings {

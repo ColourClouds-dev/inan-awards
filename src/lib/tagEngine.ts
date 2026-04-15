@@ -1,6 +1,6 @@
 'use client';
 
-import type { FeedbackResponse, FeedbackForm, ResponseTag, CustomTagRule } from '../types';
+import type { FeedbackForm, ResponseTag, CustomTagRule } from '../types';
 
 export function computeTimeTag(seconds: number): ResponseTag {
   if (seconds < 60) return { label: 'Fast (<1 min)', type: 'time', color: 'green' };
@@ -32,37 +32,53 @@ export function computeCompletionTag(
   return { label: `Partial (${answered.length}/${required.length})`, type: 'completion', color: 'yellow' };
 }
 
+// Evaluate a single condition against a response value
+function evaluateCondition(
+  val: string | number | undefined,
+  operator: CustomTagRule['condition']['operator'],
+  ruleVal: string
+): boolean {
+  if (val === undefined) return false;
+  const strVal = String(val).toLowerCase();
+  const ruleValLower = ruleVal.toLowerCase();
+  const numVal = typeof val === 'number' ? val : parseFloat(String(val));
+
+  switch (operator) {
+    case 'contains':
+      return strVal.includes(ruleValLower);
+    case 'equals':
+      return strVal === ruleValLower;
+    case 'less_than':
+      return !isNaN(numVal) && numVal < parseFloat(ruleVal);
+    case 'greater_than':
+      return !isNaN(numVal) && numVal > parseFloat(ruleVal);
+    default:
+      return false;
+  }
+}
+
 export function computeCustomTags(
   responses: Record<string, string | number>,
   rules: CustomTagRule[]
 ): ResponseTag[] {
   const tags: ResponseTag[] = [];
-  for (const rule of rules) {
-    const val = responses[rule.condition.questionId];
-    if (val === undefined) continue;
-    const strVal = String(val).toLowerCase();
-    const ruleVal = rule.condition.value.toLowerCase();
-    const numVal = typeof val === 'number' ? val : parseFloat(String(val));
 
-    let matched = false;
-    switch (rule.condition.operator) {
-      case 'contains':
-        matched = strVal.includes(ruleVal);
-        break;
-      case 'equals':
-        matched = strVal === ruleVal;
-        break;
-      case 'less_than':
-        matched = !isNaN(numVal) && numVal < parseFloat(ruleVal);
-        break;
-      case 'greater_than':
-        matched = !isNaN(numVal) && numVal > parseFloat(ruleVal);
-        break;
-    }
-    if (matched) {
+  for (const rule of rules) {
+    // Use multi-condition array if present, otherwise fall back to legacy single condition
+    const conditions = rule.conditions && rule.conditions.length > 0
+      ? rule.conditions
+      : [rule.condition];
+
+    // AND logic — every condition must match
+    const allMatch = conditions.every(cond =>
+      evaluateCondition(responses[cond.questionId], cond.operator, cond.value)
+    );
+
+    if (allMatch) {
       tags.push({ label: rule.label, type: 'custom', color: rule.color });
     }
   }
+
   return tags;
 }
 
@@ -83,4 +99,8 @@ export function computeAllTags(
 
 export function isNegativeResponse(tags: ResponseTag[]): boolean {
   return tags.some(t => t.type === 'sentiment' && t.label === 'Negative');
+}
+
+export function hasCustomTags(tags: ResponseTag[]): boolean {
+  return tags.some(t => t.type === 'custom');
 }

@@ -23,7 +23,7 @@ const Button: React.FC<ButtonProps> = ({
     outline: 'border-2 border-gray-600 text-gray-600 hover:bg-gray-50 focus:ring-gray-500'
   };
 
-  const widthClass = fullWidth ? 'w-full' : 'w-auto';
+  const widthClass = fullWidth ? 'w-full' : 'w-full min-[360px]:w-auto';
 
   return (
     <button

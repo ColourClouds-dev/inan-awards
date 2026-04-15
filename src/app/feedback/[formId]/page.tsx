@@ -12,33 +12,52 @@ export function generateStaticParams() {
 export async function generateMetadata(
   { params }: { params: { formId: string } }
 ): Promise<Metadata> {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://inan.com.ng';
+  const fallbackUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://inan.com.ng';
 
   try {
-    const snap = await getAdminDb().doc(`feedback-forms/${params.formId}`).get();
-    if (!snap.exists) return { title: 'Feedback Form' };
+    const db = getAdminDb();
 
-    const data = snap.data() as { title?: string; description?: string; location?: string };
+    // Fetch form and global SEO settings in parallel
+    const [formSnap, seoSnap] = await Promise.all([
+      db.doc(`feedback-forms/${params.formId}`).get(),
+      db.doc('settings/seo').get(),
+    ]);
+
+    const seo = seoSnap.exists ? seoSnap.data() as {
+      siteUrl?: string; siteName?: string; defaultDescription?: string; ogImageUrl?: string;
+    } : {};
+
+    const siteUrl = seo.siteUrl || fallbackUrl;
+    const siteName = seo.siteName || 'Inan Feedback';
+    const defaultOgImage = seo.ogImageUrl || '/inan.svg';
+
+    if (!formSnap.exists) return { title: 'Feedback Form' };
+
+    const data = formSnap.data() as {
+      title?: string; description?: string; location?: string; ogImageUrl?: string;
+    };
+
     const title = data.title ?? 'Feedback Form';
     const description = data.description
       ?? `Share your experience at ${data.location ?? 'our location'}. Your feedback helps us improve.`;
     const pageUrl = `${siteUrl}/feedback/${params.formId}`;
+    const ogImage = data.ogImageUrl || defaultOgImage;
 
     return {
       title,
       description,
       openGraph: {
-        title: `${title} | Inan Feedback`,
+        title: `${title} | ${siteName}`,
         description,
         url: pageUrl,
         type: 'website',
-        images: [{ url: '/inan.svg', width: 1200, height: 630, alt: title }],
+        images: [{ url: ogImage, width: 1200, height: 630, alt: title }],
       },
       twitter: {
         card: 'summary_large_image',
-        title: `${title} | Inan Feedback`,
+        title: `${title} | ${siteName}`,
         description,
-        images: ['/inan.svg'],
+        images: [ogImage],
       },
     };
   } catch {

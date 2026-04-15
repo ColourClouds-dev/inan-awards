@@ -60,7 +60,9 @@ export async function reactivateForm(formId: string): Promise<void> {
 
 export async function saveForm(form: FeedbackForm): Promise<void> {
   const docRef = doc(db, 'feedback-forms', form.id);
-  await setDoc(docRef, form);
+  // Firestore rejects undefined values — strip them before writing
+  const clean = JSON.parse(JSON.stringify(form));
+  await setDoc(docRef, clean);
 }
 
 export async function deleteForm(formId: string): Promise<void> {

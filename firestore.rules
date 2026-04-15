@@ -43,5 +43,18 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+
+    // Nominations forms — admin manages, anyone can read active ones
+    match /nominations-forms/{formId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Nominations votes — anyone can create (voting), admin can read
+    match /nominations-votes/{voteId} {
+      allow create: if true;
+      allow read: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
   }
 }

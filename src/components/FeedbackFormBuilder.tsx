@@ -8,6 +8,7 @@ import { db } from '../lib/firebase';
 import Input from './Input';
 import Button from './Button';
 import Toast from './Toast';
+import ImageUpload from './ImageUpload';
 import { useToast } from '../hooks/useToast';
 import type { FeedbackForm, FeedbackQuestion, CustomTagRule, LocationSettings } from '../types';
 
@@ -48,6 +49,8 @@ const QuestionTypeInfo = {
   }
 };
 
+const DRAFT_KEY = 'feedbackFormBuilderDraft';
+
 const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -59,7 +62,39 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
   const [previewMode, setPreviewMode] = useState(false);
   const [customTagRules, setCustomTagRules] = useState<CustomTagRule[]>([]);
   const [locations, setLocations] = useState<string[]>([]);
+  const [ogImageUrl, setOgImageUrl] = useState('');
   const { toasts, showToast, dismissToast } = useToast();
+
+  // ── Restore draft from sessionStorage on mount ─────────────────────────────
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        const draft = JSON.parse(saved);
+        if (draft.title) setTitle(draft.title);
+        if (draft.description) setDescription(draft.description);
+        if (draft.location) setLocation(draft.location);
+        if (draft.questions) setQuestions(draft.questions);
+        if (draft.currentStep) setCurrentStep(draft.currentStep);
+        if (draft.customTagRules) setCustomTagRules(draft.customTagRules);
+        if (draft.ogImageUrl) setOgImageUrl(draft.ogImageUrl);
+      }
+    } catch {
+      // Ignore corrupt draft
+    }
+  }, []);
+
+  // ── Save draft to sessionStorage on every change ───────────────────────────
+  useEffect(() => {
+    if (showQR) return; // Don't save after successful submission
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
+        title, description, location, questions, currentStep, customTagRules, ogImageUrl,
+      }));
+    } catch {
+      // Ignore storage errors
+    }
+  }, [title, description, location, questions, currentStep, customTagRules, showQR]);
 
   const FALLBACK_LOCATIONS = [
     'Qaras Hotels: House 3',
@@ -157,7 +192,8 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
       questions,
       createdAt: new Date(),
       isActive: true,
-      customTagRules: customTagRules.length > 0 ? customTagRules : undefined,
+      ...(customTagRules.length > 0 ? { customTagRules } : {}),
+      ...(ogImageUrl ? { ogImageUrl } : {}),
     };
 
     try {
@@ -166,6 +202,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         const formUrl = `${window.location.origin}/feedback/${form.id}`;
         setFormUrl(formUrl);
         showToast('Form created successfully!', 'success');
+        sessionStorage.removeItem(DRAFT_KEY);
         setShowQR(true);
       } catch (error) {
         console.error('Error saving form:', error);
@@ -262,10 +299,31 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
               <option key={loc} value={loc}>{loc}</option>
             ))}
           </Input>
+          <ImageUpload
+            label="OG Image (optional)"
+            hint="Custom image shown when this form's link is shared on social media."
+            currentUrl={ogImageUrl}
+            storagePath={`forms/draft/og-image`}
+            onUploaded={url => setOgImageUrl(url)}
+            onRemoved={() => setOgImageUrl('')}
+          />
         </div>
       </div>
-      <div className="flex justify-end">
+      <div className="flex justify-between items-center">
+        {(title || description || location || questions.length > 0) ? (
+          <button
+            onClick={() => {
+              sessionStorage.removeItem(DRAFT_KEY);
+              setTitle(''); setDescription(''); setLocation('');
+              setQuestions([]); setCustomTagRules([]); setCurrentStep('basics');
+            }}
+            className="text-sm text-gray-400 hover:text-red-500 transition-colors"
+          >
+            Clear draft
+          </button>
+        ) : <span />}
         <Button
+          fullWidth={false}
           onClick={() => setCurrentStep('questions')}
           disabled={!title || !location}
         >
@@ -281,7 +339,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold">Questions</h2>
           <div className="flex items-center space-x-2">
-            <Button onClick={() => setPreviewMode(!previewMode)}>
+            <Button fullWidth={false} onClick={() => setPreviewMode(!previewMode)}>
               {previewMode ? 'Edit Mode' : 'Preview Mode'}
             </Button>
           </div>
@@ -316,22 +374,23 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
                     <span className="text-purple-600">{QuestionTypeInfo[question.type].icon}</span>
                     <span className="font-medium">{QuestionTypeInfo[question.type].label}</span>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-stretch space-x-2">
                     <button
                       onClick={() => moveQuestion(question.id, 'up')}
                       disabled={index === 0}
-                      className="p-1 hover:bg-gray-200 rounded"
+                      className="px-3 py-3 hover:bg-gray-200 rounded-lg disabled:opacity-30 text-gray-600 font-medium leading-none"
                     >
                       ↑
                     </button>
                     <button
                       onClick={() => moveQuestion(question.id, 'down')}
                       disabled={index === questions.length - 1}
-                      className="p-1 hover:bg-gray-200 rounded"
+                      className="px-3 py-3 hover:bg-gray-200 rounded-lg disabled:opacity-30 text-gray-600 font-medium leading-none"
                     >
                       ↓
                     </button>
                     <Button
+                      fullWidth={false}
                       onClick={() => removeQuestion(question.id)}
                     >
                       Remove
@@ -393,26 +452,31 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
 
                       {question.options?.map((option, optIndex) => (
                         <div key={optIndex} className="flex items-center space-x-2">
-                          <span className="text-gray-400 text-xs">{question.multiSelect ? '☐' : '○'}</span>
+                          <span className="text-gray-400 text-xs shrink-0">{question.multiSelect ? '☐' : '○'}</span>
                           {option === '__others__' ? (
-                            <span className="text-sm text-gray-500 italic px-2 py-1 bg-gray-100 rounded">
+                            <span className="flex-1 text-sm text-gray-500 italic px-2 py-1 bg-gray-100 rounded">
                               Others (Please Specify) — text input shown to guest
                             </span>
                           ) : (
-                            <Input
-                              value={option}
-                              onChange={(e) => updateOption(question.id, optIndex, e.target.value)}
-                              placeholder={`Option ${optIndex + 1}`}
-                              required
-                            />
+                            <div className="flex-1">
+                              <Input
+                                value={option}
+                                onChange={(e) => updateOption(question.id, optIndex, e.target.value)}
+                                placeholder={`Option ${optIndex + 1}`}
+                                required
+                              />
+                            </div>
                           )}
-                          <Button onClick={() => removeOption(question.id, optIndex)}>Remove</Button>
+                          <div className="shrink-0">
+                            <Button fullWidth={false} onClick={() => removeOption(question.id, optIndex)}>Remove</Button>
+                          </div>
                         </div>
                       ))}
                       <div className="flex items-center space-x-2 ml-4">
-                        <Button onClick={() => addOption(question.id)}>Add Option</Button>
+                        <Button fullWidth={false} onClick={() => addOption(question.id)}>Add Option</Button>
                         {!question.options?.includes('__others__') && (
                           <Button
+                            fullWidth={false}
                             onClick={() =>
                               updateQuestion(question.id, {
                                 options: [...(question.options || []), '__others__'],
@@ -443,15 +507,25 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
       </div>
 
       <div className="flex justify-between gap-8">
-        <Button onClick={() => setCurrentStep('basics')}>
+        <Button fullWidth={false} onClick={() => setCurrentStep('basics')}>
           ← Back to Details
         </Button>
-        <Button
-          onClick={() => setCurrentStep('tags')}
-          disabled={questions.length === 0}
-        >
-          Next: Logic Tags →
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            fullWidth={false}
+            onClick={handleSubmit}
+            disabled={questions.length === 0}
+          >
+            Create Form
+          </Button>
+          <Button
+            fullWidth={false}
+            onClick={() => setCurrentStep('tags')}
+            disabled={questions.length === 0}
+          >
+            Add Logic Tags →
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -473,7 +547,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         a.href = canvas.toDataURL('image/png');
         a.click();
       };
-      img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+      img.src = 'data:image/svg+xml;base64,' + btoa(encodeURIComponent(svgData).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
     };
 
     const handleDownloadLink = () => {
@@ -552,6 +626,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         label: '',
         color: 'blue',
         condition: { questionId: questions[0].id, operator: 'contains', value: '' },
+        conditions: [{ questionId: questions[0].id, operator: 'contains', value: '' }],
       }]);
     };
 
@@ -559,10 +634,33 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
       setCustomTagRules(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
     };
 
-    const updateCondition = (id: string, updates: Partial<CustomTagRule['condition']>) => {
-      setCustomTagRules(prev => prev.map(r =>
-        r.id === id ? { ...r, condition: { ...r.condition, ...updates } } : r
-      ));
+    const updateConditionAt = (ruleId: string, index: number, updates: Partial<CustomTagRule['condition']>) => {
+      setCustomTagRules(prev => prev.map(r => {
+        if (r.id !== ruleId) return r;
+        const conditions = [...(r.conditions ?? [r.condition])];
+        conditions[index] = { ...conditions[index], ...updates };
+        // Keep legacy condition in sync with first condition
+        return { ...r, conditions, condition: conditions[0] };
+      }));
+    };
+
+    const addCondition = (ruleId: string) => {
+      if (questions.length === 0) return;
+      setCustomTagRules(prev => prev.map(r => {
+        if (r.id !== ruleId) return r;
+        const conditions = [...(r.conditions ?? [r.condition]),
+          { questionId: questions[0].id, operator: 'contains' as const, value: '' }];
+        return { ...r, conditions };
+      }));
+    };
+
+    const removeCondition = (ruleId: string, index: number) => {
+      setCustomTagRules(prev => prev.map(r => {
+        if (r.id !== ruleId) return r;
+        const conditions = (r.conditions ?? [r.condition]).filter((_, i) => i !== index);
+        if (conditions.length === 0) return r; // keep at least one
+        return { ...r, conditions, condition: conditions[0] };
+      }));
     };
 
     const removeRule = (id: string) => {
@@ -572,86 +670,123 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
     return (
       <div className="space-y-6">
         <div className="bg-white p-6 rounded-lg shadow">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex justify-between items-center mb-2">
             <div>
               <h2 className="text-xl font-semibold">Logic Tags</h2>
-              <p className="text-sm text-gray-500 mt-1">Define custom tags that auto-apply to responses based on conditions.</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Define custom tags that auto-apply to responses. All conditions in a rule must match (AND logic).
+              </p>
             </div>
-            <Button onClick={addRule} disabled={questions.length === 0}>+ Add Tag Rule</Button>
+            <Button fullWidth={false} onClick={addRule} disabled={questions.length === 0}>+ Add Tag Rule</Button>
           </div>
 
           {customTagRules.length === 0 ? (
-            <p className="text-sm text-gray-400 italic">No custom tag rules yet. Click "Add Tag Rule" to create one.</p>
+            <p className="text-sm text-gray-400 italic mt-4">No custom tag rules yet. Click "Add Tag Rule" to create one.</p>
           ) : (
-            <div className="space-y-4">
-              {customTagRules.map(rule => (
-                <div key={rule.id} className="bg-gray-50 p-4 rounded-lg space-y-3">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex-1 min-w-[140px]">
-                      <label className="text-xs text-gray-500 mb-1 block">Tag Label</label>
-                      <input
-                        type="text"
-                        value={rule.label}
-                        onChange={e => updateRule(rule.id, { label: e.target.value })}
-                        placeholder="e.g. Needs Follow-up"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-500 mb-1 block">Colour</label>
-                      <select
-                        value={rule.color}
-                        onChange={e => updateRule(rule.id, { color: e.target.value as CustomTagRule['color'] })}
-                        className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            <div className="space-y-4 mt-4">
+              {customTagRules.map(rule => {
+                const conditions = rule.conditions ?? [rule.condition];
+                return (
+                  <div key={rule.id} className="bg-gray-50 p-4 rounded-lg space-y-3 border border-gray-200">
+                    {/* Tag label + colour */}
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex-1 min-w-[140px]">
+                        <label className="text-xs text-gray-500 mb-1 block">Tag Label</label>
+                        <input
+                          type="text"
+                          value={rule.label}
+                          onChange={e => updateRule(rule.id, { label: e.target.value })}
+                          placeholder="e.g. Needs Follow-up"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Colour</label>
+                        <select
+                          value={rule.color}
+                          onChange={e => updateRule(rule.id, { color: e.target.value as CustomTagRule['color'] })}
+                          className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                          {colorOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <button
+                        onClick={() => removeRule(rule.id)}
+                        className="text-red-500 hover:text-red-700 text-sm mt-4"
                       >
-                        {colorOptions.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
+                        Remove Rule
+                      </button>
                     </div>
-                    <button onClick={() => removeRule(rule.id)} className="text-red-500 hover:text-red-700 text-sm mt-4">Remove</button>
+
+                    {/* Conditions */}
+                    <div className="space-y-2">
+                      {conditions.map((cond, condIndex) => (
+                        <div key={condIndex} className="flex items-end gap-2 flex-wrap">
+                          {condIndex === 0 ? (
+                            <span className="text-xs font-medium text-gray-500 w-8 pb-2.5">IF</span>
+                          ) : (
+                            <span className="text-xs font-medium text-purple-600 w-8 pb-2.5">AND</span>
+                          )}
+                          <div className="flex-1 min-w-[140px]">
+                            {condIndex === 0 && <label className="text-xs text-gray-500 mb-1 block">Question</label>}
+                            <select
+                              value={cond.questionId}
+                              onChange={e => updateConditionAt(rule.id, condIndex, { questionId: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            >
+                              {questions.map(q => (
+                                <option key={q.id} value={q.id}>{q.question || `Question (${q.type})`}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            {condIndex === 0 && <label className="text-xs text-gray-500 mb-1 block">Operator</label>}
+                            <select
+                              value={cond.operator}
+                              onChange={e => updateConditionAt(rule.id, condIndex, { operator: e.target.value as CustomTagRule['condition']['operator'] })}
+                              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            >
+                              {operatorOptions.map(op => <option key={op} value={op}>{operatorLabels[op]}</option>)}
+                            </select>
+                          </div>
+                          <div className="flex-1 min-w-[100px]">
+                            {condIndex === 0 && <label className="text-xs text-gray-500 mb-1 block">Value</label>}
+                            <input
+                              type="text"
+                              value={cond.value}
+                              onChange={e => updateConditionAt(rule.id, condIndex, { value: e.target.value })}
+                              placeholder="e.g. dirty or 3"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            />
+                          </div>
+                          {conditions.length > 1 && (
+                            <button
+                              onClick={() => removeCondition(rule.id, condIndex)}
+                              className="text-red-400 hover:text-red-600 text-xs pb-2"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => addCondition(rule.id)}
+                      className="text-xs text-purple-600 hover:text-purple-800 font-medium"
+                    >
+                      + Add AND condition
+                    </button>
                   </div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex-1 min-w-[160px]">
-                      <label className="text-xs text-gray-500 mb-1 block">If question</label>
-                      <select
-                        value={rule.condition.questionId}
-                        onChange={e => updateCondition(rule.id, { questionId: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      >
-                        {questions.map(q => (
-                          <option key={q.id} value={q.id}>{q.question || `Question (${q.type})`}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-500 mb-1 block">Operator</label>
-                      <select
-                        value={rule.condition.operator}
-                        onChange={e => updateCondition(rule.id, { operator: e.target.value as CustomTagRule['condition']['operator'] })}
-                        className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      >
-                        {operatorOptions.map(op => <option key={op} value={op}>{operatorLabels[op]}</option>)}
-                      </select>
-                    </div>
-                    <div className="flex-1 min-w-[120px]">
-                      <label className="text-xs text-gray-500 mb-1 block">Value</label>
-                      <input
-                        type="text"
-                        value={rule.condition.value}
-                        onChange={e => updateCondition(rule.id, { value: e.target.value })}
-                        placeholder="e.g. dirty or 3"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
 
         <div className="flex justify-between gap-8">
-          <Button onClick={() => setCurrentStep('questions')}>← Back to Questions</Button>
-          <Button onClick={handleSubmit}>Create Form</Button>
+          <Button fullWidth={false} onClick={() => setCurrentStep('questions')}>← Back to Questions</Button>
+          <Button fullWidth={false} onClick={handleSubmit}>Create Form</Button>
         </div>
       </div>
     );
@@ -667,7 +802,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
             <div className="flex items-center space-x-2">
               <div className={`h-3 w-3 rounded-full ${currentStep === 'basics' ? 'bg-purple-600' : 'bg-gray-300'}`} />
               <div className={`h-3 w-3 rounded-full ${currentStep === 'questions' ? 'bg-purple-600' : 'bg-gray-300'}`} />
-              <div className={`h-3 w-3 rounded-full ${currentStep === 'tags' ? 'bg-purple-600' : 'bg-gray-300'}`} />
+              <div className={`h-3 w-3 rounded-full border-2 ${currentStep === 'tags' ? 'bg-purple-600 border-purple-600' : 'border-gray-300 bg-white'}`} title="Optional: Logic Tags" />
             </div>
           </div>
         </div>
