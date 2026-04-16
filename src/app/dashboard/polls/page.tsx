@@ -183,6 +183,7 @@ export default function PollsPage() {
   const [deleteTarget, setDeleteTarget] = useState<NominationsForm | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [formSearch, setFormSearch] = useState('');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -258,23 +259,39 @@ export default function PollsPage() {
       </section>
 
       <section>
-        <h2 className="text-xl font-semibold mb-4">Nominations Forms ({forms.length})</h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <h2 className="text-xl font-semibold">Nominations Forms ({forms.length})</h2>
+          <input
+            type="text"
+            value={formSearch}
+            onChange={e => setFormSearch(e.target.value)}
+            placeholder="Search by title…"
+            className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+        </div>
         {forms.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500 min-h-[120px] flex items-center justify-center">
             No nominations forms yet. Use the builder above to create one.
           </div>
         ) : (
           <div className="space-y-4 min-h-[120px]">
-            {forms.map(form => (
-              <FormCard
-                key={form.id}
-                form={form}
-                votes={votesMap[form.id] ?? []}
-                onDelete={() => setDeleteTarget(form)}
-                onToggle={() => handleToggle(form)}
-                onCopyLink={() => handleCopyLink(form.id)}
-              />
-            ))}
+            {forms
+              .filter(f => f.title.toLowerCase().includes(formSearch.toLowerCase()))
+              .map(form => (
+                <FormCard
+                  key={form.id}
+                  form={form}
+                  votes={votesMap[form.id] ?? []}
+                  onDelete={() => setDeleteTarget(form)}
+                  onToggle={() => handleToggle(form)}
+                  onCopyLink={() => handleCopyLink(form.id)}
+                />
+              ))}
+            {forms.filter(f => f.title.toLowerCase().includes(formSearch.toLowerCase())).length === 0 && (
+              <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">
+                No forms match your search.
+              </div>
+            )}
           </div>
         )}
       </section>

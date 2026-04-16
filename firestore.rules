@@ -56,5 +56,11 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow update, delete: if isAdmin();
     }
+
+    // Employees — admin manages, authenticated users can read (for nominations)
+    match /employees/{employeeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
   }
 }

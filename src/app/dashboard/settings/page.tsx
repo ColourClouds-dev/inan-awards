@@ -6,13 +6,20 @@ import { onAuthStateChanged, updateProfile, updatePassword, EmailAuthProvider, r
 import { useRouter } from 'next/navigation';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import { db, auth, storage } from '../../../lib/firebase';
-import type { LocationSettings, NotificationSettings, SeoSettings } from '../../../types';
+import type { LocationSettings, NotificationSettings, SeoSettings, Employee } from '../../../types';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import Modal from '../../../components/Modal';
 import Toast from '../../../components/Toast';
 import ImageUpload from '../../../components/ImageUpload';
 import { useToast } from '../../../hooks/useToast';
+import {
+  getAllEmployees,
+  saveEmployee,
+  updateEmployee,
+  deleteEmployee,
+  seedEmployeesIfEmpty,
+} from '../../../lib/employeesFirestore';
 
 // ─── Section wrapper ──────────────────────────────────────────────────────────
 const Section = ({ title, description, children }: {
@@ -59,6 +66,19 @@ export default function SettingsPage() {
   const [newEmail, setNewEmail] = useState('');
   const [notifSaving, setNotifSaving] = useState(false);
 
+  // ── Employees ──────────────────────────────────────────────────────────────
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [empLoading, setEmpLoading] = useState(false);
+  const [empSearch, setEmpSearch] = useState('');
+  const [editingEmp, setEditingEmp] = useState<Employee | null>(null);
+  const [showEmpForm, setShowEmpForm] = useState(false);
+  const [empDeleteTarget, setEmpDeleteTarget] = useState<Employee | null>(null);
+  const [empSaving, setEmpSaving] = useState(false);
+  const [newEmp, setNewEmp] = useState<Partial<Employee>>({
+    Employee: '', Email: '', Role: '', 'Reporting To': '',
+    'Joining Date': '', Status: 'Active', 'Employment Type': '',
+  });
+
   // ── SEO ────────────────────────────────────────────────────────────────────
   const [seoSiteUrl, setSeoSiteUrl] = useState('');
   const [seoSiteName, setSeoSiteName] = useState('');
@@ -93,6 +113,13 @@ export default function SettingsPage() {
           setSeoDescription(seo.defaultDescription || '');
           setSeoOgImageUrl(seo.ogImageUrl || '');
         }
+
+        // Seed + load employees
+        setEmpLoading(true);
+        await seedEmployeesIfEmpty();
+        const empList = await getAllEmployees();
+        setEmployees(empList);
+        setEmpLoading(false);
       } catch (err) {
         console.error('Error loading settings:', err);
         showToast('Failed to load some settings.', 'error');
@@ -212,6 +239,105 @@ export default function SettingsPage() {
   };
 
   const removeNotifEmail = (em: string) => saveNotifEmails(notifEmails.filter(e => e !== em));
+
+  // ── Employees ──────────────────────────────────────────────────────────────
+  const ROLES = ['Operations Officer', 'Supervisor', 'Front Desk', 'Wait Staff', 'Accountant',
+    'Cashier', 'HR Admin Trainee', 'Logistics & Security Officer', 'Logistics & Security Trainee',
+    'Procurements Officer', 'Brand Communications Officer', 'Corporate Services Officer',
+    'Senior Operations Officer ICT', 'Managing Director', 'Other'];
+
+  const resetNewEmp = () => setNewEmp({
+    Employee: '', Email: '', Role: '', 'Reporting To': '',
+    'Joining Date': '', Status: 'Active', 'Employment Type': '',
+  });
+
+  const handleAddEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmp.Employee?.trim() || !newEmp.Email?.trim() || !newEmp.Role?.trim()) {
+      showToast('Name, email and role are required.', 'error');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmp.Email.trim())) {
+      showToast('Please enter a valid email address.', 'error');
+      return;
+    }
+    setEmpSaving(true);
+    try {
+      const maxId = employees.reduce((m, e) => Math.max(m, Number(e.Id) || 0), 0);
+      const maxEmpId = employees.reduce((m, e) => Math.max(m, Number(e['Employee ID']) || 0), 0);
+      const emp: Employee = {
+        '#': employees.length + 1,
+        Id: maxId + 1,
+        'Employee ID': maxEmpId + 1,
+        Employee: newEmp.Employee!.trim(),
+        Email: newEmp.Email!.trim(),
+        Role: newEmp.Role!.trim(),
+        'Reporting To': newEmp['Reporting To']?.trim() || '',
+        'Joining Date': newEmp['Joining Date'] || new Date().toISOString().split('T')[0],
+        Status: newEmp.Status || 'Active',
+        ...(newEmp['Employment Type']?.trim() ? { 'Employment Type': newEmp['Employment Type'].trim() } : {}),
+      };
+      await saveEmployee(emp);
+      setEmployees(prev => [...prev, emp].sort((a, b) => a.Employee.localeCompare(b.Employee)));
+      resetNewEmp();
+      setShowEmpForm(false);
+      showToast('Employee added successfully.', 'success');
+    } catch {
+      showToast('Failed to add employee.', 'error');
+    } finally {
+      setEmpSaving(false);
+    }
+  };
+
+  const handleUpdateEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEmp) return;
+    setEmpSaving(true);
+    try {
+      await updateEmployee(String(editingEmp['Employee ID']), editingEmp);
+      setEmployees(prev => prev.map(emp =>
+        emp['Employee ID'] === editingEmp['Employee ID'] ? editingEmp : emp
+      ).sort((a, b) => a.Employee.localeCompare(b.Employee)));
+      setEditingEmp(null);
+      showToast('Employee updated.', 'success');
+    } catch {
+      showToast('Failed to update employee.', 'error');
+    } finally {
+      setEmpSaving(false);
+    }
+  };
+
+  const handleDeleteEmployee = async () => {
+    if (!empDeleteTarget) return;
+    setEmpSaving(true);
+    try {
+      await deleteEmployee(String(empDeleteTarget['Employee ID']));
+      setEmployees(prev => prev.filter(e => e['Employee ID'] !== empDeleteTarget['Employee ID']));
+      showToast('Employee removed.', 'success');
+    } catch {
+      showToast('Failed to remove employee.', 'error');
+    } finally {
+      setEmpSaving(false);
+      setEmpDeleteTarget(null);
+    }
+  };
+
+  const handleToggleStatus = async (emp: Employee) => {
+    const updated = { ...emp, Status: emp.Status === 'Active' ? 'Inactive' : 'Active' };
+    try {
+      await updateEmployee(String(emp['Employee ID']), { Status: updated.Status });
+      setEmployees(prev => prev.map(e => e['Employee ID'] === emp['Employee ID'] ? updated : e));
+      showToast(`${emp.Employee} marked as ${updated.Status}.`, 'success');
+    } catch {
+      showToast('Failed to update status.', 'error');
+    }
+  };
+
+  const filteredEmployees = employees.filter(e =>
+    e.Employee.toLowerCase().includes(empSearch.toLowerCase()) ||
+    e.Email.toLowerCase().includes(empSearch.toLowerCase()) ||
+    (e.Role ?? '').toLowerCase().includes(empSearch.toLowerCase())
+  );
 
   // ── SEO ────────────────────────────────────────────────────────────────────
   const handleSeoSave = async (e: React.FormEvent) => {
@@ -358,6 +484,139 @@ export default function SettingsPage() {
         </div>
       </Section>
 
+      {/* ── Employee Records ──────────────────────────────────────────────── */}
+      <Section
+        title="Employee Records"
+        description="Manage staff records used for nominations voting and email verification."
+      >
+        {/* Search + Add button */}
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex-1">
+            <Input
+              placeholder="Search by name, email or role…"
+              value={empSearch}
+              onChange={e => setEmpSearch(e.target.value)}
+            />
+          </div>
+          <div className="sm:self-end">
+            <Button fullWidth={false} onClick={() => { resetNewEmp(); setShowEmpForm(o => !o); setEditingEmp(null); }}>
+              {showEmpForm ? 'Cancel' : '+ Add Employee'}
+            </Button>
+          </div>
+        </div>
+
+        {/* Add employee form */}
+        {showEmpForm && (
+          <form onSubmit={handleAddEmployee} className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
+            <p className="text-sm font-medium text-gray-700">New Employee</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input label="Full Name" value={newEmp.Employee ?? ''} onChange={e => setNewEmp(p => ({ ...p, Employee: e.target.value }))} placeholder="e.g. Jane Doe" required />
+              <Input label="Email" type="email" value={newEmp.Email ?? ''} onChange={e => setNewEmp(p => ({ ...p, Email: e.target.value }))} placeholder="jane.doe@inan.com.ng" required />
+              <div>
+                <label className="block text-lg font-medium text-gray-700 mb-1">Role</label>
+                <select value={newEmp.Role ?? ''} onChange={e => setNewEmp(p => ({ ...p, Role: e.target.value }))}
+                  className="w-full px-4 py-3 text-lg rounded-lg border-2 border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all">
+                  <option value="">Select role…</option>
+                  {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <Input label="Reporting To" value={newEmp['Reporting To'] ?? ''} onChange={e => setNewEmp(p => ({ ...p, 'Reporting To': e.target.value }))} placeholder="Manager name" />
+              <Input label="Joining Date" type="date" value={newEmp['Joining Date'] ?? ''} onChange={e => setNewEmp(p => ({ ...p, 'Joining Date': e.target.value }))} />
+              <Input label="Employment Type (optional)" value={newEmp['Employment Type'] ?? ''} onChange={e => setNewEmp(p => ({ ...p, 'Employment Type': e.target.value }))} placeholder="e.g. On Probation" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button fullWidth={false} onClick={() => setShowEmpForm(false)}>Cancel</Button>
+              <Button type="submit" fullWidth={false} disabled={empSaving} isLoading={empSaving}>Save Employee</Button>
+            </div>
+          </form>
+        )}
+
+        {/* Edit employee form */}
+        {editingEmp && (
+          <form onSubmit={handleUpdateEmployee} className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+            <p className="text-sm font-medium text-blue-700">Editing: {editingEmp.Employee}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input label="Full Name" value={editingEmp.Employee} onChange={e => setEditingEmp(p => p ? { ...p, Employee: e.target.value } : p)} required />
+              <Input label="Email" type="email" value={editingEmp.Email} onChange={e => setEditingEmp(p => p ? { ...p, Email: e.target.value } : p)} required />
+              <div>
+                <label className="block text-lg font-medium text-gray-700 mb-1">Role</label>
+                <select value={editingEmp.Role ?? ''} onChange={e => setEditingEmp(p => p ? { ...p, Role: e.target.value } : p)}
+                  className="w-full px-4 py-3 text-lg rounded-lg border-2 border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all">
+                  <option value="">Select role…</option>
+                  {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <Input label="Reporting To" value={editingEmp['Reporting To']} onChange={e => setEditingEmp(p => p ? { ...p, 'Reporting To': e.target.value } : p)} />
+              <Input label="Joining Date" type="date" value={editingEmp['Joining Date']} onChange={e => setEditingEmp(p => p ? { ...p, 'Joining Date': e.target.value } : p)} />
+              <Input label="Employment Type" value={editingEmp['Employment Type'] ?? ''} onChange={e => setEditingEmp(p => p ? { ...p, 'Employment Type': e.target.value } : p)} placeholder="e.g. On Probation" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button fullWidth={false} onClick={() => setEditingEmp(null)}>Cancel</Button>
+              <Button type="submit" fullWidth={false} disabled={empSaving} isLoading={empSaving}>Update Employee</Button>
+            </div>
+          </form>
+        )}
+
+        {/* Employee table */}
+        {empLoading ? (
+          <div className="flex justify-center py-6">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600" />
+          </div>
+        ) : (
+          <div className="overflow-x-auto min-h-[120px]">
+            <table className="min-w-full divide-y divide-gray-100 text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Joined</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {filteredEmployees.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-6 text-center text-gray-400 italic text-sm">
+                      {empSearch ? 'No employees match your search.' : 'No employees loaded yet.'}
+                    </td>
+                  </tr>
+                ) : filteredEmployees.map(emp => (
+                  <tr key={String(emp['Employee ID'])} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{emp.Employee}</td>
+                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{emp.Email}</td>
+                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{emp.Role ?? '—'}</td>
+                    <td className="px-3 py-2">
+                      <button onClick={() => handleToggleStatus(emp)}
+                        className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full transition-colors ${
+                          emp.Status === 'Active'
+                            ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}>
+                        {emp.Status}
+                      </button>
+                    </td>
+                    <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{emp['Joining Date']}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => { setEditingEmp(emp); setShowEmpForm(false); }}
+                          className="text-purple-600 hover:text-purple-800 text-xs font-medium">Edit</button>
+                        <button onClick={() => setEmpDeleteTarget(emp)}
+                          className="text-red-500 hover:text-red-700 text-xs font-medium">Remove</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filteredEmployees.length > 0 && (
+              <p className="text-xs text-gray-400 mt-2">{filteredEmployees.length} of {employees.length} employee{employees.length !== 1 ? 's' : ''}</p>
+            )}
+          </div>
+        )}
+      </Section>
+
       {/* ── SEO ───────────────────────────────────────────────────────────── */}
       <Section
         title="SEO & Open Graph"
@@ -422,6 +681,18 @@ export default function SettingsPage() {
           </button>
         </div>
       </Section>
+
+      {/* ── Employee delete modal ──────────────────────────────────────────── */}
+      <Modal
+        isOpen={!!empDeleteTarget}
+        variant="danger"
+        title="Remove this employee?"
+        message={`${empDeleteTarget?.Employee} will be removed from the employee records. This cannot be undone.`}
+        confirmLabel={empSaving ? 'Removing…' : 'Yes, remove'}
+        cancelLabel="Cancel"
+        onConfirm={handleDeleteEmployee}
+        onCancel={() => setEmpDeleteTarget(null)}
+      />
 
       {/* ── Confirmation Modal ─────────────────────────────────────────────── */}
       <Modal

@@ -83,6 +83,7 @@ export interface NominationsForm {
   closeAt: Date | Timestamp;
   isActive: boolean;
   createdAt: Date | Timestamp;
+  bannerImageUrl?: string;
 }
 
 export interface NominationsVote {

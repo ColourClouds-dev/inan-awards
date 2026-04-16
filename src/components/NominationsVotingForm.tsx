@@ -4,9 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import confetti from 'canvas-confetti';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 import { submitNominationsVote, hasEmailVoted, hasAnonymousVoted } from '../lib/nominationsFirestore';
+import { getAllEmployees } from '../lib/employeesFirestore';
 import type { NominationsForm } from '../types';
 import Button from './Button';
 import Input from './Input';
@@ -24,6 +23,12 @@ function toDate(v: unknown): Date {
 
 const ANON_KEY = (formId: string) => `nom_anon_${formId}`;
 
+// Only renders if the form has a bannerImageUrl set
+const Banner = ({ form }: { form: NominationsForm }) =>
+  form.bannerImageUrl ? (
+    <img src={form.bannerImageUrl} alt={form.title} className="h-24 mx-auto object-contain" />
+  ) : null;
+
 const NominationsVotingForm: React.FC<Props> = ({ form }) => {
   const { executeRecaptcha } = useGoogleReCaptcha();
   const [step, setStep] = useState<'gate' | 'voting' | 'submitted' | 'closed' | 'duplicate'>('gate');
@@ -34,16 +39,15 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // Check voting window
+  // Check voting window and active status
   useEffect(() => {
     const now = new Date();
     const open = toDate(form.openAt);
     const close = toDate(form.closeAt);
-    if (now < open || now > close) {
+    if (!form.isActive || now < open || now > close) {
       setStep('closed');
       return;
     }
-    // Anonymous: check localStorage
     if (!form.requireEmail) {
       const anonId = localStorage.getItem(ANON_KEY(form.id));
       if (anonId) {
@@ -55,7 +59,6 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
         setStep('voting');
       }
     }
-    // Email required: stay on gate
   }, [form]);
 
   const triggerConfetti = useCallback(() => {
@@ -67,7 +70,6 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
     frame();
   }, []);
 
-  // Email gate submit
   const handleEmailVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setEmailError('');
@@ -77,9 +79,8 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
       return;
     }
     try {
-      const res = await fetch('/employees.json');
-      const list: { Email: string; Status: string }[] = await res.json();
-      const found = list.find(e => e.Email.toLowerCase() === trimmed && e.Status === 'Active');
+      const empList = await getAllEmployees();
+      const found = empList.find(e => e.Email.toLowerCase() === trimmed && e.Status === 'Active');
       if (!found) { setEmailError('Email not found in active employee records.'); return; }
       const already = await hasEmailVoted(form.id, trimmed);
       if (already) { setStep('duplicate'); return; }
@@ -141,15 +142,18 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
     const open = toDate(form.openAt);
     const close = toDate(form.closeAt);
     const notYet = now < open;
+    const disabled = !form.isActive;
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center space-y-4">
-          <img src="/staff-awards.svg" alt="INAN Awards" className="h-24 mx-auto" />
+          <Banner form={form} />
           <h2 className="text-2xl font-bold text-gray-800">
-            {notYet ? 'Voting Not Open Yet' : 'Voting Has Closed'}
+            {disabled ? 'Voting Unavailable' : notYet ? 'Voting Not Open Yet' : 'Voting Has Closed'}
           </h2>
           <p className="text-gray-500 text-sm">
-            {notYet
+            {disabled
+              ? 'This nominations form is currently disabled.'
+              : notYet
               ? `Voting opens on ${open.toLocaleDateString()} at ${open.toLocaleTimeString()}.`
               : `Voting closed on ${close.toLocaleDateString()} at ${close.toLocaleTimeString()}.`}
           </p>
@@ -163,7 +167,7 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center space-y-4">
-          <img src="/staff-awards.svg" alt="INAN Awards" className="h-24 mx-auto" />
+          <Banner form={form} />
           <h2 className="text-2xl font-bold text-yellow-600">Already Voted</h2>
           <p className="text-gray-500 text-sm">You have already submitted your nominations for this round.</p>
         </div>
@@ -176,7 +180,7 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center space-y-4">
-          <img src="/staff-awards.svg" alt="INAN Awards" className="h-24 mx-auto" />
+          <Banner form={form} />
           <h2 className="text-2xl font-bold text-green-600">Thank You!</h2>
           <p className="text-gray-600">Your nominations have been submitted successfully.</p>
           <p className="text-gray-400 text-sm">We appreciate your participation in the INAN Staff Awards.</p>
@@ -191,7 +195,7 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full space-y-6">
           <div className="text-center space-y-3">
-            <img src="/staff-awards.svg" alt="INAN Awards" className="h-24 mx-auto" />
+            <Banner form={form} />
             <h1 className="text-2xl font-bold text-gray-800">{form.title}</h1>
             {form.description && <p className="text-gray-500 text-sm">{form.description}</p>}
             <p className="text-gray-600 text-sm">Enter your INAN company email to proceed.</p>
@@ -216,7 +220,7 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
       <div className="w-full max-w-2xl space-y-6">
         {/* Header */}
         <div className="text-center space-y-1">
-          <img src="/staff-awards.svg" alt="INAN Awards" className="h-16 mx-auto" />
+          <Banner form={form} />
           <h1 className="text-xl font-bold text-gray-800">{form.title}</h1>
         </div>
 

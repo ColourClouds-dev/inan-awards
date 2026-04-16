@@ -5,7 +5,9 @@ import { v4 as uuidv4 } from 'uuid';
 import Button from './Button';
 import Input from './Input';
 import Toast from './Toast';
+import ImageUpload from './ImageUpload';
 import { useToast } from '../hooks/useToast';
+import { getAllEmployees } from '../lib/employeesFirestore';
 import type { NominationsForm, NominationsCategory } from '../types';
 
 interface NominationsFormBuilderProps {
@@ -34,6 +36,7 @@ const NominationsFormBuilder: React.FC<NominationsFormBuilderProps> = ({ onSave 
   const [categories, setCategories] = useState<NominationsCategory[]>([]);
   const [currentStep, setCurrentStep] = useState<'basics' | 'categories'>('basics');
   const [saving, setSaving] = useState(false);
+  const [bannerImageUrl, setBannerImageUrl] = useState('');
 
   // ── Draft persistence ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -48,6 +51,7 @@ const NominationsFormBuilder: React.FC<NominationsFormBuilderProps> = ({ onSave 
         if (d.closeAt) setCloseAt(new Date(d.closeAt));
         if (d.categories) setCategories(d.categories);
         if (d.currentStep) setCurrentStep(d.currentStep);
+        if (d.bannerImageUrl) setBannerImageUrl(d.bannerImageUrl);
       }
     } catch { /* ignore */ }
   }, []);
@@ -57,7 +61,7 @@ const NominationsFormBuilder: React.FC<NominationsFormBuilderProps> = ({ onSave 
       sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
         title, description, requireEmail,
         openAt: openAt.toISOString(), closeAt: closeAt.toISOString(),
-        categories, currentStep,
+        categories, currentStep, bannerImageUrl,
       }));
     } catch { /* ignore */ }
   }, [title, description, requireEmail, openAt, closeAt, categories, currentStep]);
@@ -103,11 +107,10 @@ const NominationsFormBuilder: React.FC<NominationsFormBuilderProps> = ({ onSave 
     updateCategory(catId, { nominees: cat.nominees.filter((_, i) => i !== idx) });
   };
 
-  // ── Import nominees from employees.json ────────────────────────────────────
+  // ── Import nominees from Firestore employees ──────────────────────────────
   const importFromEmployees = async (catId: string) => {
     try {
-      const res = await fetch('/employees.json');
-      const list: { Employee: string; Status: string }[] = await res.json();
+      const list = await getAllEmployees();
       const names = list.filter(e => e.Status === 'Active').map(e => e.Employee).sort();
       updateCategory(catId, { nominees: names });
       showToast(`Imported ${names.length} employees.`, 'success');
@@ -140,6 +143,7 @@ const NominationsFormBuilder: React.FC<NominationsFormBuilderProps> = ({ onSave 
         closeAt,
         isActive: true,
         createdAt: new Date(),
+        ...(bannerImageUrl ? { bannerImageUrl } : {}),
       };
       await onSave(form);
       sessionStorage.removeItem(DRAFT_KEY);
@@ -189,6 +193,15 @@ const NominationsFormBuilder: React.FC<NominationsFormBuilderProps> = ({ onSave 
             <span className="block text-xs text-gray-400">Staff must enter their @inan.com.ng email. Prevents duplicate votes.</span>
           </label>
         </div>
+
+        <ImageUpload
+          label="Banner Image (optional)"
+          hint="Shown at the top of every screen on the voting page. Leave empty to show no banner."
+          currentUrl={bannerImageUrl}
+          storagePath={`nominations/banners/draft`}
+          onUploaded={url => setBannerImageUrl(url)}
+          onRemoved={() => setBannerImageUrl('')}
+        />
       </div>
 
       <div className="flex justify-between items-center">

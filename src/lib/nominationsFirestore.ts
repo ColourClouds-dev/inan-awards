@@ -12,17 +12,32 @@ import {
   addDoc,
   query,
   where,
+  Timestamp,
 } from 'firebase/firestore';
 import type { NominationsForm, NominationsVote } from '../types';
 
 const FORMS_COL = 'nominations-forms';
 const VOTES_COL = 'nominations-votes';
 
+function toTimestamp(v: unknown): Timestamp {
+  if (v instanceof Timestamp) return v;
+  if (v instanceof Date) return Timestamp.fromDate(v);
+  if (v && typeof (v as any).toDate === 'function') return v as Timestamp;
+  if (typeof v === 'string') return Timestamp.fromDate(new Date(v));
+  if (v && typeof (v as any).seconds === 'number') return new Timestamp((v as any).seconds, (v as any).nanoseconds ?? 0);
+  return Timestamp.now();
+}
+
 // ── Forms ──────────────────────────────────────────────────────────────────────
 
 export async function saveNominationsForm(form: NominationsForm): Promise<void> {
-  const clean = JSON.parse(JSON.stringify(form));
-  await setDoc(doc(db, FORMS_COL, form.id), clean);
+  const payload = {
+    ...form,
+    openAt: toTimestamp(form.openAt),
+    closeAt: toTimestamp(form.closeAt),
+    createdAt: toTimestamp(form.createdAt),
+  };
+  await setDoc(doc(db, FORMS_COL, form.id), payload);
 }
 
 export async function getAllNominationsForms(): Promise<NominationsForm[]> {
