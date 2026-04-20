@@ -203,7 +203,7 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
           <form onSubmit={handleEmailVerify} className="space-y-4">
             <Input type="email" value={email} onChange={e => { setEmail(e.target.value); setEmailError(''); }}
               placeholder="yourname@inan.com.ng" error={emailError} required />
-            <Button type="submit">Verify & Continue</Button>
+            <Button type="submit" loadingText="Verifying…">Verify & Continue</Button>
           </form>
         </div>
       </div>
@@ -256,7 +256,7 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
               </Button>
             ) : (
               <Button fullWidth={false} onClick={handleSubmit}
-                disabled={!allVoted || submitting} isLoading={submitting} className="ml-auto">
+                disabled={!allVoted || submitting} isLoading={submitting} loadingText="Submitting…" className="ml-auto">
                 Submit Nominations
               </Button>
             )}

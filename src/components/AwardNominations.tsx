@@ -309,7 +309,7 @@ const AwardNominations = () => {
                   required
                 />
               </div>
-              <Button type="submit">
+              <Button type="submit" loadingText="Verifying…">
                 Verify Email
               </Button>
             </form>

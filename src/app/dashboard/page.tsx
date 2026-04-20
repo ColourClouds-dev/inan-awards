@@ -34,8 +34,8 @@ export default function DashboardPage() {
         const formsSnapshot = await getDocs(formsQuery);
         const activeFeedbackForms = formsSnapshot.docs.filter(doc => doc.data().isActive).length;
 
-        // Fetch polls
-        const pollsQuery = query(collection(db, 'polls'));
+        // Fetch nominations forms
+        const pollsQuery = query(collection(db, 'nominations-forms'));
         const pollsSnapshot = await getDocs(pollsQuery);
         const activePolls = pollsSnapshot.docs.filter(doc => doc.data().isActive).length;
 
@@ -184,7 +184,7 @@ export default function DashboardPage() {
             Create Feedback Form
           </a>
           <a
-            href="/dashboard/polls/new"
+            href="/dashboard/polls"
             className="flex items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
           >
             <svg className="w-6 h-6 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

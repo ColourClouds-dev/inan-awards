@@ -140,6 +140,7 @@ export default function LoginPage() {
                 type="submit"
                 disabled={loading}
                 isLoading={loading}
+                loadingText="Signing in…"
               >
                 Sign in
               </Button>

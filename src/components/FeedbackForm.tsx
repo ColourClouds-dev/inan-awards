@@ -5,7 +5,6 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
-import Input from './Input';
 import Button from './Button';
 import Toast from './Toast';
 import { useToast } from '../hooks/useToast';
@@ -22,6 +21,7 @@ interface FeedbackFormProps {
 
 const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [visitorInfo, setVisitorInfo] = useState<VisitorInfo | null>(null);
   const [duplicateIp, setDuplicateIp] = useState(false);
@@ -61,12 +61,20 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
           message: `Please select at least ${min} option${min > 1 ? 's' : ''}`,
         });
       } else if (q.type === 'multiChoice' && q.options?.includes('__others__')) {
-        base = z.string().min(1).refine(
-          (val) => val !== '__others__',
-          { message: 'Please specify your answer in the "Others" field' }
+        base = z.preprocess(
+          val => (val == null ? '' : val),
+          z.string().min(1).refine(
+            (val) => val !== '__others__',
+            { message: 'You selected "Others" — please type your answer in the box provided.' }
+          )
         );
       } else {
-        base = z.string().min(1).max(256, { message: 'Response must be 256 characters or less' });
+        base = z.preprocess(
+          val => (val == null ? '' : val),
+          z.string()
+            .min(1, { message: 'Please answer this question before continuing.' })
+            .max(256, { message: 'Your answer is too long — please keep it under 256 characters.' })
+        );
       }
       acc[q.id] = q.required ? base : base.optional();
       return acc;
@@ -87,6 +95,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
 
   const onSubmit = async (data: FormValues) => {
     setSubmitError(null);
+    setSubmitting(true);
     try {
       // reCAPTCHA verification
       if (executeRecaptcha) {
@@ -149,6 +158,8 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
       console.error('Error submitting feedback:', err);
       showToast('Failed to submit feedback. Please try again.', 'error');
       setSubmitError('Failed to submit feedback. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -260,7 +271,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
                     />
                     {errors[question.id as keyof FormValues] && (
                       <p className="mt-2 text-sm text-red-600" role="alert">
-                        {String((errors[question.id as keyof FormValues] as { message?: string })?.message ?? 'This field is required')}
+                        {String((errors[question.id as keyof FormValues] as { message?: string })?.message ?? 'Please answer this question before continuing.')}
                       </p>
                     )}
                   </div>
@@ -288,7 +299,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
                     />
                     {errors[question.id as keyof FormValues] && (
                       <p className="mt-2 text-sm text-red-600" role="alert">
-                        {String((errors[question.id as keyof FormValues] as { message?: string })?.message ?? 'This field is required')}
+                        {String((errors[question.id as keyof FormValues] as { message?: string })?.message ?? 'Please answer this question before continuing.')}
                       </p>
                     )}
                   </div>
@@ -436,7 +447,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
                     )}
                     {errors[question.id as keyof FormValues] && (
                       <p className="mt-2 text-sm text-red-600" role="alert">
-                        {String((errors[question.id as keyof FormValues] as { message?: string })?.message ?? 'This field is required')}
+                        {String((errors[question.id as keyof FormValues] as { message?: string })?.message ?? 'Please answer this question before continuing.')}
                       </p>
                     )}
                   </div>
@@ -462,7 +473,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
         )}
 
         <div className="flex justify-end">
-          <Button type="submit" className="px-8">
+          <Button type="submit" className="px-8" isLoading={submitting} loadingText="Submitting…" disabled={submitting}>
             Submit Feedback
           </Button>
         </div>
@@ -472,3 +483,4 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
 };
 
 export default FeedbackForm;
+

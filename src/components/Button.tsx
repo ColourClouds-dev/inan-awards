@@ -4,6 +4,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline';
   fullWidth?: boolean;
   isLoading?: boolean;
+  loadingText?: string;
 }
 
 const Button: React.FC<ButtonProps> = ({
@@ -11,6 +12,7 @@ const Button: React.FC<ButtonProps> = ({
   variant = 'primary',
   fullWidth = true,
   isLoading = false,
+  loadingText,
   className = '',
   disabled,
   ...props
@@ -32,9 +34,9 @@ const Button: React.FC<ButtonProps> = ({
       {...props}
     >
       {isLoading ? (
-        <div className="flex items-center justify-center">
-          <div className="w-5 h-5 border-t-2 border-b-2 border-white rounded-full animate-spin mr-2" />
-          Loading...
+        <div className="flex items-center justify-center gap-2">
+          <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin shrink-0" />
+          {loadingText || 'Loading...'}
         </div>
       ) : (
         children

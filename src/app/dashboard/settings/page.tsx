@@ -429,7 +429,7 @@ export default function SettingsPage() {
               onChange={e => setConfirmPassword(e.target.value)} placeholder="Repeat new password" />
           </div>
           <div className="flex justify-end">
-            <Button type="submit" disabled={profileSaving || !hasProfileChanges} isLoading={profileSaving}>
+            <Button type="submit" disabled={profileSaving || !hasProfileChanges} isLoading={profileSaving} loadingText="Saving…">
               Save Profile
             </Button>
           </div>
@@ -526,7 +526,7 @@ export default function SettingsPage() {
             </div>
             <div className="flex justify-end gap-2">
               <Button fullWidth={false} onClick={() => setShowEmpForm(false)}>Cancel</Button>
-              <Button type="submit" fullWidth={false} disabled={empSaving} isLoading={empSaving}>Save Employee</Button>
+              <Button type="submit" fullWidth={false} disabled={empSaving} isLoading={empSaving} loadingText="Saving…">Save Employee</Button>
             </div>
           </form>
         )}
@@ -552,7 +552,7 @@ export default function SettingsPage() {
             </div>
             <div className="flex justify-end gap-2">
               <Button fullWidth={false} onClick={() => setEditingEmp(null)}>Cancel</Button>
-              <Button type="submit" fullWidth={false} disabled={empSaving} isLoading={empSaving}>Update Employee</Button>
+              <Button type="submit" fullWidth={false} disabled={empSaving} isLoading={empSaving} loadingText="Updating…">Update Employee</Button>
             </div>
           </form>
         )}
@@ -656,7 +656,7 @@ export default function SettingsPage() {
             onRemoved={() => setSeoOgImageUrl('')}
           />
           <div className="flex justify-end">
-            <Button type="submit" disabled={seoSaving} isLoading={seoSaving} fullWidth={false}>
+            <Button type="submit" disabled={seoSaving} isLoading={seoSaving} loadingText="Saving…" fullWidth={false}>
               Save SEO Settings
             </Button>
           </div>
