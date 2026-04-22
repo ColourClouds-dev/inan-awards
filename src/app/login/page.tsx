@@ -9,6 +9,7 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
+import CreateAccountModal from '../../components/CreateAccountModal';
 
 function getErrorMessage(error: { code?: string } | null | undefined): string {
   switch (error?.code) {
@@ -33,6 +34,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [showCreateAccount, setShowCreateAccount] = useState(false);
   const { toasts, showToast, dismissToast } = useToast();
   const router = useRouter();
 
@@ -77,6 +79,10 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <Toast toasts={toasts} onDismiss={dismissToast} />
+      <CreateAccountModal
+        isOpen={showCreateAccount}
+        onClose={() => setShowCreateAccount(false)}
+      />
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="text-center">
           <Link href="/" className="inline-flex items-center text-sm text-purple-600 hover:text-purple-800 mb-4">
@@ -147,6 +153,18 @@ export default function LoginPage() {
             </div>
           </form>
         </div>
+      </div>
+
+      <div className="mt-4 sm:mx-auto sm:w-full sm:max-w-md text-center">
+        <p className="text-sm text-gray-600">
+          Don&apos;t have an account?{' '}
+          <button
+            onClick={() => setShowCreateAccount(true)}
+            className="font-medium text-purple-600 hover:text-purple-800 transition-colors"
+          >
+            Create one
+          </button>
+        </p>
       </div>
     </div>
   );
