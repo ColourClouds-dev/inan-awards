@@ -27,7 +27,7 @@ export async function saveEmployee(employee: Employee): Promise<void> {
 }
 
 export async function updateEmployee(employeeId: string, updates: Partial<Employee>): Promise<void> {
-  await updateDoc(doc(db, COL, employeeId), updates as Record<string, unknown>);
+  await updateDoc(doc(db, COL, employeeId), updates as Record<string, any>);
 }
 
 export async function deleteEmployee(employeeId: string): Promise<void> {
