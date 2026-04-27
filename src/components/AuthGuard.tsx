@@ -22,13 +22,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         return;
       }
 
-      if (!currentUser.emailVerified) {
-        // Sign out and redirect — account exists but email not verified
-        auth.signOut().then(() => router.push('/login'));
-        setLoading(false);
-        return;
-      }
-
       setUser(currentUser);
       setLoading(false);
     });

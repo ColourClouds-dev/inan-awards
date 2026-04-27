@@ -10,18 +10,24 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
-  orderBy,
   query,
   where,
 } from 'firebase/firestore';
 import type { FeedbackForm, FeedbackResponse } from '../types';
+import { incrementFormCount } from './tenantFirestore';
 
-export async function submitFeedback(response: FeedbackResponse): Promise<void> {
+const DEFAULT_TENANT = 'inan';
+
+export async function submitFeedback(response: FeedbackResponse & { tenantId?: string }): Promise<void> {
   await addDoc(collection(db, 'feedback-responses'), response);
 }
 
-export async function getAllResponses(): Promise<FeedbackResponse[]> {
-  const snapshot = await getDocs(collection(db, 'feedback-responses'));
+export async function getAllResponses(tenantId: string = DEFAULT_TENANT): Promise<FeedbackResponse[]> {
+  const q = query(
+    collection(db, 'feedback-responses'),
+    where('tenantId', '==', tenantId)
+  );
+  const snapshot = await getDocs(q);
   const responses = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeedbackResponse));
   return responses.sort((a, b) => {
     const aTime = a.submittedAt instanceof Date ? a.submittedAt.getTime() : (a.submittedAt as any)?.seconds ?? 0;
@@ -30,10 +36,13 @@ export async function getAllResponses(): Promise<FeedbackResponse[]> {
   });
 }
 
-export async function getAllForms(): Promise<FeedbackForm[]> {
-  const snapshot = await getDocs(collection(db, 'feedback-forms'));
+export async function getAllForms(tenantId: string = DEFAULT_TENANT): Promise<FeedbackForm[]> {
+  const q = query(
+    collection(db, 'feedback-forms'),
+    where('tenantId', '==', tenantId)
+  );
+  const snapshot = await getDocs(q);
   const forms = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeedbackForm));
-  // Sort client-side to avoid Firestore index requirements
   return forms.sort((a, b) => {
     const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : (a.createdAt as any)?.seconds ?? 0;
     const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : (b.createdAt as any)?.seconds ?? 0;
@@ -58,11 +67,16 @@ export async function reactivateForm(formId: string): Promise<void> {
   await updateDoc(docRef, { isActive: true });
 }
 
-export async function saveForm(form: FeedbackForm): Promise<void> {
+export async function saveForm(form: FeedbackForm, tenantId: string = DEFAULT_TENANT): Promise<void> {
   const docRef = doc(db, 'feedback-forms', form.id);
-  // Firestore rejects undefined values — strip them before writing
-  const clean = JSON.parse(JSON.stringify(form));
+  const clean = JSON.parse(JSON.stringify({ ...form, tenantId }));
   await setDoc(docRef, clean);
+  // Increment the tenant's form count
+  try {
+    await incrementFormCount(tenantId);
+  } catch {
+    // Non-fatal — count may be slightly off but form is saved
+  }
 }
 
 export async function deleteForm(formId: string): Promise<void> {
@@ -71,11 +85,12 @@ export async function deleteForm(formId: string): Promise<void> {
 }
 
 /** Check if an IP has already submitted a response for a specific form */
-export async function hasIpSubmittedForm(formId: string, ip: string): Promise<boolean> {
+export async function hasIpSubmittedForm(formId: string, ip: string, tenantId: string = DEFAULT_TENANT): Promise<boolean> {
   const q = query(
     collection(db, 'feedback-responses'),
     where('formId', '==', formId),
-    where('visitorIp', '==', ip)
+    where('visitorIp', '==', ip),
+    where('tenantId', '==', tenantId)
   );
   const snapshot = await getDocs(q);
   return !snapshot.empty;

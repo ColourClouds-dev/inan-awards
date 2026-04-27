@@ -2,8 +2,14 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Helper functions ────────────────────────────────────────────────────
+
     function isAuthenticated() {
       return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && request.auth.token.superAdmin == true;
     }
 
     function isAdmin() {
@@ -12,55 +18,115 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Feedback forms: anyone can read active forms; only admins can write
-    match /feedback-forms/{formId} {
-      allow read: if resource.data.isActive == true || isAdmin();
-      allow create, update, delete: if isAdmin();
+    // Returns the tenantId this authenticated user belongs to.
+    // Looks up tenant-admins/{uid} document.
+    function userTenantId() {
+      return get(/databases/$(database)/documents/tenant-admins/$(request.auth.uid)).data.tenantId;
     }
 
-    // Feedback responses:
-    // allow create: if true  — public feedback submission requires no auth
-    // read/update/delete restricted to authenticated sessions only
+    // True if the document's tenantId matches the authenticated user's tenant.
+    // Also allows legacy isAdmin() users (users collection role == 'admin') as fallback.
+    function ownsTenant(docTenantId) {
+      return isAuthenticated() && (
+        (
+          exists(/databases/$(database)/documents/tenant-admins/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/tenant-admins/$(request.auth.uid)).data.tenantId == docTenantId
+        ) || isAdmin()
+      );
+    }
+
+    // ── Tenants ─────────────────────────────────────────────────────────────
+    // Super admin can read/write all tenants.
+    // Authenticated users can read their own tenant document.
+    match /tenants/{tenantId} {
+      allow read: if isSuperAdmin() || ownsTenant(tenantId);
+      allow write: if isSuperAdmin();
+    }
+
+    // ── Tenant admins mapping ───────────────────────────────────────────────
+    // Users can read their own mapping. Super admin can read/write all.
+    match /tenant-admins/{uid} {
+      allow read: if isSuperAdmin() || request.auth.uid == uid;
+      allow write: if isSuperAdmin() || request.auth.uid == uid;
+    }
+
+    // ── Per-tenant settings ─────────────────────────────────────────────────
+    // Readable by the tenant's own admin. Writable by the tenant's own admin.
+    // Super admin can read/write all.
+    match /tenant-settings/{tenantId}/config/{key} {
+      allow read: if isSuperAdmin() || ownsTenant(tenantId);
+      allow write: if isSuperAdmin() || ownsTenant(tenantId);
+    }
+
+    // ── Feedback forms ──────────────────────────────────────────────────────
+    // Public can read active forms (for the feedback submission page).
+    // Only the owning tenant's admin can write.
+    match /feedback-forms/{formId} {
+      allow read: if resource.data.isActive == true
+                  || isSuperAdmin()
+                  || ownsTenant(resource.data.tenantId);
+      allow create: if isAuthenticated() && ownsTenant(request.resource.data.tenantId);
+      allow update, delete: if isSuperAdmin()
+                            || ownsTenant(resource.data.tenantId);
+    }
+
+    // ── Feedback responses ──────────────────────────────────────────────────
+    // Anyone can create (public form submission).
+    // Only the owning tenant's admin can read/update/delete.
     match /feedback-responses/{responseId} {
       allow create: if true;
-      allow read, update, delete: if isAuthenticated();
+      allow read, update, delete: if isSuperAdmin()
+                                  || ownsTenant(resource.data.tenantId);
+    }
+
+    // ── Nominations forms ───────────────────────────────────────────────────
+    // Public can read (for the voting page).
+    // Only the owning tenant's admin can write.
+    match /nominations-forms/{formId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && ownsTenant(request.resource.data.tenantId);
+      allow update, delete: if isSuperAdmin()
+                            || ownsTenant(resource.data.tenantId);
+    }
+
+    // ── Nominations votes ───────────────────────────────────────────────────
+    // Anyone can create (public voting).
+    // Only the owning tenant's admin can read.
+    match /nominations-votes/{voteId} {
+      allow create: if true;
+      allow read: if isSuperAdmin() || ownsTenant(resource.data.tenantId);
+      allow update, delete: if isSuperAdmin()
+                            || ownsTenant(resource.data.tenantId);
+    }
+
+    // ── Employees ───────────────────────────────────────────────────────────
+    // Public read (needed for nominations email verification).
+    // Only the owning tenant's admin can write.
+    match /employees/{employeeId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && ownsTenant(request.resource.data.tenantId);
+      allow update, delete: if isSuperAdmin()
+                            || ownsTenant(resource.data.tenantId);
+    }
+
+    // ── Legacy collections (kept for backward compatibility) ─────────────────
+
+    // Old nominations collection (pre-migration)
+    match /nominations/{nominationId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Old settings collection (pre-migration — read-only after migration)
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin() || isSuperAdmin();
     }
 
     // User profiles
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-
-    // Nominations collection
-    match /nominations/{nominationId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
-    }
-
-    // Settings
-    match /settings/{settingId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // Nominations forms — admin manages, anyone can read active ones
-    match /nominations-forms/{formId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // Nominations votes — anyone can create (voting), admin can read
-    match /nominations-votes/{voteId} {
-      allow create: if true;
-      allow read: if isAdmin();
-      allow update, delete: if isAdmin();
-    }
-
-    // Employees — admin manages, authenticated users can read (for nominations)
-    match /employees/{employeeId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isAdmin() || isSuperAdmin();
     }
   }
 }

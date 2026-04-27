@@ -5,7 +5,7 @@ import { doc, setDoc, getDoc, collection, getDocs, deleteDoc } from 'firebase/fi
 import { onAuthStateChanged, updateProfile, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
-import { db, auth, storage } from '../../../lib/firebase';
+import { db, auth } from '../../../lib/firebase';
 import type { LocationSettings, NotificationSettings, SeoSettings, Employee } from '../../../types';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
@@ -13,6 +13,7 @@ import Modal from '../../../components/Modal';
 import Toast from '../../../components/Toast';
 import ImageUpload from '../../../components/ImageUpload';
 import { useToast } from '../../../hooks/useToast';
+import { useTenant } from '../../../contexts/TenantContext';
 import {
   getAllEmployees,
   saveEmployee,
@@ -41,6 +42,7 @@ export default function SettingsPage() {
   const { toasts, showToast, dismissToast } = useToast();
   const { executeRecaptcha } = useGoogleReCaptcha();
   const [pageLoading, setPageLoading] = useState(true);
+  const { tenantId, tenant, isLoading: tenantLoading } = useTenant();
 
   // ── Profile ────────────────────────────────────────────────────────────────
   const [displayName, setDisplayName] = useState('');
@@ -100,9 +102,9 @@ export default function SettingsPage() {
       setEmail(user.email || '');
       try {
         const [locSnap, notifSnap, seoSnap] = await Promise.all([
-          getDoc(doc(db, 'settings', 'locations')),
-          getDoc(doc(db, 'settings', 'notifications')),
-          getDoc(doc(db, 'settings', 'seo')),
+          getDoc(doc(db, 'tenant-settings', tenantId, 'config', 'locations')),
+          getDoc(doc(db, 'tenant-settings', tenantId, 'config', 'notifications')),
+          getDoc(doc(db, 'tenant-settings', tenantId, 'config', 'seo')),
         ]);
         if (locSnap.exists()) setLocations((locSnap.data() as LocationSettings).locations || []);
         if (notifSnap.exists()) setNotifEmails((notifSnap.data() as NotificationSettings).emails || []);
@@ -116,8 +118,8 @@ export default function SettingsPage() {
 
         // Seed + load employees
         setEmpLoading(true);
-        await seedEmployeesIfEmpty();
-        const empList = await getAllEmployees();
+        await seedEmployeesIfEmpty(tenantId);
+        const empList = await getAllEmployees(tenantId);
         setEmployees(empList);
         setEmpLoading(false);
       } catch (err) {
@@ -194,7 +196,7 @@ export default function SettingsPage() {
   const saveLocations = async (updated: string[]) => {
     setLocationSaving(true);
     try {
-      await setDoc(doc(db, 'settings', 'locations'), { locations: updated });
+      await setDoc(doc(db, 'tenant-settings', tenantId, 'config', 'locations'), { locations: updated });
       setLocations(updated);
       showToast('Locations saved.', 'success');
     } catch {
@@ -217,7 +219,7 @@ export default function SettingsPage() {
   const saveNotifEmails = async (updated: string[]) => {
     setNotifSaving(true);
     try {
-      await setDoc(doc(db, 'settings', 'notifications'), { emails: updated });
+      await setDoc(doc(db, 'tenant-settings', tenantId, 'config', 'notifications'), { emails: updated });
       setNotifEmails(updated);
       showToast('Notification emails saved.', 'success');
     } catch {
@@ -277,7 +279,7 @@ export default function SettingsPage() {
         Status: newEmp.Status || 'Active',
         ...(newEmp['Employment Type']?.trim() ? { 'Employment Type': newEmp['Employment Type'].trim() } : {}),
       };
-      await saveEmployee(emp);
+      await saveEmployee(emp, tenantId);
       setEmployees(prev => [...prev, emp].sort((a, b) => a.Employee.localeCompare(b.Employee)));
       resetNewEmp();
       setShowEmpForm(false);
@@ -358,7 +360,7 @@ export default function SettingsPage() {
         defaultDescription: seoDescription.trim(),
         ...(seoOgImageUrl ? { ogImageUrl: seoOgImageUrl } : {}),
       };
-      await setDoc(doc(db, 'settings', 'seo'), payload);
+      await setDoc(doc(db, 'tenant-settings', tenantId, 'config', 'seo'), payload);
       showToast('SEO settings saved.', 'success');
     } catch {
       showToast('Failed to save SEO settings.', 'error');
@@ -485,6 +487,7 @@ export default function SettingsPage() {
       </Section>
 
       {/* ── Employee Records ──────────────────────────────────────────────── */}
+      {(tenant?.features?.employeeRecords !== false) && (
       <Section
         title="Employee Records"
         description="Manage staff records used for nominations voting and email verification."
@@ -630,8 +633,10 @@ export default function SettingsPage() {
           </div>
         )}
       </Section>
+      )}
 
       {/* ── SEO ───────────────────────────────────────────────────────────── */}
+      {(tenant?.features?.seoSettings !== false) && (
       <Section
         title="SEO & Open Graph"
         description="Control how your site appears in search engines and when links are shared on social media."
@@ -665,7 +670,7 @@ export default function SettingsPage() {
             label="Default OG Image"
             hint="Shown when your site is shared on WhatsApp, Twitter, LinkedIn etc. Recommended: 1200 × 630 px."
             currentUrl={seoOgImageUrl}
-            storagePath="seo/og-image"
+            folder="inan/seo"
             onUploaded={url => setSeoOgImageUrl(url)}
             onRemoved={() => setSeoOgImageUrl('')}
           />
@@ -676,6 +681,7 @@ export default function SettingsPage() {
           </div>
         </form>
       </Section>
+      )}
 
       {/* ── Danger Zone ───────────────────────────────────────────────────── */}
       <Section title="Danger Zone" description="Irreversible actions. Proceed with caution.">

@@ -1,14 +1,12 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { storage } from '../lib/firebase';
 
 interface ImageUploadProps {
   label: string;
   hint?: string;
   currentUrl?: string;
-  storagePath: string; // e.g. 'seo/og-image' or 'forms/abc123/og-image'
+  folder: string; // Cloudinary folder path e.g. "inan/banners"
   onUploaded: (url: string) => void;
   onRemoved?: () => void;
 }
@@ -20,7 +18,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   label,
   hint,
   currentUrl,
-  storagePath,
+  folder,
   onUploaded,
   onRemoved,
 }) => {
@@ -42,9 +40,31 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
     setUploading(true);
     try {
-      const storageRef = ref(storage, `${storagePath}-${Date.now()}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+      // 1. Get signed upload params from our server
+      const signRes = await fetch('/api/cloudinary/sign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder }),
+      });
+      if (!signRes.ok) throw new Error('Failed to get upload signature');
+      const { signature, timestamp, cloudName, apiKey, folder: signedFolder } = await signRes.json();
+
+      // 2. Upload directly to Cloudinary using signed params
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('api_key', apiKey);
+      formData.append('timestamp', String(timestamp));
+      formData.append('signature', signature);
+      formData.append('folder', signedFolder);
+
+      const uploadRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        { method: 'POST', body: formData }
+      );
+      if (!uploadRes.ok) throw new Error('Cloudinary upload failed');
+      const uploadData = await uploadRes.json();
+
+      const url: string = uploadData.secure_url;
       setPreview(url);
       onUploaded(url);
     } catch {
@@ -57,10 +77,13 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   const handleRemove = async () => {
     if (!preview) return;
     try {
-      const storageRef = ref(storage, preview);
-      await deleteObject(storageRef);
+      await fetch('/api/cloudinary/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: preview }),
+      });
     } catch {
-      // File may not exist in storage (e.g. external URL) — ignore
+      // Ignore delete errors — the image may already be gone
     }
     setPreview(undefined);
     onRemoved?.();
@@ -76,7 +99,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
         <div className="relative inline-block">
           <img
             src={preview}
-            alt="OG preview"
+            alt="Preview"
             className="h-32 w-auto rounded-lg border border-gray-200 object-cover"
           />
           <button

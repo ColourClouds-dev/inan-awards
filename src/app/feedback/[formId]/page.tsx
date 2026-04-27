@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import FeedbackPageClient from './FeedbackPageClient';
 import { getAdminDb } from '../../../lib/firebaseAdmin';
 
@@ -16,11 +17,13 @@ export async function generateMetadata(
 
   try {
     const db = getAdminDb();
+    const headersList = headers();
+    const tenantId = headersList.get('x-tenant-id') || 'inan';
 
-    // Fetch form and global SEO settings in parallel
+    // Fetch form and per-tenant SEO settings in parallel
     const [formSnap, seoSnap] = await Promise.all([
       db.doc(`feedback-forms/${params.formId}`).get(),
-      db.doc('settings/seo').get(),
+      db.doc(`tenant-settings/${tenantId}/config/seo`).get(),
     ]);
 
     const seo = seoSnap.exists ? seoSnap.data() as {

@@ -9,15 +9,16 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
-  addDoc,
   query,
   where,
   Timestamp,
 } from 'firebase/firestore';
 import type { NominationsForm, NominationsVote } from '../types';
+import { incrementNominationFormCount } from './tenantFirestore';
 
 const FORMS_COL = 'nominations-forms';
 const VOTES_COL = 'nominations-votes';
+const DEFAULT_TENANT = 'inan';
 
 function toTimestamp(v: unknown): Timestamp {
   if (v instanceof Timestamp) return v;
@@ -30,18 +31,26 @@ function toTimestamp(v: unknown): Timestamp {
 
 // ── Forms ──────────────────────────────────────────────────────────────────────
 
-export async function saveNominationsForm(form: NominationsForm): Promise<void> {
+export async function saveNominationsForm(form: NominationsForm, tenantId: string = DEFAULT_TENANT): Promise<void> {
   const payload = {
     ...form,
+    tenantId,
     openAt: toTimestamp(form.openAt),
     closeAt: toTimestamp(form.closeAt),
     createdAt: toTimestamp(form.createdAt),
   };
   await setDoc(doc(db, FORMS_COL, form.id), payload);
+  // Increment the tenant's nomination form count
+  try {
+    await incrementNominationFormCount(tenantId);
+  } catch {
+    // Non-fatal
+  }
 }
 
-export async function getAllNominationsForms(): Promise<NominationsForm[]> {
-  const snap = await getDocs(collection(db, FORMS_COL));
+export async function getAllNominationsForms(tenantId: string = DEFAULT_TENANT): Promise<NominationsForm[]> {
+  const q = query(collection(db, FORMS_COL), where('tenantId', '==', tenantId));
+  const snap = await getDocs(q);
   const forms = snap.docs.map(d => ({ id: d.id, ...d.data() } as NominationsForm));
   return forms.sort((a, b) => {
     const aT = a.createdAt instanceof Date ? a.createdAt.getTime() : (a.createdAt as any)?.seconds ?? 0;
@@ -66,8 +75,8 @@ export async function toggleNominationsFormActive(formId: string, isActive: bool
 
 // ── Votes ──────────────────────────────────────────────────────────────────────
 
-export async function submitNominationsVote(vote: NominationsVote): Promise<void> {
-  const clean = JSON.parse(JSON.stringify(vote));
+export async function submitNominationsVote(vote: NominationsVote, tenantId: string = DEFAULT_TENANT): Promise<void> {
+  const clean = JSON.parse(JSON.stringify({ ...vote, tenantId }));
   await setDoc(doc(db, VOTES_COL, vote.id), clean);
 }
 

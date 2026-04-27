@@ -8,6 +8,7 @@ import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import Button from './Button';
 import Toast from './Toast';
 import { useToast } from '../hooks/useToast';
+import { useTenant } from '../contexts/TenantContext';
 import { submitFeedback } from '../lib/firestore';
 import { hasIpSubmittedForm } from '../lib/firestore';
 import { getVisitorInfo } from '../lib/visitorInfo';
@@ -29,6 +30,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
   const [formOpenedAt] = useState<number>(Date.now());
   const { toasts, showToast, dismissToast } = useToast();
   const { executeRecaptcha } = useGoogleReCaptcha();
+  const { tenant } = useTenant();
 
   useEffect(() => {
     const init = async () => {
@@ -478,6 +480,15 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
           </Button>
         </div>
       </form>
+
+      {!tenant?.features?.hidePoweredBy && (
+        <div className="text-center mt-8 text-xs text-gray-400">
+          Powered by{' '}
+          <a href="https://inanmanagement.com" target="_blank" rel="noopener noreferrer" className="hover:text-gray-600">
+            Inan Management Ltd
+          </a>
+        </div>
+      )}
     </div>
   );
 };

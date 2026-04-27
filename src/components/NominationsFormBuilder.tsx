@@ -7,6 +7,7 @@ import Input from './Input';
 import Toast from './Toast';
 import ImageUpload from './ImageUpload';
 import { useToast } from '../hooks/useToast';
+import { useTenant } from '../contexts/TenantContext';
 import { getAllEmployees } from '../lib/employeesFirestore';
 import type { NominationsForm, NominationsCategory } from '../types';
 
@@ -24,6 +25,9 @@ function toLocalDatetimeValue(d: Date): string {
 
 const NominationsFormBuilder: React.FC<NominationsFormBuilderProps> = ({ onSave }) => {
   const { toasts, showToast, dismissToast } = useToast();
+  const { tenant } = useTenant();
+
+  const isOverNominationLimit = tenant != null && tenant.nominationFormCount >= tenant.nominationFormLimit;
 
   // ── Form state ─────────────────────────────────────────────────────────────
   const [title, setTitle] = useState('');
@@ -159,6 +163,11 @@ const NominationsFormBuilder: React.FC<NominationsFormBuilderProps> = ({ onSave 
   // ── Render basics step ─────────────────────────────────────────────────────
   const renderBasics = () => (
     <div className="space-y-6">
+      {isOverNominationLimit && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
+          You&apos;ve reached your nominations form limit ({tenant?.nominationFormLimit} forms). Please contact support to upgrade your plan.
+        </div>
+      )}
       <div className="bg-white p-6 rounded-lg shadow space-y-4">
         <h2 className="text-xl font-semibold">Form Details</h2>
         <Input label="Form Title" value={title} onChange={e => setTitle(e.target.value)}
@@ -196,7 +205,7 @@ const NominationsFormBuilder: React.FC<NominationsFormBuilderProps> = ({ onSave 
           label="Banner Image (optional)"
           hint="Shown at the top of every screen on the voting page. Leave empty to show no banner."
           currentUrl={bannerImageUrl}
-          storagePath={`nominations/banners/draft`}
+          folder="inan/nominations/banners"
           onUploaded={url => setBannerImageUrl(url)}
           onRemoved={() => setBannerImageUrl('')}
         />
@@ -212,7 +221,7 @@ const NominationsFormBuilder: React.FC<NominationsFormBuilderProps> = ({ onSave 
             Clear draft
           </button>
         ) : <span />}
-        <Button fullWidth={false} onClick={() => setCurrentStep('categories')} disabled={!title.trim()}>
+        <Button fullWidth={false} onClick={() => setCurrentStep('categories')} disabled={!title.trim() || isOverNominationLimit}>
           Next: Add Categories →
         </Button>
       </div>
@@ -286,7 +295,7 @@ const NominationsFormBuilder: React.FC<NominationsFormBuilderProps> = ({ onSave 
 
       <div className="flex justify-between gap-4">
         <Button fullWidth={false} onClick={() => setCurrentStep('basics')}>← Back to Details</Button>
-        <Button fullWidth={false} onClick={handleSubmit} disabled={saving || categories.length === 0} isLoading={saving} loadingText="Creating…">
+        <Button fullWidth={false} onClick={handleSubmit} disabled={saving || categories.length === 0 || isOverNominationLimit} isLoading={saving} loadingText="Creating…">
           Create Nominations Form
         </Button>
       </div>

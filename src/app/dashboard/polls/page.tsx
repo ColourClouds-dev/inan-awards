@@ -7,6 +7,7 @@ import { saveNominationsForm } from '../../../lib/nominationsFirestore';
 import Modal from '../../../components/Modal';
 import Toast from '../../../components/Toast';
 import { useToast } from '../../../hooks/useToast';
+import { useTenant } from '../../../contexts/TenantContext';
 import type { NominationsForm, NominationsVote } from '../../../types';
 
 function toDate(v: unknown): Date {
@@ -192,6 +193,7 @@ function FormCard({ form, votes, onDelete, onToggle, onCopyLink }: {
 
 export default function PollsPage() {
   const { toasts, showToast, dismissToast } = useToast();
+  const { tenant, isLoading: tenantLoading } = useTenant();
   const [forms, setForms] = useState<NominationsForm[]>([]);
   const [votesMap, setVotesMap] = useState<Record<string, NominationsVote[]>>({});
   const [loading, setLoading] = useState(true);
@@ -261,6 +263,18 @@ export default function PollsPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+      </div>
+    );
+  }
+
+  // Feature gate — show message if nominations not enabled for this tenant
+  if (!tenantLoading && tenant && !tenant.features?.nominations) {
+    return (
+      <div className="p-6">
+        <div className="bg-white rounded-lg shadow p-8 text-center">
+          <h2 className="text-xl font-semibold text-gray-700 mb-2">Feature Not Available</h2>
+          <p className="text-gray-500">This feature is not available on your plan. Please contact support to upgrade your plan.</p>
+        </div>
       </div>
     );
   }

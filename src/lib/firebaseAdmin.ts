@@ -27,3 +27,17 @@ export function getAdminDb(): Firestore {
   }
   return adminDb;
 }
+
+/** Read a per-tenant settings document server-side */
+export async function getTenantSettings<T = Record<string, unknown>>(
+  tenantId: string,
+  key: string
+): Promise<T | null> {
+  try {
+    const snap = await getAdminDb().doc(`tenant-settings/${tenantId}/config/${key}`).get();
+    if (!snap.exists) return null;
+    return snap.data() as T;
+  } catch {
+    return null;
+  }
+}

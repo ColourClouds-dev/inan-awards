@@ -1,12 +1,25 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 import CreateAccountModal from '../components/CreateAccountModal';
 
 export default function HomePage() {
   const [showCreateAccount, setShowCreateAccount] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        router.replace('/dashboard');
+      }
+    });
+    return () => unsubscribe();
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white">
@@ -34,12 +47,12 @@ export default function HomePage() {
             >
               Sign In
             </Link>
-            <button
-              onClick={() => setShowCreateAccount(true)}
+            <Link
+              href="/register"
               className="inline-flex items-center px-4 py-2 border border-purple-600 text-sm font-medium rounded-md text-purple-600 bg-white hover:bg-purple-50 transition-colors"
             >
-              Create Account
-            </button>
+              Get Started Free
+            </Link>
             </div>
           </div>
         </div>

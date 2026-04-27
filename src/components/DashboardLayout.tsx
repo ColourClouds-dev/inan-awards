@@ -1,9 +1,10 @@
 'use client';
 
-import React, { ReactNode, useState } from 'react';
+import React, { ReactNode, useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '../lib/firebase';
+import { useTenant } from '../contexts/TenantContext';
 import Link from 'next/link';
 
 interface DashboardLayoutProps {
@@ -16,13 +17,25 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const { tenant } = useTenant();
 
-  const navigationItems = [
-    { href: '/dashboard', label: 'Overview', path: '/dashboard' },
-    { href: '/dashboard/polls', label: 'Nominations', path: '/dashboard/polls' },
-    { href: '/dashboard/feedback', label: 'Feedback', path: '/dashboard/feedback' },
-    { href: '/dashboard/settings', label: 'Settings', path: '/dashboard/settings' },
+  // Check super admin claim once on mount
+  useEffect(() => {
+    auth.currentUser?.getIdTokenResult().then(result => {
+      setIsSuperAdmin(result.claims.superAdmin === true);
+    });
+  }, []);
+
+  const allNavItems = [
+    { href: '/dashboard', label: 'Overview', path: '/dashboard', show: true },
+    { href: '/dashboard/polls', label: 'Nominations', path: '/dashboard/polls', show: tenant?.features?.nominations !== false },
+    { href: '/dashboard/feedback', label: 'Feedback', path: '/dashboard/feedback', show: true },
+    { href: '/dashboard/settings', label: 'Settings', path: '/dashboard/settings', show: true },
+    { href: '/super-admin', label: 'Super Admin', path: '/super-admin', show: isSuperAdmin },
   ];
+
+  const navigationItems = allNavItems.filter(item => item.show);
 
   const handleSignOut = async () => {
     setIsSigningOut(true);

@@ -1,6 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
-import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getAuth, Auth } from 'firebase/auth';
 
 const requiredEnvVars: Record<string, string | undefined> = {
@@ -34,7 +33,6 @@ const firebaseConfig = {
 
 let app: FirebaseApp;
 let db: Firestore;
-let storage: FirebaseStorage;
 let auth: Auth;
 
 if (typeof window !== 'undefined') {
@@ -51,7 +49,6 @@ if (typeof window !== 'undefined') {
 
   try {
     db = getFirestore(app!);
-    storage = getStorage(app!);
     auth = getAuth(app!);
   } catch (error) {
     console.error('Error initializing Firebase services:', error);
@@ -59,4 +56,4 @@ if (typeof window !== 'undefined') {
   }
 }
 
-export { app, db, storage, auth };
+export { app, db, auth };

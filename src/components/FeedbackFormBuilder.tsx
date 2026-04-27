@@ -10,6 +10,7 @@ import Button from './Button';
 import Toast from './Toast';
 import ImageUpload from './ImageUpload';
 import { useToast } from '../hooks/useToast';
+import { useTenant } from '../contexts/TenantContext';
 import type { FeedbackForm, FeedbackQuestion, CustomTagRule, LocationSettings } from '../types';
 
 interface FeedbackFormBuilderProps {
@@ -64,6 +65,9 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
   const [locations, setLocations] = useState<string[]>([]);
   const [ogImageUrl, setOgImageUrl] = useState('');
   const { toasts, showToast, dismissToast } = useToast();
+  const { tenant, tenantId } = useTenant();
+
+  const isOverFormLimit = tenant != null && tenant.formCount >= tenant.formLimit;
 
   // ── Restore draft from sessionStorage on mount ─────────────────────────────
   useEffect(() => {
@@ -96,15 +100,12 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
     }
   }, [title, description, location, questions, currentStep, customTagRules, showQR]);
 
-  const FALLBACK_LOCATIONS = [
-    'Qaras Hotels: House 3',
-    'Qaras Hotels: Bluxton',
-  ];
+  const FALLBACK_LOCATIONS: string[] = [];
 
   useEffect(() => {
     const fetchLocations = async () => {
       try {
-        const snap = await getDoc(doc(db, 'settings', 'locations'));
+        const snap = await getDoc(doc(db, 'tenant-settings', tenantId, 'config', 'locations'));
         if (snap.exists()) {
           const fetched = (snap.data() as LocationSettings).locations || [];
           setLocations(fetched.length > 0 ? fetched : FALLBACK_LOCATIONS);
@@ -117,7 +118,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
       }
     };
     fetchLocations();
-  }, []);
+  }, [tenantId]);
 
   const addQuestion = (type: FeedbackQuestion['type']) => {
     const newQuestion: FeedbackQuestion = {
@@ -270,6 +271,11 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
 
   const renderBasicsStep = () => (
     <div className="space-y-6">
+      {isOverFormLimit && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
+          You&apos;ve reached your form limit ({tenant?.formLimit} forms). Please contact support to upgrade your plan.
+        </div>
+      )}
       <div className="bg-white p-6 rounded-lg shadow">
         <h2 className="text-xl font-semibold mb-4">Form Details</h2>
         <div className="space-y-4">
@@ -303,7 +309,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
             label="OG Image (optional)"
             hint="Custom image shown when this form's link is shared on social media."
             currentUrl={ogImageUrl}
-            storagePath={`forms/draft/og-image`}
+            folder="inan/forms/og-images"
             onUploaded={url => setOgImageUrl(url)}
             onRemoved={() => setOgImageUrl('')}
           />
@@ -325,7 +331,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         <Button
           fullWidth={false}
           onClick={() => setCurrentStep('questions')}
-          disabled={!title || !location}
+          disabled={!title || !location || isOverFormLimit}
         >
           Next: Add Questions →
         </Button>
@@ -514,7 +520,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
           <Button
             fullWidth={false}
             onClick={handleSubmit}
-            disabled={questions.length === 0}
+            disabled={questions.length === 0 || isOverFormLimit}
           >
             Create Form
           </Button>

@@ -1,7 +1,9 @@
 import { Inter } from "next/font/google";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import "../styles/globals.css";
 import RecaptchaProvider from "../components/RecaptchaProvider";
+import { TenantProvider } from "../contexts/TenantContext";
 import { getAdminDb } from "../lib/firebaseAdmin";
 
 const inter = Inter({
@@ -18,7 +20,9 @@ export async function generateMetadata(): Promise<Metadata> {
   let ogImage = '/inan.svg';
 
   try {
-    const snap = await getAdminDb().doc('settings/seo').get();
+    const headersList = headers();
+    const tenantId = headersList.get('x-tenant-id') || 'inan';
+    const snap = await getAdminDb().doc(`tenant-settings/${tenantId}/config/seo`).get();
     if (snap.exists) {
       const seo = snap.data() as {
         siteUrl?: string; siteName?: string; defaultDescription?: string; ogImageUrl?: string;
@@ -67,9 +71,11 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans antialiased`}>
         <div className="min-h-screen bg-gradient-to-br from-purple-100 via-white to-purple-50">
           <RecaptchaProvider>
-            <div className="min-h-screen mx-auto relative">
-              {children}
-            </div>
+            <TenantProvider>
+              <div className="min-h-screen mx-auto relative">
+                {children}
+              </div>
+            </TenantProvider>
           </RecaptchaProvider>
         </div>
       </body>

@@ -1,5 +1,32 @@
 import { Timestamp } from 'firebase/firestore';
 
+export interface TenantFeatures {
+  feedbackForms: boolean;
+  nominations: boolean;
+  employeeRecords: boolean;
+  seoSettings: boolean;
+  hidePoweredBy: boolean;
+}
+
+export interface Tenant {
+  id: string; // slug e.g. "inan", "acme-corp"
+  name: string; // display name e.g. "Inan Hotels"
+  domain: string; // e.g. "feedback.inan.com.ng"
+  emailDomain?: string; // e.g. "inan.com.ng" for nominations email verification
+  features: TenantFeatures;
+  formLimit: number; // max feedback forms allowed
+  formCount: number; // current count
+  nominationFormLimit: number;
+  nominationFormCount: number;
+  status: 'active' | 'inactive' | 'trial';
+  plan: 'trial' | 'basic' | 'pro';
+  createdAt: Date | Timestamp;
+  branding?: {
+    primaryColor?: string;
+    logoUrl?: string;
+  };
+}
+
 export interface FeedbackForm {
   id: string;
   title: string;

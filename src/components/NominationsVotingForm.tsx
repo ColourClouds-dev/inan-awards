@@ -6,6 +6,7 @@ import confetti from 'canvas-confetti';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import { submitNominationsVote, hasEmailVoted, hasAnonymousVoted } from '../lib/nominationsFirestore';
 import { getAllEmployees } from '../lib/employeesFirestore';
+import { useTenant } from '../contexts/TenantContext';
 import type { NominationsForm } from '../types';
 import Button from './Button';
 import Input from './Input';
@@ -29,8 +30,19 @@ const Banner = ({ form }: { form: NominationsForm }) =>
     <img src={form.bannerImageUrl} alt={form.title} className="h-24 mx-auto object-contain" />
   ) : null;
 
+const PoweredBy = ({ tenant }: { tenant: import('../types').Tenant | null }) =>
+  !tenant?.features?.hidePoweredBy ? (
+    <div className="text-center mt-8 text-xs text-gray-400">
+      Powered by{' '}
+      <a href="https://inanmanagement.com" target="_blank" rel="noopener noreferrer" className="hover:text-gray-600">
+        Inan Management Ltd
+      </a>
+    </div>
+  ) : null;
+
 const NominationsVotingForm: React.FC<Props> = ({ form }) => {
   const { executeRecaptcha } = useGoogleReCaptcha();
+  const { tenant } = useTenant();
   const [step, setStep] = useState<'gate' | 'voting' | 'submitted' | 'closed' | 'duplicate'>('gate');
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -74,10 +86,21 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
     e.preventDefault();
     setEmailError('');
     const trimmed = email.trim().toLowerCase();
-    if (!trimmed.endsWith('@inan.com.ng')) {
-      setEmailError('Please use your INAN company email (@inan.com.ng).');
-      return;
+
+    // Domain validation: only if tenant has emailDomain configured
+    if (tenant?.emailDomain) {
+      if (!trimmed.endsWith('@' + tenant.emailDomain)) {
+        setEmailError(`Please use your company email (@${tenant.emailDomain}).`);
+        return;
+      }
+    } else {
+      // No domain restriction — just validate it's a valid email format
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        setEmailError('Please enter a valid email address.');
+        return;
+      }
     }
+
     try {
       const empList = await getAllEmployees();
       const found = empList.find(e => e.Email.toLowerCase() === trimmed && e.Status === 'Active');
@@ -157,6 +180,7 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
               ? `Voting opens on ${open.toLocaleDateString()} at ${open.toLocaleTimeString()}.`
               : `Voting closed on ${close.toLocaleDateString()} at ${close.toLocaleTimeString()}.`}
           </p>
+          <PoweredBy tenant={tenant} />
         </div>
       </div>
     );
@@ -170,6 +194,7 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
           <Banner form={form} />
           <h2 className="text-2xl font-bold text-yellow-600">Already Voted</h2>
           <p className="text-gray-500 text-sm">You have already submitted your nominations for this round.</p>
+          <PoweredBy tenant={tenant} />
         </div>
       </div>
     );
@@ -183,13 +208,13 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
           <Banner form={form} />
           <h2 className="text-2xl font-bold text-green-600">Thank You!</h2>
           <p className="text-gray-600">Your nominations have been submitted successfully.</p>
-          <p className="text-gray-400 text-sm">We appreciate your participation in the INAN Staff Awards.</p>
+          <p className="text-gray-400 text-sm">We appreciate your participation in the Staff Awards.</p>
+          <PoweredBy tenant={tenant} />
         </div>
       </div>
     );
   }
 
-  // ── Email gate ─────────────────────────────────────────────────────────────
   if (step === 'gate') {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
@@ -198,13 +223,18 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
             <Banner form={form} />
             <h1 className="text-2xl font-bold text-gray-800">{form.title}</h1>
             {form.description && <p className="text-gray-500 text-sm">{form.description}</p>}
-            <p className="text-gray-600 text-sm">Enter your INAN company email to proceed.</p>
+            <p className="text-gray-600 text-sm">
+              {tenant?.emailDomain
+                ? `Enter your @${tenant.emailDomain} email to proceed.`
+                : 'Enter your company email to proceed.'}
+            </p>
           </div>
           <form onSubmit={handleEmailVerify} className="space-y-4">
             <Input type="email" value={email} onChange={e => { setEmail(e.target.value); setEmailError(''); }}
-              placeholder="yourname@inan.com.ng" error={emailError} required />
+              placeholder={tenant?.emailDomain ? `yourname@${tenant.emailDomain}` : 'your@email.com'} error={emailError} required />
             <Button type="submit" loadingText="Verifying…">Verify & Continue</Button>
           </form>
+          <PoweredBy tenant={tenant} />
         </div>
       </div>
     );
@@ -274,6 +304,8 @@ const NominationsVotingForm: React.FC<Props> = ({ form }) => {
               }`} title={c.title} />
           ))}
         </div>
+
+        <PoweredBy tenant={tenant} />
       </div>
     </div>
   );

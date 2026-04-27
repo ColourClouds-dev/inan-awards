@@ -6,9 +6,9 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 const FALLBACK_EMAIL = 'adminaccess@inan.com.ng';
 
-async function getNotificationEmails(): Promise<string[]> {
+async function getNotificationEmails(tenantId: string): Promise<string[]> {
   try {
-    const snap = await getAdminDb().doc('settings/notifications').get();
+    const snap = await getAdminDb().doc(`tenant-settings/${tenantId}/config/notifications`).get();
     if (snap.exists) {
       const emails = (snap.data() as { emails?: string[] }).emails;
       if (Array.isArray(emails) && emails.length > 0) return emails;
@@ -21,8 +21,9 @@ async function getNotificationEmails(): Promise<string[]> {
 
 export async function POST(req: NextRequest) {
   try {
+    const tenantId = req.headers.get('x-tenant-id') || 'inan';
     const { formTitle, location, tags, timeSpent, visitorCountry, submittedAt } = await req.json();
-    const recipients = await getNotificationEmails();
+    const recipients = await getNotificationEmails(tenantId);
     const tagLabels = (tags as { label: string }[]).map(t => t.label).join(', ');
 
     await resend.emails.send({
