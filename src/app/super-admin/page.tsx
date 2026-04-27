@@ -299,10 +299,11 @@ export default function SuperAdminPage() {
         isOpen={!!editingTenant}
         title={`Edit — ${editingTenant?.name ?? ''}`}
         onCancel={() => setEditingTenant(null)}
-        cancelLabel="Cancel"
+        size="lg"
+        hideFooter
       >
         {editingTenant && (
-          <form onSubmit={handleSaveEdit} className="space-y-4 text-left mt-2">
+          <form onSubmit={handleSaveEdit} className="space-y-4 text-left">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Input label="Display Name" value={editForm.name ?? ''} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} required />
               <Input label="Domain" value={editForm.domain ?? ''} onChange={e => setEditForm(p => ({ ...p, domain: e.target.value }))} required />
@@ -336,7 +337,7 @@ export default function SuperAdminPage() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex justify-end gap-2 border-t pt-4">
               <Button fullWidth={false} onClick={() => setEditingTenant(null)}>Cancel</Button>
               <Button type="submit" fullWidth={false} disabled={editSaving} isLoading={editSaving} loadingText="Saving…">
                 Save Changes
