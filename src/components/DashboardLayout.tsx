@@ -2,7 +2,7 @@
 
 import React, { ReactNode, useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { signOut } from 'firebase/auth';
+import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { useTenant } from '../contexts/TenantContext';
 import Link from 'next/link';
@@ -17,14 +17,22 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [displayName, setDisplayName] = useState('');
   const { tenant } = useTenant();
 
-  // Check super admin claim once on mount
+  // Check super admin claim and display name on mount and whenever auth state changes
   useEffect(() => {
-    auth.currentUser?.getIdTokenResult().then(result => {
-      setIsSuperAdmin(result.claims.superAdmin === true);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setDisplayName(user.displayName || user.email || '');
+        user.getIdTokenResult().then(result => {
+          setIsSuperAdmin(result.claims.superAdmin === true);
+        });
+      }
     });
+    return () => unsubscribe();
   }, []);
 
   const allNavItems = [
@@ -109,15 +117,61 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             </div>
 
             <div className="hidden sm:flex sm:items-center">
-              <button
-                onClick={handleSignOut}
-                disabled={isSigningOut}
-                className={`ml-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 ${
-                  isSigningOut ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                {isSigningOut ? 'Signing Out...' : 'Sign Out'}
-              </button>
+              {/* Profile dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setIsProfileOpen(o => !o)}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  aria-haspopup="true"
+                  aria-expanded={isProfileOpen}
+                >
+                  <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-sm font-semibold shrink-0">
+                    {displayName ? displayName.charAt(0).toUpperCase() : '?'}
+                  </div>
+                  {displayName && (
+                    <span className="text-sm text-gray-700 font-medium max-w-[140px] truncate">
+                      {displayName}
+                    </span>
+                  )}
+                  <svg className={`w-4 h-4 text-gray-400 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {/* Dropdown panel */}
+                {isProfileOpen && (
+                  <>
+                    {/* Click-away backdrop */}
+                    <div className="fixed inset-0 z-10" onClick={() => setIsProfileOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-100 z-20 py-1">
+                      <div className="px-4 py-2 border-b border-gray-100">
+                        <p className="text-xs text-gray-400">Signed in as</p>
+                        <p className="text-sm font-medium text-gray-800 truncate">{displayName}</p>
+                      </div>
+                      <Link
+                        href="/dashboard/settings"
+                        onClick={() => setIsProfileOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        Profile & Settings
+                      </Link>
+                      <button
+                        onClick={() => { setIsProfileOpen(false); handleSignOut(); }}
+                        disabled={isSigningOut}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        {isSigningOut ? 'Signing Out...' : 'Sign Out'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -138,13 +192,26 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 {label}
               </Link>
             ))}
-            <button
-              onClick={handleSignOut}
-              disabled={isSigningOut}
-              className="w-full text-left pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700"
-            >
-              {isSigningOut ? 'Signing Out...' : 'Sign Out'}
-            </button>
+            <div className="border-t border-gray-200 mt-1 pt-1">
+              {displayName && (
+                <div className="flex items-center gap-3 pl-3 pr-4 py-2">
+                  <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-sm font-semibold shrink-0">
+                    {displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-sm font-medium text-gray-700 truncate">{displayName}</span>
+                </div>
+              )}
+              <button
+                onClick={handleSignOut}
+                disabled={isSigningOut}
+                className="w-full flex items-center gap-2 pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-red-600 hover:bg-red-50"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                {isSigningOut ? 'Signing Out...' : 'Sign Out'}
+              </button>
+            </div>
           </div>
         </div>
       </nav>

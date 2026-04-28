@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { collection, query, getDocs, orderBy, where } from 'firebase/firestore';
+import { collection, query, getDocs, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import type { FeedbackForm, FeedbackResponse } from '../../types';
+import { useTenant } from '../../contexts/TenantContext';
 
 interface Stats {
   totalFeedback: number;
@@ -15,85 +15,87 @@ interface Stats {
 }
 
 export default function DashboardPage() {
+  const { tenantId, isLoading: tenantLoading } = useTenant();
   const [stats, setStats] = useState<Stats>({
     totalFeedback: 0,
     totalPolls: 0,
     activePolls: 0,
     activeFeedbackForms: 0,
     recentResponses: 0,
-    averageRating: 0
+    averageRating: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (tenantLoading) return;
+
     const fetchStats = async () => {
       try {
-        // Fetch feedback forms
-        const formsQuery = query(collection(db, 'feedback-forms'));
-        const formsSnapshot = await getDocs(formsQuery);
-        const activeFeedbackForms = formsSnapshot.docs.filter(doc => doc.data().isActive).length;
-
-        // Fetch nominations forms
-        const pollsQuery = query(collection(db, 'nominations-forms'));
-        const pollsSnapshot = await getDocs(pollsQuery);
-        const activePolls = pollsSnapshot.docs.filter(doc => doc.data().isActive).length;
-
-        // Fetch recent responses (last 30 days)
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        
-        const responsesQuery = query(
-          collection(db, 'feedback-responses'),
-          where('submittedAt', '>=', thirtyDaysAgo),
-          orderBy('submittedAt', 'desc')
-        );
-        const responsesSnapshot = await getDocs(responsesQuery);
-        
-        // Calculate average rating from responses
+
+        const [formsSnap, pollsSnap, responsesSnap] = await Promise.all([
+          getDocs(query(collection(db, 'feedback-forms'), where('tenantId', '==', tenantId))),
+          getDocs(query(collection(db, 'nominations-forms'), where('tenantId', '==', tenantId))),
+          getDocs(query(collection(db, 'feedback-responses'), where('tenantId', '==', tenantId))),
+        ]);
+
+        const activeFeedbackForms = formsSnap.docs.filter(d => d.data().isActive).length;
+        const activePolls = pollsSnap.docs.filter(d => d.data().isActive).length;
+
+        // Filter recent responses client-side to avoid needing a composite index
+        const recentResponses = responsesSnap.docs.filter(d => {
+          const submitted = d.data().submittedAt;
+          const date = submitted?.toDate ? submitted.toDate() : new Date(submitted);
+          return date >= thirtyDaysAgo;
+        });
+
         let totalRating = 0;
         let ratingCount = 0;
-        responsesSnapshot.docs.forEach(doc => {
-          const data = doc.data();
-          Object.values(data.responses).forEach(response => {
-            if (typeof response === 'number' && response >= 1 && response <= 5) {
-              totalRating += response;
+        recentResponses.forEach(doc => {
+          const responses = doc.data().responses ?? {};
+          Object.values(responses).forEach(val => {
+            if (typeof val === 'number' && val >= 1 && val <= 5) {
+              totalRating += val;
               ratingCount++;
             }
           });
         });
 
         setStats({
-          totalFeedback: formsSnapshot.size,
-          totalPolls: pollsSnapshot.size,
+          totalFeedback: formsSnap.size,
+          totalPolls: pollsSnap.size,
           activePolls,
           activeFeedbackForms,
-          recentResponses: responsesSnapshot.size,
-          averageRating: ratingCount > 0 ? Math.round((totalRating / ratingCount) * 10) / 10 : 0
+          recentResponses: recentResponses.length,
+          averageRating: ratingCount > 0 ? Math.round((totalRating / ratingCount) * 10) / 10 : 0,
         });
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-        setError('Failed to load dashboard statistics');
+      } catch (err) {
+        console.error('Error fetching stats:', err);
+        setError('Failed to load dashboard statistics.');
       } finally {
         setLoading(false);
       }
     };
 
     fetchStats();
-  }, []);
+  }, [tenantId, tenantLoading]);
 
-  if (loading) {
+  if (loading || tenantLoading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border-l-4 border-red-400 p-4">
-        <p className="text-sm text-red-700">{error}</p>
+      <div className="p-6">
+        <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
       </div>
     );
   }
@@ -104,7 +106,6 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Active Forms Card */}
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center">
             <div className="p-3 rounded-full bg-purple-100">
@@ -120,7 +121,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Active Polls Card */}
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center">
             <div className="p-3 rounded-full bg-green-100">
@@ -137,7 +137,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Recent Responses Card */}
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center">
             <div className="p-3 rounded-full bg-purple-100">
@@ -153,7 +152,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Average Rating Card */}
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center">
             <div className="p-3 rounded-full bg-yellow-100">
@@ -174,38 +172,26 @@ export default function DashboardPage() {
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <a
-            href="/dashboard/feedback"
-            className="flex items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
-          >
+          <a href="/dashboard/feedback" className="flex items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
             <svg className="w-6 h-6 text-purple-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Create Feedback Form
           </a>
-          <a
-            href="/dashboard/polls"
-            className="flex items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
-          >
+          <a href="/dashboard/polls" className="flex items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
             <svg className="w-6 h-6 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Manage Nominations
           </a>
-          <a
-            href="/dashboard/feedback"
-            className="flex items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
-          >
+          <a href="/dashboard/feedback" className="flex items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
             <svg className="w-6 h-6 text-purple-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
             View Feedback
           </a>
-          <a
-            href="/dashboard/polls"
-            className="flex items-center p-4 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition-colors"
-          >
+          <a href="/dashboard/polls" className="flex items-center p-4 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition-colors">
             <svg className="w-6 h-6 text-yellow-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
