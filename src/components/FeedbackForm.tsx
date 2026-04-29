@@ -212,6 +212,13 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
     <div className="max-w-2xl mx-auto p-6">
       <Toast toasts={toasts} onDismiss={dismissToast} />
       <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
+        {form.ogImageUrl && (
+          <img
+            src={form.ogImageUrl}
+            alt={form.title}
+            className="w-full h-48 object-cover rounded-lg mb-6"
+          />
+        )}
         <h1 className="text-3xl font-bold mb-2">{form.title}</h1>
         <div className="flex items-center text-gray-600 mb-6">
           <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -484,7 +491,7 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
       {!tenant?.features?.hidePoweredBy && (
         <div className="text-center mt-8 text-xs text-gray-400">
           Powered by{' '}
-          <a href="https://inanmanagement.com" target="_blank" rel="noopener noreferrer" className="hover:text-gray-600">
+          <a href="https://inan.com.ng" target="_blank" rel="noopener noreferrer" className="hover:text-gray-600">
             Inan Management Ltd
           </a>
         </div>

@@ -15,7 +15,7 @@ interface Stats {
 }
 
 export default function DashboardPage() {
-  const { tenantId, isLoading: tenantLoading } = useTenant();
+  const { tenantId, tenant, isLoading: tenantLoading } = useTenant();
   const [stats, setStats] = useState<Stats>({
     totalFeedback: 0,
     totalPolls: 0,
@@ -121,6 +121,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {tenant?.features?.nominations !== false && (
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center">
             <div className="p-3 rounded-full bg-green-100">
@@ -136,6 +137,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+        )}
 
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center">
@@ -178,12 +180,14 @@ export default function DashboardPage() {
             </svg>
             Create Feedback Form
           </a>
+          {tenant?.features?.nominations !== false && (
           <a href="/dashboard/polls" className="flex items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
             <svg className="w-6 h-6 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
             Manage Nominations
           </a>
+          )}
           <a href="/dashboard/feedback" className="flex items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
             <svg className="w-6 h-6 text-purple-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -191,12 +195,14 @@ export default function DashboardPage() {
             </svg>
             View Feedback
           </a>
+          {tenant?.features?.nominations !== false && (
           <a href="/dashboard/polls" className="flex items-center p-4 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition-colors">
             <svg className="w-6 h-6 text-yellow-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
             View Nomination Results
           </a>
+          )}
         </div>
       </div>
     </div>
