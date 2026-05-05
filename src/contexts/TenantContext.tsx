@@ -7,12 +7,14 @@ interface TenantContextValue {
   tenant: Tenant | null;
   tenantId: string;
   isLoading: boolean;
+  isImpersonating: boolean;
 }
 
 const TenantContext = createContext<TenantContextValue>({
   tenant: null,
   tenantId: 'inan',
   isLoading: true,
+  isImpersonating: false,
 });
 
 export function useTenant(): TenantContextValue {
@@ -27,6 +29,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [tenantId, setTenantId] = useState<string>('inan');
   const [isLoading, setIsLoading] = useState(true);
+  const [isImpersonating, setIsImpersonating] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -38,9 +41,9 @@ export function TenantProvider({ children }: TenantProviderProps) {
             setTenant(data.tenant);
             setTenantId(data.tenant.id ?? 'inan');
           } else {
-            // Fallback: use tenantId from response if tenant doc not found
             setTenantId(data.tenantId ?? 'inan');
           }
+          setIsImpersonating(data.isImpersonating === true);
         }
       } catch {
         // Silently fall back to defaults
@@ -52,7 +55,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
   }, []);
 
   return (
-    <TenantContext.Provider value={{ tenant, tenantId, isLoading }}>
+    <TenantContext.Provider value={{ tenant, tenantId, isLoading, isImpersonating }}>
       {children}
     </TenantContext.Provider>
   );

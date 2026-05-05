@@ -5,22 +5,23 @@ const DOMAIN_TO_TENANT: Record<string, string> = {
   'localhost:3001': 'inan',
 };
 
+const IMPERSONATE_COOKIE = 'sa-impersonate';
+
 export async function middleware(req: NextRequest) {
   const host = req.headers.get('host') ?? '';
-
-  // Strip www. prefix
   const domain = host.replace(/^www\./, '');
 
-  // Check static map first (for dev)
-  let tenantId = DOMAIN_TO_TENANT[domain];
+  // Check if super admin is impersonating a tenant
+  const impersonateCookie = req.cookies.get(IMPERSONATE_COOKIE)?.value;
 
-  // If not in static map, derive from domain
-  // e.g. feedback.inan.com.ng -> look up in Firestore
-  // For now, pass domain as header and let the app resolve it
+  // Resolve tenantId: impersonation takes priority, then static map, then domain header
+  let tenantId = impersonateCookie || DOMAIN_TO_TENANT[domain] || '';
 
   const response = NextResponse.next();
-  response.headers.set('x-tenant-id', tenantId ?? '');
+  response.headers.set('x-tenant-id', tenantId);
   response.headers.set('x-tenant-domain', domain);
+  // Pass impersonation flag so the app can show the banner
+  response.headers.set('x-impersonating', impersonateCookie ? 'true' : 'false');
   return response;
 }
 

@@ -20,7 +20,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [displayName, setDisplayName] = useState('');
-  const { tenant } = useTenant();
+  const { tenant, isImpersonating } = useTenant();
 
   // Check super admin claim and display name on mount and whenever auth state changes
   useEffect(() => {
@@ -59,8 +59,39 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     }
   };
 
+  const handleExitImpersonation = async () => {
+    try {
+      await fetch('/api/impersonate', { method: 'DELETE' });
+      // Hard reload so TenantProvider re-fetches without the impersonation cookie
+      window.location.href = '/super-admin';
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-100">
+      {/* ── Impersonation banner ──────────────────────────────────────────── */}
+      {isImpersonating && (
+        <div className="bg-yellow-400 text-yellow-900 px-4 py-2 flex items-center justify-between text-sm font-medium">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            Viewing as <strong className="ml-1">{tenant?.name ?? 'Unknown Tenant'}</strong>
+          </div>
+          <button
+            onClick={handleExitImpersonation}
+            className="flex items-center gap-1.5 px-3 py-1 bg-yellow-900 text-yellow-100 rounded-md hover:bg-yellow-800 transition-colors text-xs font-semibold"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Exit
+          </button>
+        </div>
+      )}
       <nav className="bg-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex justify-between h-16">

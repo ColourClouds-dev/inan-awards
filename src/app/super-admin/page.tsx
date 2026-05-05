@@ -119,6 +119,29 @@ export default function SuperAdminPage() {
     }
   };
 
+  // ── Impersonate tenant ─────────────────────────────────────────────────────
+  const handleImpersonate = async (tenantId: string) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+      const res = await fetch('/api/impersonate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ tenantId }),
+      });
+      if (res.ok) {
+        // Hard reload so TenantProvider re-fetches with the new cookie
+        window.location.href = '/dashboard';
+      } else {
+        const data = await res.json();
+        showToast(data.error || 'Failed to impersonate tenant.', 'error');
+      }
+    } catch {
+      showToast('Failed to impersonate tenant.', 'error');
+    }
+  };
+
   // ── Open edit modal ────────────────────────────────────────────────────────
   const openEdit = (tenant: Tenant) => {
     setEditingTenant(tenant);
@@ -255,6 +278,17 @@ export default function SuperAdminPage() {
 
               {/* Action icons */}
               <div className="flex items-center gap-1 shrink-0">
+                {/* View as tenant icon */}
+                <button
+                  onClick={() => handleImpersonate(tenant.id)}
+                  title={`View dashboard as ${tenant.name}`}
+                  className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded-md transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </button>
                 {/* Edit icon */}
                 <button
                   onClick={() => openEdit(tenant)}

@@ -5,10 +5,20 @@ export async function GET(req: NextRequest) {
   try {
     const domain = req.headers.get('x-tenant-domain') ?? '';
     const tenantIdHeader = req.headers.get('x-tenant-id') ?? '';
+    const isImpersonating = req.headers.get('x-impersonating') === 'true';
 
     const db = getAdminDb();
 
-    // Try to look up by domain first
+    // Try by tenantId header first (covers both impersonation and static map)
+    if (tenantIdHeader) {
+      const snap = await db.doc(`tenants/${tenantIdHeader}`).get();
+      if (snap.exists) {
+        const tenant = { id: snap.id, ...snap.data() };
+        return NextResponse.json({ tenant, isImpersonating });
+      }
+    }
+
+    // Try to look up by domain
     if (domain) {
       const snap = await db
         .collection('tenants')
@@ -19,16 +29,7 @@ export async function GET(req: NextRequest) {
       if (!snap.empty) {
         const doc = snap.docs[0];
         const tenant = { id: doc.id, ...doc.data() };
-        return NextResponse.json({ tenant });
-      }
-    }
-
-    // Try by tenantId header
-    if (tenantIdHeader) {
-      const snap = await db.doc(`tenants/${tenantIdHeader}`).get();
-      if (snap.exists) {
-        const tenant = { id: snap.id, ...snap.data() };
-        return NextResponse.json({ tenant });
+        return NextResponse.json({ tenant, isImpersonating: false });
       }
     }
 
@@ -36,13 +37,12 @@ export async function GET(req: NextRequest) {
     const fallbackSnap = await db.doc('tenants/inan').get();
     if (fallbackSnap.exists) {
       const tenant = { id: fallbackSnap.id, ...fallbackSnap.data() };
-      return NextResponse.json({ tenant });
+      return NextResponse.json({ tenant, isImpersonating: false });
     }
 
-    // No tenant found at all — return minimal fallback
-    return NextResponse.json({ tenantId: 'inan', tenant: null });
+    return NextResponse.json({ tenantId: 'inan', tenant: null, isImpersonating: false });
   } catch (err) {
     console.error('Tenant lookup error:', err);
-    return NextResponse.json({ tenantId: 'inan', tenant: null });
+    return NextResponse.json({ tenantId: 'inan', tenant: null, isImpersonating: false });
   }
 }
