@@ -19,27 +19,24 @@ service cloud.firestore {
     }
 
     // Returns the tenantId this authenticated user belongs to.
-    // Looks up tenant-admins/{uid} document.
+    // Uses the custom claim set at registration — instant, no Firestore lookup needed.
     function userTenantId() {
-      return get(/databases/$(database)/documents/tenant-admins/$(request.auth.uid)).data.tenantId;
+      return request.auth.token.tenantId;
     }
 
     // True if the document's tenantId matches the authenticated user's tenant.
-    // Also allows legacy isAdmin() users (users collection role == 'admin') as fallback.
+    // Also allows legacy isAdmin() users as fallback.
     function ownsTenant(docTenantId) {
       return isAuthenticated() && (
-        (
-          exists(/databases/$(database)/documents/tenant-admins/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/tenant-admins/$(request.auth.uid)).data.tenantId == docTenantId
-        ) || isAdmin()
+        request.auth.token.tenantId == docTenantId || isAdmin()
       );
     }
 
     // ── Tenants ─────────────────────────────────────────────────────────────
     // Super admin can read/write all tenants.
-    // Authenticated users can read their own tenant document.
+    // Authenticated users can read their own tenant document via the claim.
     match /tenants/{tenantId} {
-      allow read: if isSuperAdmin() || ownsTenant(tenantId);
+      allow read: if isSuperAdmin() || request.auth.token.tenantId == tenantId;
       allow write: if isSuperAdmin();
     }
 

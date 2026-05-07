@@ -35,6 +35,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [showCreateAccount, setShowCreateAccount] = useState(false);
+  const [tenantName, setTenantName] = useState('');
 
   // Forgot password state
   const [mode, setMode] = useState<'login' | 'forgot'>('login');
@@ -43,6 +44,14 @@ export default function LoginPage() {
 
   const { toasts, showToast, dismissToast } = useToast();
   const router = useRouter();
+
+  // Fetch tenant name for dynamic branding
+  useEffect(() => {
+    fetch('/api/tenant/current')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.tenant?.name) setTenantName(data.tenant.name); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -125,7 +134,7 @@ export default function LoginPage() {
             Back to Home
           </Link>
           <h1 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            INAN Admin Feedback System
+            {tenantName ? `${tenantName} — Admin` : 'Feedback Management System'}
           </h1>
         </div>
       </div>

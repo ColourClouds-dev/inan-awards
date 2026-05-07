@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
@@ -21,6 +21,7 @@ function slugify(name: string): string {
 export default function RegisterPage() {
   const router = useRouter();
   const { toasts, showToast, dismissToast } = useToast();
+  const [tenantName, setTenantName] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [yourName, setYourName] = useState('');
   const [workEmail, setWorkEmail] = useState('');
@@ -28,6 +29,14 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Fetch tenant name for dynamic branding
+  useEffect(() => {
+    fetch('/api/tenant/current')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.tenant?.name) setTenantName(data.tenant.name); })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,6 +82,10 @@ export default function RegisterPage() {
         throw new Error(data.error || 'Failed to set up your account.');
       }
 
+      // Force a token refresh so the new tenantId custom claim
+      // is included in the ID token before the dashboard loads
+      await auth.currentUser?.getIdToken(true);
+
       showToast('Account created successfully! Redirecting…', 'success');
       setTimeout(() => router.push('/dashboard?welcome=1'), 1500);
     } catch (err: any) {
@@ -95,7 +108,11 @@ export default function RegisterPage() {
         {/* Header */}
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900">Create Your Account</h1>
-          <p className="text-gray-500 text-sm mt-2">Start collecting feedback for your organisation.</p>
+          <p className="text-gray-500 text-sm mt-2">
+            {tenantName
+              ? `Start collecting feedback for ${tenantName}.`
+              : 'Start collecting feedback for your organisation.'}
+          </p>
         </div>
 
         {/* Form */}

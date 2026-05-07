@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '../../../lib/firebaseAdmin';
+import { getApps, initializeApp, cert } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import type { Tenant, TenantFeatures } from '../../../types';
 
 const DEFAULT_FEATURES: TenantFeatures = {
@@ -9,6 +11,19 @@ const DEFAULT_FEATURES: TenantFeatures = {
   seoSettings: false,
   hidePoweredBy: false,
 };
+
+function getAdminAuth() {
+  if (!getApps().length) {
+    initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      }),
+    });
+  }
+  return getAuth();
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -43,7 +58,7 @@ export async function POST(req: NextRequest) {
       createdAt: new Date(),
     };
 
-    // Use a batch write so both documents are created atomically
+    // Batch write: tenant doc + tenant-admins mapping
     const batch = db.batch();
     batch.set(db.doc(`tenants/${tenantId}`), JSON.parse(JSON.stringify(tenant)));
     batch.set(db.doc(`tenant-admins/${uid}`), {
@@ -52,6 +67,12 @@ export async function POST(req: NextRequest) {
       createdAt: new Date(),
     });
     await batch.commit();
+
+    // Set tenantId as a custom claim on the Firebase Auth user.
+    // This makes it instantly available in the user's ID token and
+    // allows Firestore rules to check request.auth.token.tenantId
+    // without needing a Firestore lookup.
+    await getAdminAuth().setCustomUserClaims(uid, { tenantId });
 
     return NextResponse.json({ success: true, tenantId });
   } catch (err) {
