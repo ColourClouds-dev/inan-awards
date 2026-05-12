@@ -38,8 +38,26 @@ export async function deleteEmployee(employeeId: string): Promise<void> {
   await deleteDoc(doc(db, COL, employeeId));
 }
 
-/** Seed Firestore from the static employees.json — only runs if collection is empty for this tenant */
+/** Bulk import employees from a parsed list — used for CSV/Excel import */
+export async function bulkSaveEmployees(employees: Employee[], tenantId: string): Promise<void> {
+  const BATCH_SIZE = 400;
+  for (let i = 0; i < employees.length; i += BATCH_SIZE) {
+    const chunk = employees.slice(i, i + BATCH_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach(emp => {
+      const id = `${tenantId}_${String(emp['Employee ID'])}`;
+      batch.set(doc(db, COL, id), JSON.parse(JSON.stringify({ ...emp, tenantId })));
+    });
+    await batch.commit();
+  }
+}
+
+/** Seed Firestore from the static employees.json — only runs for the inan tenant if collection is empty */
 export async function seedEmployeesIfEmpty(tenantId: string = DEFAULT_TENANT): Promise<void> {
+  // Only seed from the static file for the Inan tenant.
+  // Other tenants start with an empty employee list and add their own.
+  if (tenantId !== 'inan') return;
+
   const q = query(collection(db, COL), where('tenantId', '==', tenantId));
   const snap = await getDocs(q);
   if (!snap.empty) return;

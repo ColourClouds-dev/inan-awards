@@ -20,6 +20,7 @@ import {
   updateEmployee,
   deleteEmployee,
   seedEmployeesIfEmpty,
+  bulkSaveEmployees,
 } from '../../../lib/employeesFirestore';
 
 // ─── Section wrapper ──────────────────────────────────────────────────────────
@@ -80,6 +81,7 @@ export default function SettingsPage() {
     Employee: '', Email: '', Role: '', 'Reporting To': '',
     'Joining Date': '', Status: 'Active', 'Employment Type': '',
   });
+  const [csvImporting, setCsvImporting] = useState(false);
 
   // ── SEO ────────────────────────────────────────────────────────────────────
   const [seoSiteUrl, setSeoSiteUrl] = useState('');
@@ -341,6 +343,58 @@ export default function SettingsPage() {
     (e.Role ?? '').toLowerCase().includes(empSearch.toLowerCase())
   );
 
+  // ── CSV import ─────────────────────────────────────────────────────────────
+  const handleCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvImporting(true);
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').filter(l => l.trim());
+      if (lines.length < 2) { showToast('CSV must have a header row and at least one data row.', 'error'); return; }
+
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      const parsed: Employee[] = [];
+      const maxEmpId = employees.reduce((m, e) => Math.max(m, Number(e['Employee ID']) || 0), 0);
+
+      lines.slice(1).forEach((line, idx) => {
+        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        const row: Record<string, string> = {};
+        headers.forEach((h, i) => { row[h] = values[i] ?? ''; });
+
+        const name = row['Employee'] || row['Name'] || row['Full Name'] || '';
+        const email = row['Email'] || row['Email Address'] || '';
+        if (!name || !email) return; // skip rows without name or email
+
+        parsed.push({
+          '#': idx + 1,
+          Id: maxEmpId + idx + 1,
+          'Employee ID': maxEmpId + idx + 1,
+          Employee: name,
+          Email: email,
+          Role: row['Role'] || row['Position'] || row['Job Title'] || '',
+          'Reporting To': row['Reporting To'] || row['Manager'] || '',
+          'Joining Date': row['Joining Date'] || row['Start Date'] || new Date().toISOString().split('T')[0],
+          Status: row['Status'] || 'Active',
+          ...(row['Employment Type'] ? { 'Employment Type': row['Employment Type'] } : {}),
+        });
+      });
+
+      if (parsed.length === 0) { showToast('No valid rows found. Check that your CSV has Employee and Email columns.', 'error'); return; }
+
+      await bulkSaveEmployees(parsed, tenantId);
+      const refreshed = await getAllEmployees(tenantId);
+      setEmployees(refreshed);
+      showToast(`Imported ${parsed.length} employee${parsed.length !== 1 ? 's' : ''} successfully.`, 'success');
+    } catch (err) {
+      console.error('CSV import error:', err);
+      showToast('Failed to import CSV. Please check the file format.', 'error');
+    } finally {
+      setCsvImporting(false);
+      e.target.value = '';
+    }
+  };
+
   // ── SEO ────────────────────────────────────────────────────────────────────
   const handleSeoSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -487,7 +541,6 @@ export default function SettingsPage() {
       </Section>
 
       {/* ── Employee Records ──────────────────────────────────────────────── */}
-      {(tenant?.features?.employeeRecords !== false) && (
       <Section
         title="Employee Records"
         description="Manage staff records used for nominations voting and email verification."
@@ -501,12 +554,29 @@ export default function SettingsPage() {
               onChange={e => setEmpSearch(e.target.value)}
             />
           </div>
-          <div className="sm:self-end">
+          <div className="sm:self-end flex gap-2">
+            <label
+              title="Import employees from CSV"
+              className={`inline-flex items-center gap-1.5 px-4 py-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 cursor-pointer transition-colors ${csvImporting ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {csvImporting ? (
+                <div className="w-4 h-4 border-2 border-t-transparent border-gray-500 rounded-full animate-spin" />
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+              )}
+              Import CSV
+              <input type="file" accept=".csv" className="hidden" onChange={handleCsvImport} disabled={csvImporting} />
+            </label>
             <Button fullWidth={false} onClick={() => { resetNewEmp(); setShowEmpForm(o => !o); setEditingEmp(null); }}>
               {showEmpForm ? 'Cancel' : '+ Add Employee'}
             </Button>
           </div>
         </div>
+        <p className="text-xs text-gray-400">
+          CSV must include <strong>Employee</strong> and <strong>Email</strong> columns. Optional: Role, Reporting To, Joining Date, Status, Employment Type.
+        </p>
 
         {/* Add employee form */}
         {showEmpForm && (
@@ -534,31 +604,7 @@ export default function SettingsPage() {
           </form>
         )}
 
-        {/* Edit employee form */}
-        {editingEmp && (
-          <form onSubmit={handleUpdateEmployee} className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
-            <p className="text-sm font-medium text-blue-700">Editing: {editingEmp.Employee}</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Input label="Full Name" value={editingEmp.Employee} onChange={e => setEditingEmp(p => p ? { ...p, Employee: e.target.value } : p)} required />
-              <Input label="Email" type="email" value={editingEmp.Email} onChange={e => setEditingEmp(p => p ? { ...p, Email: e.target.value } : p)} required />
-              <div>
-                <label className="block text-lg font-medium text-gray-700 mb-1">Role</label>
-                <select value={editingEmp.Role ?? ''} onChange={e => setEditingEmp(p => p ? { ...p, Role: e.target.value } : p)}
-                  className="w-full px-4 py-3 text-lg rounded-lg border-2 border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all">
-                  <option value="">Select role…</option>
-                  {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-              <Input label="Reporting To" value={editingEmp['Reporting To']} onChange={e => setEditingEmp(p => p ? { ...p, 'Reporting To': e.target.value } : p)} />
-              <Input label="Joining Date" type="date" value={editingEmp['Joining Date']} onChange={e => setEditingEmp(p => p ? { ...p, 'Joining Date': e.target.value } : p)} />
-              <Input label="Employment Type" value={editingEmp['Employment Type'] ?? ''} onChange={e => setEditingEmp(p => p ? { ...p, 'Employment Type': e.target.value } : p)} placeholder="e.g. On Probation" />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button fullWidth={false} onClick={() => setEditingEmp(null)}>Cancel</Button>
-              <Button type="submit" fullWidth={false} disabled={empSaving} isLoading={empSaving} loadingText="Updating…">Update Employee</Button>
-            </div>
-          </form>
-        )}
+        {/* Edit employee — Modal (rendered at page level below) */}
 
         {/* Employee table */}
         {empLoading ? (
@@ -633,7 +679,6 @@ export default function SettingsPage() {
           </div>
         )}
       </Section>
-      )}
 
       {/* ── SEO ───────────────────────────────────────────────────────────── */}
       {(tenant?.features?.seoSettings !== false) && (
@@ -701,6 +746,70 @@ export default function SettingsPage() {
           </button>
         </div>
       </Section>
+
+      {/* ── Edit Employee Modal ────────────────────────────────────────────── */}
+      <Modal
+        isOpen={!!editingEmp}
+        title={editingEmp ? `Edit — ${editingEmp.Employee}` : 'Edit Employee'}
+        onCancel={() => setEditingEmp(null)}
+        size="lg"
+        hideFooter
+      >
+        {editingEmp && (
+          <form onSubmit={handleUpdateEmployee} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input
+                label="Full Name"
+                value={editingEmp.Employee}
+                onChange={e => setEditingEmp(p => p ? { ...p, Employee: e.target.value } : p)}
+                required
+              />
+              <Input
+                label="Email"
+                type="email"
+                value={editingEmp.Email}
+                onChange={e => setEditingEmp(p => p ? { ...p, Email: e.target.value } : p)}
+                required
+              />
+              <div>
+                <label className="block text-lg font-medium text-gray-700 mb-1">Role</label>
+                <select
+                  value={editingEmp.Role ?? ''}
+                  onChange={e => setEditingEmp(p => p ? { ...p, Role: e.target.value } : p)}
+                  className="w-full px-4 py-3 text-lg rounded-lg border-2 border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all"
+                >
+                  <option value="">Select role…</option>
+                  {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <Input
+                label="Reporting To"
+                value={editingEmp['Reporting To']}
+                onChange={e => setEditingEmp(p => p ? { ...p, 'Reporting To': e.target.value } : p)}
+                placeholder="Manager name"
+              />
+              <Input
+                label="Joining Date"
+                type="date"
+                value={editingEmp['Joining Date']}
+                onChange={e => setEditingEmp(p => p ? { ...p, 'Joining Date': e.target.value } : p)}
+              />
+              <Input
+                label="Employment Type (optional)"
+                value={editingEmp['Employment Type'] ?? ''}
+                onChange={e => setEditingEmp(p => p ? { ...p, 'Employment Type': e.target.value } : p)}
+                placeholder="e.g. On Probation"
+              />
+            </div>
+            <div className="flex justify-end gap-2 border-t pt-4">
+              <Button fullWidth={false} onClick={() => setEditingEmp(null)}>Cancel</Button>
+              <Button type="submit" fullWidth={false} disabled={empSaving} isLoading={empSaving} loadingText="Updating…">
+                Update Employee
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
       {/* ── Employee delete modal ──────────────────────────────────────────── */}
       <Modal

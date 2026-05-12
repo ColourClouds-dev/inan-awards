@@ -34,7 +34,7 @@ const PoweredBy = ({ tenant }: { tenant: import('../types').Tenant | null }) =>
   !tenant?.features?.hidePoweredBy ? (
     <div className="text-center mt-8 text-xs text-gray-400">
       Powered by{' '}
-      <a href="https://inanmanagement.com" target="_blank" rel="noopener noreferrer" className="hover:text-gray-600">
+      <a href="https://inan.com.ng" target="_blank" rel="noopener noreferrer" className="hover:text-gray-600">
         Inan Management Ltd
       </a>
     </div>

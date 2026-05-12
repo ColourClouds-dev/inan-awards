@@ -40,7 +40,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { href: '/dashboard/polls', label: 'Nominations', path: '/dashboard/polls', show: tenant?.features?.nominations !== false },
     { href: '/dashboard/feedback', label: 'Feedback', path: '/dashboard/feedback', show: true },
     { href: '/dashboard/settings', label: 'Settings', path: '/dashboard/settings', show: true },
-    { href: '/super-admin', label: 'Super Admin', path: '/super-admin', show: isSuperAdmin },
+    { href: '/super-admin', label: 'Super Admin', path: '/super-admin', show: isSuperAdmin && !isImpersonating },
   ];
 
   const navigationItems = allNavItems.filter(item => item.show);
@@ -97,7 +97,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           <div className="flex justify-between h-16">
             <div className="flex">
               <div className="flex-shrink-0 flex items-center">
-                <h1 className="text-xl font-bold text-gray-800">Inan Feedback</h1>
+                <h1 className="text-xl font-bold text-gray-800">
+                  {tenant?.name ?? 'Feedback System'}
+                </h1>
               </div>
               {/* Desktop Navigation */}
               <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
