@@ -22,8 +22,9 @@ export interface Tenant {
   plan: 'trial' | 'basic' | 'pro';
   createdAt: Date | Timestamp;
   branding?: {
-    primaryColor?: string;
-    logoUrl?: string;
+    primaryColor?: string;   // hex e.g. "#7C3AED"
+    logoUrl?: string;        // Cloudinary URL
+    emailDisplayName?: string; // e.g. "Acme Corp Feedback"
   };
 }
 

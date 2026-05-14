@@ -1,6 +1,27 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Brand color custom property ─────────────────────────────────────────────
+   Set by BrandProvider on <html>. Falls back to Inan purple.              */
+:root {
+  --brand: #7C3AED;
+}
+
+/* Utility classes that consume the brand color */
+.btn-brand {
+  background-color: var(--brand) !important;
+  color: #fff !important;
+}
+.btn-brand:hover {
+  filter: brightness(0.88);
+}
+.text-brand {
+  color: var(--brand) !important;
+}
+.border-brand {
+  border-color: var(--brand) !important;
+}
  
 @layer base {
   :root {

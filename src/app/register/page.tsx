@@ -51,6 +51,7 @@ export default function RegisterPage() {
 
   // Branding
   const [tenantName, setTenantName] = useState('');
+  const [tenantLogo, setTenantLogo] = useState('');
 
   // Step 1 — account details
   const [companyName, setCompanyName] = useState('');
@@ -71,7 +72,13 @@ export default function RegisterPage() {
   useEffect(() => {
     fetch('/api/tenant/current')
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.tenant?.name) setTenantName(data.tenant.name); })
+      .then(data => {
+        if (data?.tenant?.name) setTenantName(data.tenant.name);
+        if (data?.tenant?.branding?.logoUrl) setTenantLogo(data.tenant.branding.logoUrl);
+        if (data?.tenant?.branding?.primaryColor) {
+          document.documentElement.style.setProperty('--brand', data.tenant.branding.primaryColor);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -106,7 +113,16 @@ export default function RegisterPage() {
         throw new Error(data.error || 'Failed to set up your account.');
       }
 
-      await auth.currentUser?.getIdToken(true);
+      // Wait for the tenantId custom claim to propagate into the token
+      // before moving on — Firestore rules depend on it being present.
+      let attempts = 0;
+      while (attempts < 10) {
+        const tokenResult = await auth.currentUser?.getIdTokenResult(true);
+        if (tokenResult?.claims?.tenantId) break;
+        await new Promise(resolve => setTimeout(resolve, 800));
+        attempts++;
+      }
+
       setCreatedTenantId(tenantId);
       showToast('Account created! Optionally upload your staff list below.', 'success');
       setStep('employees');
@@ -171,6 +187,11 @@ export default function RegisterPage() {
         {step === 'details' && (
           <>
             <div className="text-center">
+              {tenantLogo && (
+                <div className="flex justify-center mb-3">
+                  <img src={tenantLogo} alt={tenantName} className="h-10 w-auto max-w-[180px] object-contain" />
+                </div>
+              )}
               <h1 className="text-3xl font-bold text-gray-900">Create Your Account</h1>
               <p className="text-gray-500 text-sm mt-2">
                 {tenantName ? `Start collecting feedback for ${tenantName}.` : 'Start collecting feedback for your organisation.'}

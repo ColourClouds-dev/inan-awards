@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { collection, query, getDocs, where } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { db, auth } from '../../lib/firebase';
 import { useTenant } from '../../contexts/TenantContext';
 
 interface Stats {
@@ -16,6 +17,7 @@ interface Stats {
 
 export default function DashboardPage() {
   const { tenantId, tenant, isLoading: tenantLoading } = useTenant();
+  const [authReady, setAuthReady] = useState(false);
   const [stats, setStats] = useState<Stats>({
     totalFeedback: 0,
     totalPolls: 0,
@@ -27,8 +29,18 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Wait for Firebase Auth to confirm the user before querying Firestore.
+  // Without this, Firestore requests fire before the auth token is attached,
+  // causing "Missing or insufficient permissions" on fresh logins.
   useEffect(() => {
-    if (tenantLoading) return;
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) setAuthReady(true);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (tenantLoading || !authReady) return;
 
     const fetchStats = async () => {
       try {
@@ -80,9 +92,9 @@ export default function DashboardPage() {
     };
 
     fetchStats();
-  }, [tenantId, tenantLoading]);
+  }, [tenantId, tenantLoading, authReady]);
 
-  if (loading || tenantLoading) {
+  if (loading || tenantLoading || !authReady) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />

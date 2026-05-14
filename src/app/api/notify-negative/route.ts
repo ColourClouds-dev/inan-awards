@@ -26,8 +26,18 @@ export async function POST(req: NextRequest) {
     const recipients = await getNotificationEmails(tenantId);
     const tagLabels = (tags as { label: string }[]).map(t => t.label).join(', ');
 
+    // Resolve tenant display name for email sender
+    let emailDisplayName = 'INAN Feedback';
+    try {
+      const tenantSnap = await getAdminDb().doc(`tenants/${tenantId}`).get();
+      if (tenantSnap.exists) {
+        const data = tenantSnap.data() as { name?: string; branding?: { emailDisplayName?: string } };
+        emailDisplayName = data.branding?.emailDisplayName || data.name || emailDisplayName;
+      }
+    } catch { /* use fallback */ }
+
     await resend.emails.send({
-      from: 'INAN Feedback <notifications@inan.com.ng>',
+      from: `${emailDisplayName} <notifications@inan.com.ng>`,
       to: recipients,
       subject: `⚠️ Negative Feedback Alert — ${formTitle}`,
       html: `

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { getFormById } from '../../../lib/firestore';
 import FeedbackForm from '../../../components/FeedbackForm';
-import type { FeedbackForm as FeedbackFormType } from '../../../types';
+import type { FeedbackForm as FeedbackFormType, Tenant } from '../../../types';
 
 export default function FeedbackPageClient() {
   const params = useParams();
@@ -14,6 +14,22 @@ export default function FeedbackPageClient() {
   const [notFound, setNotFound] = useState(false);
   const [inactive, setInactive] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [tenantBranding, setTenantBranding] = useState<Tenant['branding']>(undefined);
+
+  useEffect(() => {
+    // Fetch tenant branding for public page styling
+    fetch('/api/tenant/current')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.tenant?.branding) {
+          setTenantBranding(data.tenant.branding);
+          if (data.tenant.branding.primaryColor) {
+            document.documentElement.style.setProperty('--brand', data.tenant.branding.primaryColor);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!formId) return;
@@ -44,7 +60,7 @@ export default function FeedbackPageClient() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: 'var(--brand)' }} />
       </div>
     );
   }
@@ -73,5 +89,5 @@ export default function FeedbackPageClient() {
     return null;
   }
 
-  return <FeedbackForm form={form} />;
+  return <FeedbackForm form={form} tenantBranding={tenantBranding} />;
 }

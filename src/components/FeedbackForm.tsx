@@ -13,14 +13,15 @@ import { submitFeedback } from '../lib/firestore';
 import { hasIpSubmittedForm } from '../lib/firestore';
 import { getVisitorInfo } from '../lib/visitorInfo';
 import { computeAllTags, isNegativeResponse, hasCustomTags } from '../lib/tagEngine';
-import type { FeedbackForm } from '../types';
+import type { FeedbackForm, Tenant } from '../types';
 import type { VisitorInfo } from '../lib/visitorInfo';
 
 interface FeedbackFormProps {
   form: FeedbackForm;
+  tenantBranding?: Tenant['branding'];
 }
 
-const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
+const FeedbackForm: React.FC<FeedbackFormProps> = ({ form, tenantBranding }) => {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -211,6 +212,18 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
   return (
     <div className="max-w-2xl mx-auto p-6">
       <Toast toasts={toasts} onDismiss={dismissToast} />
+
+      {/* Tenant branding header */}
+      {(tenantBranding?.logoUrl || tenant?.branding?.logoUrl) && (
+        <div className="flex justify-center mb-6">
+          <img
+            src={tenantBranding?.logoUrl ?? tenant?.branding?.logoUrl}
+            alt="Organisation logo"
+            className="h-10 w-auto max-w-[180px] object-contain"
+          />
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
         {form.ogImageUrl && (
           <img
@@ -239,7 +252,8 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
         {form.questions.map((question, index) => (
           <div key={question.id} className="bg-white rounded-lg shadow-lg p-6" data-testid="question-block">
             <div className="flex items-start mb-4">
-              <span className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-semibold">
+              <span className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-semibold text-white"
+                style={{ backgroundColor: 'var(--brand)' }}>
                 {index + 1}
               </span>
               <div className="ml-4 flex-grow">
@@ -263,9 +277,10 @@ const FeedbackForm: React.FC<FeedbackFormProps> = ({ form }) => {
                                 onClick={() => field.onChange(rating)}
                                 className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-medium transition-all transform hover:scale-110
                                   ${field.value === rating
-                                    ? 'bg-purple-600 text-white shadow-lg'
+                                    ? 'text-white shadow-lg'
                                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                   }`}
+                                style={field.value === rating ? { backgroundColor: 'var(--brand)' } : {}}
                               >
                                 {rating}
                               </button>

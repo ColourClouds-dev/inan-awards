@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import { db, auth } from '../../../lib/firebase';
 import type { LocationSettings, NotificationSettings, SeoSettings, Employee } from '../../../types';
+import { updateTenant } from '../../../lib/tenantFirestore';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
 import Modal from '../../../components/Modal';
@@ -95,6 +96,12 @@ export default function SettingsPage() {
   const [dangerAction, setDangerAction] = useState<'responses' | null>(null);
   const [dangerLoading, setDangerLoading] = useState(false);
 
+  // ── Branding ───────────────────────────────────────────────────────────────
+  const [brandLogoUrl, setBrandLogoUrl] = useState('');
+  const [brandColor, setBrandColor] = useState('#7C3AED');
+  const [brandEmailName, setBrandEmailName] = useState('');
+  const [brandSaving, setBrandSaving] = useState(false);
+
   // ── Auth guard + load ──────────────────────────────────────────────────────
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -124,6 +131,17 @@ export default function SettingsPage() {
         const empList = await getAllEmployees(tenantId);
         setEmployees(empList);
         setEmpLoading(false);
+
+        // Seed branding from tenant doc
+        try {
+          const tSnap = await getDoc(doc(db, 'tenants', tenantId));
+          if (tSnap.exists()) {
+            const b = (tSnap.data() as { branding?: { logoUrl?: string; primaryColor?: string; emailDisplayName?: string } }).branding;
+            if (b?.logoUrl) setBrandLogoUrl(b.logoUrl);
+            if (b?.primaryColor) setBrandColor(b.primaryColor);
+            if (b?.emailDisplayName) setBrandEmailName(b.emailDisplayName);
+          }
+        } catch { /* non-fatal */ }
       } catch (err) {
         console.error('Error loading settings:', err);
         showToast('Failed to load some settings.', 'error');
@@ -395,7 +413,30 @@ export default function SettingsPage() {
     }
   };
 
-  // ── SEO ────────────────────────────────────────────────────────────────────
+  // ── Branding ───────────────────────────────────────────────────────────────
+  const handleBrandingSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (brandColor && !/^#[0-9A-Fa-f]{6}$/.test(brandColor)) {
+      showToast('Please enter a valid hex color (e.g. #7C3AED).', 'error');
+      return;
+    }
+    setBrandSaving(true);
+    try {
+      await updateTenant(tenantId, {
+        branding: {
+          ...(brandLogoUrl ? { logoUrl: brandLogoUrl } : {}),
+          ...(brandColor ? { primaryColor: brandColor } : {}),
+          ...(brandEmailName.trim() ? { emailDisplayName: brandEmailName.trim() } : {}),
+        },
+      });
+      showToast('Branding saved.', 'success');
+    } catch {
+      showToast('Failed to save branding.', 'error');
+    } finally {
+      setBrandSaving(false);
+    }
+  };
+
   const handleSeoSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!seoSiteUrl.trim() || !seoSiteName.trim()) {
@@ -454,6 +495,77 @@ export default function SettingsPage() {
     <div className="space-y-8 max-w-3xl mx-auto">
       <Toast toasts={toasts} onDismiss={dismissToast} />
       <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+
+      {/* ── Branding ──────────────────────────────────────────────────────── */}
+      <Section title="Branding" description="Customise how your organisation appears across the platform — logo, brand color, and email display name.">
+        <form onSubmit={handleBrandingSave} className="space-y-5">
+
+          {/* Logo */}
+          <ImageUpload
+            label="Organisation Logo"
+            hint="Shown in the nav bar, login page, and public forms. Recommended: PNG or SVG with transparent background."
+            currentUrl={brandLogoUrl}
+            folder={`${tenantId}/branding`}
+            onUploaded={url => setBrandLogoUrl(url)}
+            onRemoved={() => setBrandLogoUrl('')}
+          />
+
+          {/* Brand color */}
+          <div>
+            <label className="block text-lg font-medium text-gray-700 mb-1">Brand Color</label>
+            <p className="text-xs text-gray-400 mb-2">Used on buttons, active nav links, and accents across the platform.</p>
+            <div className="flex items-center gap-3">
+              {/* Native color picker */}
+              <input
+                type="color"
+                value={brandColor}
+                onChange={e => setBrandColor(e.target.value)}
+                className="h-11 w-14 rounded-lg border-2 border-gray-300 cursor-pointer p-0.5 bg-white"
+                title="Pick a color"
+              />
+              {/* Hex text input */}
+              <input
+                type="text"
+                value={brandColor}
+                onChange={e => {
+                  const val = e.target.value;
+                  setBrandColor(val);
+                }}
+                maxLength={7}
+                placeholder="#7C3AED"
+                className="w-32 px-3 py-2.5 text-sm font-mono rounded-lg border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:border-transparent uppercase"
+              />
+              {/* Live preview */}
+              <div className="flex items-center gap-2 ml-2">
+                <div
+                  className="h-9 px-4 rounded-lg text-white text-sm font-medium flex items-center"
+                  style={{ backgroundColor: /^#[0-9A-Fa-f]{6}$/.test(brandColor) ? brandColor : '#7C3AED' }}
+                >
+                  Preview
+                </div>
+                <span className="text-xs text-gray-400">Button preview</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Email display name */}
+          <div>
+            <Input
+              label="Email Display Name"
+              value={brandEmailName}
+              onChange={e => setBrandEmailName(e.target.value)}
+              placeholder={`e.g. ${tenant?.name ?? 'Your Company'} Feedback`}
+            />
+            <p className="text-xs text-gray-400 mt-1">Shown as the sender name in notification emails.</p>
+          </div>
+
+          <div className="flex justify-end">
+            <Button type="submit" fullWidth={false} disabled={brandSaving} isLoading={brandSaving} loadingText="Saving…">
+              Save Branding
+            </Button>
+          </div>
+        </form>
+      </Section>
 
       {/* ── Profile / Account ─────────────────────────────────────────────── */}
       <Section title="Profile & Account" description="Update your display name and password.">

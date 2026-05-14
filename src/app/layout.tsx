@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import "../styles/globals.css";
 import RecaptchaProvider from "../components/RecaptchaProvider";
 import { TenantProvider } from "../contexts/TenantContext";
+import BrandProvider from "../components/BrandProvider";
 import { getAdminDb } from "../lib/firebaseAdmin";
 
 const inter = Inter({
@@ -18,19 +19,28 @@ export async function generateMetadata(): Promise<Metadata> {
   let siteName = 'Inan Feedback';
   let description = 'Collect, manage and analyse guest feedback across all Inan hotel locations.';
   let ogImage = '/inan.svg';
+  let faviconUrl = '/favicon.png';
 
   try {
     const headersList = headers();
     const tenantId = headersList.get('x-tenant-id') || 'inan';
-    const snap = await getAdminDb().doc(`tenant-settings/${tenantId}/config/seo`).get();
-    if (snap.exists) {
-      const seo = snap.data() as {
+    const db = getAdminDb();
+    const [seoSnap, tenantSnap] = await Promise.all([
+      db.doc(`tenant-settings/${tenantId}/config/seo`).get(),
+      db.doc(`tenants/${tenantId}`).get(),
+    ]);
+    if (seoSnap.exists) {
+      const seo = seoSnap.data() as {
         siteUrl?: string; siteName?: string; defaultDescription?: string; ogImageUrl?: string;
       };
       if (seo.siteUrl) siteUrl = seo.siteUrl;
       if (seo.siteName) siteName = seo.siteName;
       if (seo.defaultDescription) description = seo.defaultDescription;
       if (seo.ogImageUrl) ogImage = seo.ogImageUrl;
+    }
+    if (tenantSnap.exists) {
+      const branding = (tenantSnap.data() as { branding?: { logoUrl?: string } }).branding;
+      if (branding?.logoUrl) faviconUrl = branding.logoUrl;
     }
   } catch {
     // Fall back to defaults silently
@@ -43,6 +53,7 @@ export async function generateMetadata(): Promise<Metadata> {
       template: `%s | ${siteName}`,
     },
     description,
+    icons: { icon: faviconUrl, apple: faviconUrl },
     openGraph: {
       siteName,
       type: 'website',
@@ -72,6 +83,7 @@ export default function RootLayout({
         <div className="min-h-screen bg-gradient-to-br from-purple-100 via-white to-purple-50">
           <RecaptchaProvider>
             <TenantProvider>
+              <BrandProvider />
               <div className="min-h-screen mx-auto relative">
                 {children}
               </div>

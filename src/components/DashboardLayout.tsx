@@ -97,21 +97,30 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           <div className="flex justify-between h-16">
             <div className="flex">
               <div className="flex-shrink-0 flex items-center">
-                <h1 className="text-xl font-bold text-gray-800">
-                  {tenant?.name ?? 'Feedback System'}
-                </h1>
+                {tenant?.branding?.logoUrl ? (
+                  <img
+                    src={tenant.branding.logoUrl}
+                    alt={tenant.name}
+                    className="h-8 w-auto max-w-[160px] object-contain"
+                  />
+                ) : (
+                  <h1 className="text-xl font-bold text-gray-800">
+                    {tenant?.name ?? 'Feedback System'}
+                  </h1>
+                )}
               </div>
               {/* Desktop Navigation */}
               <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
                 {navigationItems.map(({ href, label, path }) => (
-                  <Link 
+                  <Link
                     key={href}
                     href={href}
                     className={`${
                       pathname === path
-                        ? 'border-purple-500 text-gray-900'
+                        ? 'border-b-2 text-gray-900'
                         : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
                     } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
+                    style={pathname === path ? { borderColor: 'var(--brand)' } : {}}
                   >
                     {label}
                   </Link>

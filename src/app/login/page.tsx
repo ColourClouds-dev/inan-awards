@@ -36,6 +36,8 @@ export default function LoginPage() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [showCreateAccount, setShowCreateAccount] = useState(false);
   const [tenantName, setTenantName] = useState('');
+  const [tenantLogo, setTenantLogo] = useState('');
+  const [tenantColor, setTenantColor] = useState('#7C3AED');
 
   // Forgot password state
   const [mode, setMode] = useState<'login' | 'forgot'>('login');
@@ -49,7 +51,14 @@ export default function LoginPage() {
   useEffect(() => {
     fetch('/api/tenant/current')
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.tenant?.name) setTenantName(data.tenant.name); })
+      .then(data => {
+        if (data?.tenant?.name) setTenantName(data.tenant.name);
+        if (data?.tenant?.branding?.logoUrl) setTenantLogo(data.tenant.branding.logoUrl);
+        if (data?.tenant?.branding?.primaryColor) {
+          setTenantColor(data.tenant.branding.primaryColor);
+          document.documentElement.style.setProperty('--brand', data.tenant.branding.primaryColor);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -133,7 +142,12 @@ export default function LoginPage() {
             </svg>
             Back to Home
           </Link>
-          <h1 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          {tenantLogo ? (
+            <div className="flex justify-center mb-4">
+              <img src={tenantLogo} alt={tenantName} className="h-12 w-auto max-w-[200px] object-contain" />
+            </div>
+          ) : null}
+          <h1 className="mt-2 text-center text-3xl font-extrabold text-gray-900">
             {tenantName ? `${tenantName} — Admin` : 'Feedback Management System'}
           </h1>
         </div>

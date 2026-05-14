@@ -20,9 +20,9 @@ const Button: React.FC<ButtonProps> = ({
   const baseStyles = 'px-6 py-3 rounded-lg text-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
   
   const variants = {
-    primary: 'bg-gray-600 hover:bg-gray-700 text-white focus:ring-gray-500',
-    secondary: 'bg-gray-600 hover:bg-gray-700 text-white focus:ring-gray-500',
-    outline: 'border-2 border-gray-600 text-gray-600 hover:bg-gray-50 focus:ring-gray-500'
+    primary: 'btn-brand focus:ring-2 focus:ring-offset-2',
+    secondary: 'btn-brand focus:ring-2 focus:ring-offset-2',
+    outline: 'border-2 border-brand text-brand hover:opacity-80 focus:ring-2 focus:ring-offset-2',
   };
 
   const widthClass = fullWidth ? 'w-full' : 'w-full min-[360px]:w-auto';
