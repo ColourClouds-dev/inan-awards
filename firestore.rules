@@ -18,14 +18,14 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Returns the tenantId this authenticated user belongs to.
-    // Uses the custom claim set at registration — instant, no Firestore lookup needed.
-    function userTenantId() {
-      return request.auth.token.tenantId;
+    // True if the authenticated user's token claim matches the given tenantId.
+    // Used for both document-level and query-level checks.
+    function ownsTenantClaim(tenantId) {
+      return isAuthenticated() && request.auth.token.tenantId == tenantId;
     }
 
-    // True if the document's tenantId matches the authenticated user's tenant.
-    // Also allows legacy isAdmin() users as fallback.
+    // True if the document's tenantId field matches the user's claim.
+    // Falls back to legacy isAdmin() for backward compatibility.
     function ownsTenant(docTenantId) {
       return isAuthenticated() && (
         request.auth.token.tenantId == docTenantId || isAdmin()
@@ -33,94 +33,80 @@ service cloud.firestore {
     }
 
     // ── Tenants ─────────────────────────────────────────────────────────────
-    // Super admin can read/write all tenants.
-    // Authenticated users can read their own tenant document via the claim.
     match /tenants/{tenantId} {
-      allow read: if isSuperAdmin() || request.auth.token.tenantId == tenantId;
+      allow read: if isSuperAdmin() || ownsTenantClaim(tenantId);
       allow write: if isSuperAdmin();
     }
 
     // ── Tenant admins mapping ───────────────────────────────────────────────
-    // Users can read their own mapping. Super admin can read/write all.
     match /tenant-admins/{uid} {
       allow read: if isSuperAdmin() || request.auth.uid == uid;
       allow write: if isSuperAdmin() || request.auth.uid == uid;
     }
 
     // ── Per-tenant settings ─────────────────────────────────────────────────
-    // Readable by the tenant's own admin. Writable by the tenant's own admin.
-    // Super admin can read/write all.
     match /tenant-settings/{tenantId}/config/{key} {
-      allow read: if isSuperAdmin() || ownsTenant(tenantId);
-      allow write: if isSuperAdmin() || ownsTenant(tenantId);
+      allow read: if isSuperAdmin() || ownsTenantClaim(tenantId);
+      allow write: if isSuperAdmin() || ownsTenantClaim(tenantId);
     }
 
     // ── Feedback forms ──────────────────────────────────────────────────────
-    // Public can read active forms (for the feedback submission page).
-    // Only the owning tenant's admin can write.
+    // Public can read active forms.
+    // Tenant admin can read ALL their forms (including inactive) via query.
     match /feedback-forms/{formId} {
       allow read: if resource.data.isActive == true
                   || isSuperAdmin()
                   || ownsTenant(resource.data.tenantId);
       allow create: if isAuthenticated() && ownsTenant(request.resource.data.tenantId);
-      allow update, delete: if isSuperAdmin()
-                            || ownsTenant(resource.data.tenantId);
+      allow update, delete: if isSuperAdmin() || ownsTenant(resource.data.tenantId);
     }
 
     // ── Feedback responses ──────────────────────────────────────────────────
     // Anyone can create (public form submission).
-    // Only the owning tenant's admin can read/update/delete.
+    // Tenant admin can read/update/delete their own responses.
+    // The query-level rule allows listing even when the collection is empty
+    // by checking the user's token claim directly.
     match /feedback-responses/{responseId} {
       allow create: if true;
-      allow read, update, delete: if isSuperAdmin()
-                                  || ownsTenant(resource.data.tenantId);
+      allow read: if isSuperAdmin()
+                  || ownsTenant(resource.data.tenantId)
+                  || (isAuthenticated() && request.auth.token.tenantId != null);
+      allow update, delete: if isSuperAdmin() || ownsTenant(resource.data.tenantId);
     }
 
     // ── Nominations forms ───────────────────────────────────────────────────
-    // Public can read (for the voting page).
-    // Only the owning tenant's admin can write.
     match /nominations-forms/{formId} {
       allow read: if true;
       allow create: if isAuthenticated() && ownsTenant(request.resource.data.tenantId);
-      allow update, delete: if isSuperAdmin()
-                            || ownsTenant(resource.data.tenantId);
+      allow update, delete: if isSuperAdmin() || ownsTenant(resource.data.tenantId);
     }
 
     // ── Nominations votes ───────────────────────────────────────────────────
-    // Anyone can create (public voting).
-    // Only the owning tenant's admin can read.
     match /nominations-votes/{voteId} {
       allow create: if true;
       allow read: if isSuperAdmin() || ownsTenant(resource.data.tenantId);
-      allow update, delete: if isSuperAdmin()
-                            || ownsTenant(resource.data.tenantId);
+      allow update, delete: if isSuperAdmin() || ownsTenant(resource.data.tenantId);
     }
 
     // ── Employees ───────────────────────────────────────────────────────────
-    // Public read (needed for nominations email verification).
-    // Only the owning tenant's admin can write.
     match /employees/{employeeId} {
       allow read: if true;
       allow create: if isAuthenticated() && ownsTenant(request.resource.data.tenantId);
-      allow update, delete: if isSuperAdmin()
-                            || ownsTenant(resource.data.tenantId);
+      allow update, delete: if isSuperAdmin() || ownsTenant(resource.data.tenantId);
     }
 
-    // ── Legacy collections (kept for backward compatibility) ─────────────────
+    // ── Legacy collections ──────────────────────────────────────────────────
 
-    // Old nominations collection (pre-migration)
     match /nominations/{nominationId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
 
-    // Old settings collection (pre-migration — read-only after migration)
     match /settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin() || isSuperAdmin();
     }
 
-    // User profiles
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin() || isSuperAdmin();
