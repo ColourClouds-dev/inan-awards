@@ -193,7 +193,7 @@ function FormCard({ form, votes, onDelete, onToggle, onCopyLink }: {
 
 export default function PollsPage() {
   const { toasts, showToast, dismissToast } = useToast();
-  const { tenant, isLoading: tenantLoading } = useTenant();
+  const { tenant, tenantId, isLoading: tenantLoading } = useTenant();
   const [forms, setForms] = useState<NominationsForm[]>([]);
   const [votesMap, setVotesMap] = useState<Record<string, NominationsVote[]>>({});
   const [loading, setLoading] = useState(true);
@@ -203,9 +203,10 @@ export default function PollsPage() {
   const [formSearch, setFormSearch] = useState('');
 
   const fetchData = useCallback(async () => {
+    if (!tenantId || tenantLoading) return;
     setLoading(true);
     try {
-      const allForms = await getAllNominationsForms();
+      const allForms = await getAllNominationsForms(tenantId);
       setForms(allForms);
       const map: Record<string, NominationsVote[]> = {};
       await Promise.all(allForms.map(async f => {
@@ -217,9 +218,13 @@ export default function PollsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [tenantId, tenantLoading]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    if (!tenantLoading && tenantId) {
+      fetchData();
+    }
+  }, [fetchData, tenantId, tenantLoading]);
 
   const handleSaveForm = async (form: NominationsForm) => {
     await saveNominationsForm(form);
@@ -259,7 +264,7 @@ export default function PollsPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  if (loading) {
+  if (loading || tenantLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
@@ -267,7 +272,7 @@ export default function PollsPage() {
     );
   }
 
-  // Feature gate — show message if nominations not enabled for this tenant
+  // Feature gate — wait for tenant to load before checking
   if (!tenantLoading && tenant && !tenant.features?.nominations) {
     return (
       <div className="p-6">

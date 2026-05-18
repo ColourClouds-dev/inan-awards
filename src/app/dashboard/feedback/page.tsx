@@ -478,12 +478,13 @@ export default function FeedbackDashboardPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
+    if (!tenantId || tenantLoading) return;
     setLoading(true);
     setError(null);
     try {
       const [fetchedForms, fetchedResponses] = await Promise.all([
-        getAllForms(),
-        getAllResponses(),
+        getAllForms(tenantId),
+        getAllResponses(tenantId),
       ]);
       setForms(fetchedForms);
       setResponses(fetchedResponses);
@@ -493,9 +494,13 @@ export default function FeedbackDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [tenantId, tenantLoading]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    if (!tenantLoading && tenantId) {
+      fetchData();
+    }
+  }, [fetchData, tenantId, tenantLoading]);
 
   const handleSaveForm = async (form: FeedbackForm) => {
     await saveForm(form);
@@ -577,7 +582,7 @@ export default function FeedbackDashboardPage() {
     return filtered;
   }, [forms, sortTab, search]);
 
-  if (loading) {
+  if (loading || tenantLoading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" role="status" aria-label="Loading" />
@@ -602,8 +607,8 @@ export default function FeedbackDashboardPage() {
     { key: 'location', label: 'Location' },
   ];
 
-  // Feature gate — feedbackForms must be enabled
-  if (!tenantLoading && tenant && tenant.features?.feedbackForms === false) {
+  // Feature gate — wait for tenant to load before checking
+  if (!tenantLoading && tenant?.features?.feedbackForms === false) {
     return (
       <div className="p-6">
         <div className="bg-white rounded-lg shadow p-8 text-center">
