@@ -2,7 +2,6 @@ import { Timestamp } from 'firebase/firestore';
 
 export interface TenantFeatures {
   feedbackForms: boolean;
-  nominations: boolean;
   employeeRecords: boolean;
   seoSettings: boolean;
   hidePoweredBy: boolean;
@@ -12,12 +11,9 @@ export interface Tenant {
   id: string; // slug e.g. "inan", "acme-corp"
   name: string; // display name e.g. "Inan Hotels"
   domain: string; // e.g. "feedback.inan.com.ng"
-  emailDomain?: string; // e.g. "inan.com.ng" for nominations email verification
   features: TenantFeatures;
   formLimit: number; // max feedback forms allowed
   formCount: number; // current count
-  nominationFormLimit: number;
-  nominationFormCount: number;
   status: 'active' | 'inactive' | 'trial';
   plan: 'trial' | 'basic' | 'pro';
   createdAt: Date | Timestamp;
@@ -36,6 +32,7 @@ export interface FeedbackForm {
   questions: FeedbackQuestion[];
   createdAt: Date | Timestamp;
   isActive: boolean;
+  stepByStep?: boolean;
   customTagRules?: CustomTagRule[];
   ogImageUrl?: string;
 }
@@ -94,34 +91,6 @@ export interface CustomTagRule {
   };
 }
 
-export interface NominationsCategory {
-  id: string;
-  title: string;
-  description?: string;
-  nominees: string[];
-}
-
-export interface NominationsForm {
-  id: string;
-  title: string;
-  description?: string;
-  categories: NominationsCategory[];
-  requireEmail: boolean;
-  openAt: Date | Timestamp;
-  closeAt: Date | Timestamp;
-  isActive: boolean;
-  createdAt: Date | Timestamp;
-  bannerImageUrl?: string;
-}
-
-export interface NominationsVote {
-  id: string;
-  formId: string;
-  categoryVotes: { [categoryId: string]: string };
-  email?: string;
-  submittedAt: Date | Timestamp;
-}
-
 export interface SeoSettings {
   siteUrl: string;
   siteName: string;
@@ -155,19 +124,6 @@ export interface Employee {
   Status: string;
   Role?: string;
   'Employment Type'?: string;
-}
-
-export interface Nomination {
-  categoryId: number;
-  nominee: string;
-  timestamp: Date;
-}
-
-export interface NominationResults {
-  categoryId: number;
-  nominations: {
-    [key: string]: number;
-  };
 }
 
 export interface User {

@@ -48,7 +48,3 @@ export async function updateTenant(tenantId: string, updates: Partial<Tenant>): 
 export async function incrementFormCount(tenantId: string): Promise<void> {
   await updateDoc(doc(db, COL, tenantId), { formCount: increment(1) });
 }
-
-export async function incrementNominationFormCount(tenantId: string): Promise<void> {
-  await updateDoc(doc(db, COL, tenantId), { nominationFormCount: increment(1) });
-}

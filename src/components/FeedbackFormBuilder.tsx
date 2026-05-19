@@ -64,6 +64,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
   const [customTagRules, setCustomTagRules] = useState<CustomTagRule[]>([]);
   const [locations, setLocations] = useState<string[]>([]);
   const [ogImageUrl, setOgImageUrl] = useState('');
+  const [stepByStep, setStepByStep] = useState(false);
   const { toasts, showToast, dismissToast } = useToast();
   const { tenant, tenantId } = useTenant();
 
@@ -82,6 +83,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         if (draft.currentStep) setCurrentStep(draft.currentStep);
         if (draft.customTagRules) setCustomTagRules(draft.customTagRules);
         if (draft.ogImageUrl) setOgImageUrl(draft.ogImageUrl);
+        if (draft.stepByStep !== undefined) setStepByStep(draft.stepByStep);
       }
     } catch {
       // Ignore corrupt draft
@@ -93,7 +95,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
     if (showQR) return; // Don't save after successful submission
     try {
       sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
-        title, description, location, questions, currentStep, customTagRules, ogImageUrl,
+        title, description, location, questions, currentStep, customTagRules, ogImageUrl, stepByStep,
       }));
     } catch {
       // Ignore storage errors
@@ -184,6 +186,10 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !location || questions.length === 0) return;
+    if (!tenant) {
+      showToast('Still loading your account. Please try again in a moment.', 'error');
+      return;
+    }
 
     const form: FeedbackForm = {
       id: uuidv4(),
@@ -193,6 +199,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
       questions,
       createdAt: new Date(),
       isActive: true,
+      stepByStep,
       ...(customTagRules.length > 0 ? { customTagRules } : {}),
       ...(ogImageUrl ? { ogImageUrl } : {}),
     };
@@ -313,6 +320,40 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
             onUploaded={url => setOgImageUrl(url)}
             onRemoved={() => setOgImageUrl('')}
           />
+
+          {/* Question display mode */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Question display
+            </label>
+            <div className="flex rounded-md border border-gray-200 overflow-hidden w-fit">
+              <button
+                type="button"
+                onClick={() => setStepByStep(false)}
+                className={`px-4 py-2 text-sm font-medium transition-colors border-r border-gray-200 ${
+                  !stepByStep ? 'text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+                style={!stepByStep ? { backgroundColor: 'var(--brand)' } : undefined}
+              >
+                All at once
+              </button>
+              <button
+                type="button"
+                onClick={() => setStepByStep(true)}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  stepByStep ? 'text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+                style={stepByStep ? { backgroundColor: 'var(--brand)' } : undefined}
+              >
+                One at a time
+              </button>
+            </div>
+            <p className="mt-1.5 text-xs text-gray-400">
+              {stepByStep
+                ? 'Respondents answer one question per screen with a progress bar.'
+                : 'All questions are shown on a single scrollable page.'}
+            </p>
+          </div>
         </div>
       </div>
       <div className="flex justify-between items-center">
@@ -321,7 +362,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
             onClick={() => {
               sessionStorage.removeItem(DRAFT_KEY);
               setTitle(''); setDescription(''); setLocation('');
-              setQuestions([]); setCustomTagRules([]); setCurrentStep('basics');
+              setQuestions([]); setCustomTagRules([]); setStepByStep(false); setCurrentStep('basics');
             }}
             className="text-sm text-gray-400 hover:text-red-500 transition-colors"
           >

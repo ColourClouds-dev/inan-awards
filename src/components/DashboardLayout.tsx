@@ -1,11 +1,40 @@
 'use client';
 
 import React, { ReactNode, useState, useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { useTenant } from '../contexts/TenantContext';
-import Link from 'next/link';
+import Sidebar from './Sidebar';
+
+// ── Nav icons (inline SVG, consistent with the rest of the project) ────────
+
+const IconOverview = (
+  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="w-5 h-5">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+  </svg>
+);
+
+const IconFeedback = (
+  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="w-5 h-5">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+  </svg>
+);
+
+const IconSettings = (
+  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="w-5 h-5">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+
+const IconSuperAdmin = (
+  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="w-5 h-5">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+  </svg>
+);
+
+// ──────────────────────────────────────────────────────────────────────────
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -13,22 +42,22 @@ interface DashboardLayoutProps {
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const router = useRouter();
-  const pathname = usePathname();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [displayName, setDisplayName] = useState('');
+  const [role, setRole] = useState('Admin');
   const { tenant, isImpersonating } = useTenant();
 
-  // Check super admin claim and display name on mount and whenever auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setDisplayName(user.displayName || user.email || '');
-        user.getIdTokenResult().then(result => {
-          setIsSuperAdmin(result.claims.superAdmin === true);
+        user.getIdTokenResult().then((result) => {
+          const isSuper = result.claims.superAdmin === true;
+          setIsSuperAdmin(isSuper);
+          setRole(isSuper ? 'Super Admin' : 'Admin');
         });
       }
     });
@@ -36,14 +65,20 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   }, []);
 
   const allNavItems = [
-    { href: '/dashboard', label: 'Overview', path: '/dashboard', show: true },
-    { href: '/dashboard/polls', label: 'Nominations', path: '/dashboard/polls', show: tenant?.features?.nominations !== false },
-    { href: '/dashboard/feedback', label: 'Feedback', path: '/dashboard/feedback', show: true },
-    { href: '/dashboard/settings', label: 'Settings', path: '/dashboard/settings', show: true },
-    { href: '/super-admin', label: 'Super Admin', path: '/super-admin', show: isSuperAdmin && !isImpersonating },
+    { href: '/dashboard',          label: 'Overview',    icon: IconOverview,    show: true },
+    {
+      href: '/dashboard/feedback',
+      label: 'Feedback',
+      icon: IconFeedback,
+      show: true,
+      children: [
+        { href: '/dashboard/feedback/responses', label: 'Responses' },
+        { href: '/dashboard/feedback/analytics', label: 'Analytics' },
+      ],
+    },
+    { href: '/dashboard/settings', label: 'Settings',    icon: IconSettings,    show: true },
+    { href: '/super-admin',        label: 'Super Admin', icon: IconSuperAdmin,  show: isSuperAdmin && !isImpersonating },
   ];
-
-  const navigationItems = allNavItems.filter(item => item.show);
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
@@ -62,7 +97,6 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const handleExitImpersonation = async () => {
     try {
       await fetch('/api/impersonate', { method: 'DELETE' });
-      // Hard reload so TenantProvider re-fetches without the impersonation cookie
       window.location.href = '/super-admin';
     } catch {
       // ignore
@@ -71,9 +105,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* ── Impersonation banner ──────────────────────────────────────────── */}
+      {/* ── Impersonation banner (full width, above everything) ────────── */}
       {isImpersonating && (
-        <div className="bg-yellow-400 text-yellow-900 px-4 py-2 flex items-center justify-between text-sm font-medium">
+        <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-400 text-yellow-900 px-4 py-2 flex items-center justify-between text-sm font-medium">
           <div className="flex items-center gap-2">
             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -92,191 +126,60 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           </button>
         </div>
       )}
-      <nav className="bg-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              <div className="flex-shrink-0 flex items-center">
-                {tenant?.branding?.logoUrl ? (
-                  <img
-                    src={tenant.branding.logoUrl}
-                    alt={tenant.name}
-                    className="h-8 w-auto max-w-[160px] object-contain"
-                  />
-                ) : (
-                  <h1 className="text-xl font-bold text-gray-800">
-                    {tenant?.name ?? 'Feedback System'}
-                  </h1>
-                )}
-              </div>
-              {/* Desktop Navigation */}
-              <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                {navigationItems.map(({ href, label, path }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={`${
-                      pathname === path
-                        ? 'border-b-2 text-gray-900'
-                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                    } inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium`}
-                    style={pathname === path ? { borderColor: 'var(--brand)' } : {}}
-                  >
-                    {label}
-                  </Link>
-                ))}
-              </div>
-            </div>
 
-            {/* Mobile menu button */}
-            <div className="flex items-center sm:hidden">
-              <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-purple-500"
-              >
-                <span className="sr-only">Open main menu</span>
-                {/* Menu icon */}
-                <svg
-                  className={`${isMobileMenuOpen ? 'hidden' : 'block'} h-6 w-6`}
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-                {/* Close icon */}
-                <svg
-                  className={`${isMobileMenuOpen ? 'block' : 'hidden'} h-6 w-6`}
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+      {/* ── Main flex row: sidebar + content ──────────────────────────── */}
+      <div className={`flex min-h-screen ${isImpersonating ? 'pt-10' : ''}`}>
+        {/* Sidebar */}
+        <Sidebar
+          isOpen={isMobileOpen}
+          onClose={() => setIsMobileOpen(false)}
+          navigationItems={allNavItems}
+          displayName={displayName}
+          role={role}
+          isSigningOut={isSigningOut}
+          onSignOut={handleSignOut}
+          logoUrl={tenant?.branding?.logoUrl}
+          tenantName={tenant?.name}
+        />
 
-            <div className="hidden sm:flex sm:items-center">
-              {/* Profile dropdown */}
-              <div className="relative">
-                <button
-                  onClick={() => setIsProfileOpen(o => !o)}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  aria-haspopup="true"
-                  aria-expanded={isProfileOpen}
-                >
-                  <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-sm font-semibold shrink-0">
-                    {displayName ? displayName.charAt(0).toUpperCase() : '?'}
-                  </div>
-                  {displayName && (
-                    <span className="text-sm text-gray-700 font-medium max-w-[140px] truncate">
-                      {displayName}
-                    </span>
-                  )}
-                  <svg className={`w-4 h-4 text-gray-400 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        {/* ── Content area ──────────────────────────────────────────────── */}
+        <div className="flex-1 flex flex-col min-w-0 md:ml-60">
+          {/* Mobile top bar (hamburger only) */}
+          <div className="flex items-center h-14 px-4 bg-white border-b border-gray-200 md:hidden">
+            <button
+              onClick={() => setIsMobileOpen(true)}
+              className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-inset"
+              style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
+              aria-label="Open menu"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <span className="ml-3 text-base font-semibold text-gray-800 truncate">
+              {tenant?.name ?? 'Feedback System'}
+            </span>
+          </div>
+
+          {/* Sign-out error */}
+          {signOutError && (
+            <div className="mx-4 mt-4">
+              <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">
+                <div className="flex">
+                  <svg className="h-5 w-5 text-red-400 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                   </svg>
-                </button>
-
-                {/* Dropdown panel */}
-                {isProfileOpen && (
-                  <>
-                    {/* Click-away backdrop */}
-                    <div className="fixed inset-0 z-10" onClick={() => setIsProfileOpen(false)} />
-                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-100 z-20 py-1">
-                      <div className="px-4 py-2 border-b border-gray-100">
-                        <p className="text-xs text-gray-400">Signed in as</p>
-                        <p className="text-sm font-medium text-gray-800 truncate">{displayName}</p>
-                      </div>
-                      <Link
-                        href="/dashboard/settings"
-                        onClick={() => setIsProfileOpen(false)}
-                        className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        Profile & Settings
-                      </Link>
-                      <button
-                        onClick={() => { setIsProfileOpen(false); handleSignOut(); }}
-                        disabled={isSigningOut}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                        </svg>
-                        {isSigningOut ? 'Signing Out...' : 'Sign Out'}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile menu */}
-        <div className={`${isMobileMenuOpen ? 'block' : 'hidden'} sm:hidden`}>
-          <div className="pt-2 pb-3 space-y-1">
-            {navigationItems.map(({ href, label, path }) => (
-              <Link
-                key={href}
-                href={href}
-                className={`${
-                  pathname === path
-                    ? 'bg-purple-50 border-purple-500 text-purple-700'
-                    : 'border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700'
-                } block pl-3 pr-4 py-2 border-l-4 text-base font-medium`}
-              >
-                {label}
-              </Link>
-            ))}
-            <div className="border-t border-gray-200 mt-1 pt-1">
-              {displayName && (
-                <div className="flex items-center gap-3 pl-3 pr-4 py-2">
-                  <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-sm font-semibold shrink-0">
-                    {displayName.charAt(0).toUpperCase()}
-                  </div>
-                  <span className="text-sm font-medium text-gray-700 truncate">{displayName}</span>
+                  <p className="ml-3 text-sm text-red-700">{signOutError}</p>
                 </div>
-              )}
-              <button
-                onClick={handleSignOut}
-                disabled={isSigningOut}
-                className="w-full flex items-center gap-2 pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-red-600 hover:bg-red-50"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                {isSigningOut ? 'Signing Out...' : 'Sign Out'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {signOutError && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-          <div className="bg-red-50 border-l-4 border-red-400 p-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-red-700">{signOutError}</p>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {children}
+          {/* Page content */}
+          <main className="flex-1 py-6 px-4 sm:px-6 lg:px-8">
+            {children}
+          </main>
+        </div>
       </div>
     </div>
   );
