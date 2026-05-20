@@ -102,7 +102,7 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 space-y-8">
-      <h1 className="text-2xl font-bold text-gray-900">Dashboard Overview</h1>
+      <h1 className="text-xl font-bold text-gray-900">Dashboard Overview</h1>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -115,7 +115,7 @@ export default function DashboardPage() {
             </div>
             <div className="ml-4">
               <h2 className="text-lg font-semibold text-gray-900">Active Forms</h2>
-              <p className="text-3xl font-bold text-purple-600">{stats.activeFeedbackForms}</p>
+              <p className="text-xl font-bold text-purple-600">{stats.activeFeedbackForms}</p>
               <p className="text-sm text-gray-500">Out of {stats.totalFeedback} total forms</p>
             </div>
           </div>
@@ -130,7 +130,7 @@ export default function DashboardPage() {
             </div>
             <div className="ml-4">
               <h2 className="text-lg font-semibold text-gray-900">Recent Responses</h2>
-              <p className="text-3xl font-bold text-purple-600">{stats.recentResponses}</p>
+              <p className="text-xl font-bold text-purple-600">{stats.recentResponses}</p>
               <p className="text-sm text-gray-500">In the last 30 days</p>
             </div>
           </div>
@@ -145,7 +145,7 @@ export default function DashboardPage() {
             </div>
             <div className="ml-4">
               <h2 className="text-lg font-semibold text-gray-900">Average Rating</h2>
-              <p className="text-3xl font-bold text-yellow-600">{stats.averageRating}</p>
+              <p className="text-xl font-bold text-yellow-600">{stats.averageRating}</p>
               <p className="text-sm text-gray-500">Out of 5 stars</p>
             </div>
           </div>

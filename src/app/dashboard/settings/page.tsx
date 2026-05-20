@@ -494,7 +494,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-8 max-w-3xl mx-auto">
       <Toast toasts={toasts} onDismiss={dismissToast} />
-      <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+      <h1 className="text-xl font-bold text-gray-900">Settings</h1>
 
       {/* ── Branding ──────────────────────────────────────────────────────── */}
       <Section title="Branding" description="Customise how your organisation appears across the platform — logo, brand color, and email display name.">
@@ -583,12 +583,12 @@ export default function SettingsPage() {
             </p>
           </div>
           <div>
-            <label className="block text-lg font-medium ext-gray-700 mb-1">Email</label>
+            <label className="block text-base font-semibold ext-gray-700 mb-1">Email</label>
             <p className="px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-lg text-gray-500 text-sm">{email}</p>
             <p className="text-xs text-gray-400 mt-1">Email cannot be changed here.</p>
           </div>
           <div className="border-t pt-4 space-y-3">
-            <p className="text-sm font-medium text-gray-700">Change Password</p>
+            <p className="text-base font-semibold text-gray-700">Change Password</p>
             <Input label="Current Password" type="password" value={currentPassword}
               onChange={e => setCurrentPassword(e.target.value)} placeholder="Enter current password" />
             <Input label="New Password" type="password" value={newPassword}
@@ -611,8 +611,16 @@ export default function SettingsPage() {
           {locations.map(loc => (
             <div key={loc} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-md border border-gray-200">
               <span className="text-sm text-gray-700">{loc}</span>
-              <button onClick={() => removeLocation(loc)} disabled={locationSaving}
-                className="text-red-500 hover:text-red-700 text-xs font-medium">Remove</button>
+              <button
+                onClick={() => removeLocation(loc)}
+                disabled={locationSaving}
+                title="Remove location"
+                className="text-red-400 hover:text-red-600 disabled:opacity-40 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
             </div>
           ))}
         </div>
@@ -652,145 +660,6 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      {/* ── Employee Records ──────────────────────────────────────────────── */}
-      <Section
-        title="Employee Records"
-        description="Manage staff records used for nominations voting and email verification."
-      >
-        {/* Search + Add button */}
-        <div className="flex flex-col sm:flex-row gap-2">
-          <div className="flex-1">
-            <Input
-              placeholder="Search by name, email or role…"
-              value={empSearch}
-              onChange={e => setEmpSearch(e.target.value)}
-            />
-          </div>
-          <div className="sm:self-end flex gap-2">
-            <label
-              title="Import employees from CSV"
-              className={`inline-flex items-center gap-1.5 px-4 py-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 cursor-pointer transition-colors ${csvImporting ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {csvImporting ? (
-                <div className="w-4 h-4 border-2 border-t-transparent border-gray-500 rounded-full animate-spin" />
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
-              )}
-              Import CSV
-              <input type="file" accept=".csv" className="hidden" onChange={handleCsvImport} disabled={csvImporting} />
-            </label>
-            <Button fullWidth={false} onClick={() => { resetNewEmp(); setShowEmpForm(o => !o); setEditingEmp(null); }}>
-              {showEmpForm ? 'Cancel' : '+ Add Employee'}
-            </Button>
-          </div>
-        </div>
-        <p className="text-xs text-gray-400">
-          CSV must include <strong>Employee</strong> and <strong>Email</strong> columns. Optional: Role, Reporting To, Joining Date, Status, Employment Type.
-        </p>
-
-        {/* Add employee form */}
-        {showEmpForm && (
-          <form onSubmit={handleAddEmployee} className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
-            <p className="text-sm font-medium text-gray-700">New Employee</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Input label="Full Name" value={newEmp.Employee ?? ''} onChange={e => setNewEmp(p => ({ ...p, Employee: e.target.value }))} placeholder="e.g. Jane Doe" required />
-              <Input label="Email" type="email" value={newEmp.Email ?? ''} onChange={e => setNewEmp(p => ({ ...p, Email: e.target.value }))} placeholder="jane.doe@inan.com.ng" required />
-              <div>
-                <label className="block text-lg font-medium text-gray-700 mb-1">Role</label>
-                <select value={newEmp.Role ?? ''} onChange={e => setNewEmp(p => ({ ...p, Role: e.target.value }))}
-                  className="w-full px-4 py-3 text-lg rounded-lg border-2 border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all">
-                  <option value="">Select role…</option>
-                  {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-              <Input label="Reporting To" value={newEmp['Reporting To'] ?? ''} onChange={e => setNewEmp(p => ({ ...p, 'Reporting To': e.target.value }))} placeholder="Manager name" />
-              <Input label="Joining Date" type="date" value={newEmp['Joining Date'] ?? ''} onChange={e => setNewEmp(p => ({ ...p, 'Joining Date': e.target.value }))} />
-              <Input label="Employment Type (optional)" value={newEmp['Employment Type'] ?? ''} onChange={e => setNewEmp(p => ({ ...p, 'Employment Type': e.target.value }))} placeholder="e.g. On Probation" />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button fullWidth={false} onClick={() => setShowEmpForm(false)}>Cancel</Button>
-              <Button type="submit" fullWidth={false} disabled={empSaving} isLoading={empSaving} loadingText="Saving…">Save Employee</Button>
-            </div>
-          </form>
-        )}
-
-        {/* Edit employee — Modal (rendered at page level below) */}
-
-        {/* Employee table */}
-        {empLoading ? (
-          <div className="flex justify-center py-6">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600" />
-          </div>
-        ) : (
-          <div className="overflow-x-auto min-h-[120px]">
-            <table className="min-w-full divide-y divide-gray-100 text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Joined</th>
-                  <th className="px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {filteredEmployees.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-3 py-6 text-center text-gray-400 italic text-sm">
-                      {empSearch ? 'No employees match your search.' : 'No employees loaded yet.'}
-                    </td>
-                  </tr>
-                ) : filteredEmployees.map(emp => (
-                  <tr key={String(emp['Employee ID'])} className="hover:bg-gray-50">
-                    <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{emp.Employee}</td>
-                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{emp.Email}</td>
-                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{emp.Role ?? '—'}</td>
-                    <td className="px-3 py-2">
-                      <button onClick={() => handleToggleStatus(emp)}
-                        className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full transition-colors ${
-                          emp.Status === 'Active'
-                            ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}>
-                        {emp.Status}
-                      </button>
-                    </td>
-                    <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{emp['Joining Date']}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => { setEditingEmp(emp); setShowEmpForm(false); }}
-                          title="Edit employee"
-                          className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => setEmpDeleteTarget(emp)}
-                          title="Remove employee"
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filteredEmployees.length > 0 && (
-              <p className="text-xs text-gray-400 mt-2">{filteredEmployees.length} of {employees.length} employee{employees.length !== 1 ? 's' : ''}</p>
-            )}
-          </div>
-        )}
-      </Section>
 
       {/* ── SEO ───────────────────────────────────────────────────────────── */}
       {(tenant?.features?.seoSettings !== false) && (

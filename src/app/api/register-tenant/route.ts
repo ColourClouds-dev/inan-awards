@@ -6,7 +6,6 @@ import type { Tenant, TenantFeatures } from '../../../types';
 
 const DEFAULT_FEATURES: TenantFeatures = {
   feedbackForms: true,
-  nominations: false,
   employeeRecords: false,
   seoSettings: false,
   hidePoweredBy: false,
@@ -51,9 +50,7 @@ export async function POST(req: NextRequest) {
       plan: 'trial',
       status: 'trial',
       formLimit: 5,
-      nominationFormLimit: 2,
       formCount: 0,
-      nominationFormCount: 0,
       features: { ...DEFAULT_FEATURES },
       createdAt: new Date(),
     };

@@ -62,7 +62,7 @@ export default function HomePage() {
       <main>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
           <div className="text-center">
-            <h2 className="text-4xl tracking-tight font-extrabold text-gray-900 sm:text-5xl md:text-6xl">
+            <h2 className="text-xl tracking-tight font-extrabold text-gray-900 sm:text-2xl">
               <span className="block">Empowering Management</span>
               <span className="block text-purple-600">Through Feedback</span>
             </h2>
@@ -119,7 +119,7 @@ export default function HomePage() {
 
           {/* QR Code Demo */}
           <div className="mt-20 bg-white rounded-lg shadow-sm p-8 text-center">
-            <h3 className="text-2xl font-bold text-gray-900 mb-4">Easy Feedback Collection</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Easy Feedback Collection</h3>
             <p className="text-gray-600 mb-8">
               Generate QR codes for your feedback forms and make it easy for customers to share their thoughts.
             </p>

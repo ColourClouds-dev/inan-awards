@@ -23,7 +23,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(({
 }, ref) => {
   const [visible, setVisible] = useState(false);
 
-  const baseStyles = 'px-4 py-3 text-lg rounded-lg border-2 bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200';
+  const baseStyles = 'px-4 py-2.5 text-base rounded-lg border-2 bg-white focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200';
   const widthClass = fullWidth ? 'w-full' : 'w-auto';
 
   const inputStyles = error
@@ -37,7 +37,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(({
   return (
     <div className={`${widthClass} space-y-2`}>
       {label && (
-        <label className="block text-lg font-medium text-gray-700">
+        <label className="block text-sm font-medium text-gray-700">
           {label}
         </label>
       )}

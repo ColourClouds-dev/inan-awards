@@ -6,10 +6,31 @@ import { auth } from '../../../../lib/firebase';
 import { getAllForms, getAllResponses } from '../../../../lib/firestore';
 import { exportToExcel } from '../../../../lib/exportToExcel';
 import { useTenant } from '../../../../contexts/TenantContext';
-import { useFeedbackFilters, applyFilters, toDate } from '../../../../hooks/useFeedbackFilters';
-import FeedbackFilterBar from '../../../../components/FeedbackFilterBar';
-import FeedbackFormsList from '../../../../components/FeedbackFormsList';
+import { toDate } from '../../../../hooks/useFeedbackFilters';
+import FilterSortBar from '../../../../components/FilterSortBar';
 import type { FeedbackForm, FeedbackResponse, ResponseTag } from '../../../../types';
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const TAG_STATUS_PILLS = [
+  { key: 'sentiment', label: 'Sentiment', selectedClass: 'bg-purple-100 text-purple-800', unselectedClass: 'border-purple-200 text-purple-700 hover:bg-purple-50' },
+  { key: 'time',      label: 'Time',      selectedClass: 'bg-blue-100 text-blue-800',     unselectedClass: 'border-blue-200 text-blue-700 hover:bg-blue-50' },
+  { key: 'completion',label: 'Completion',selectedClass: 'bg-green-100 text-green-800',   unselectedClass: 'border-green-200 text-green-700 hover:bg-green-50' },
+  { key: 'custom',    label: 'Custom',    selectedClass: 'bg-yellow-100 text-yellow-800', unselectedClass: 'border-yellow-200 text-yellow-700 hover:bg-yellow-50' },
+];
+
+const SORT_OPTIONS = [
+  { key: 'submitted_desc', label: 'Submitted ↓' },
+  { key: 'submitted_asc',  label: 'Submitted ↑' },
+  { key: 'form_asc',       label: 'Form A → Z' },
+  { key: 'form_desc',      label: 'Form Z → A' },
+  { key: 'country_asc',    label: 'Country A → Z' },
+  { key: 'country_desc',   label: 'Country Z → A' },
+  { key: 'time_desc',      label: 'Time Spent ↓' },
+  { key: 'time_asc',       label: 'Time Spent ↑' },
+];
+
+type SortKey = 'submitted_desc' | 'submitted_asc' | 'form_asc' | 'form_desc' | 'country_asc' | 'country_desc' | 'time_desc' | 'time_asc';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -101,9 +122,13 @@ export default function ResponsesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { filters, setField, toggleTag, reset } = useFeedbackFilters();
+  // Filter/sort state
+  const [search, setSearch] = useState('');
+  const [selectedTagTypes, setSelectedTagTypes] = useState<string[]>([]);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [activeSort, setActiveSort] = useState<SortKey>('submitted_desc');
 
-  // Wait for auth before querying Firestore
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, user => { if (user) setAuthReady(true); });
     return () => unsub();
@@ -128,7 +153,55 @@ export default function ResponsesPage() {
 
   const formMap = useMemo(() => new Map(forms.map(f => [f.id, f])), [forms]);
 
-  const filtered = useMemo(() => applyFilters(responses, filters), [responses, filters]);
+  const handleTagTypeToggle = (key: string) =>
+    setSelectedTagTypes(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+
+  const handleClearFilters = () => {
+    setSelectedTagTypes([]);
+    setDateFrom('');
+    setDateTo('');
+  };
+
+  const filteredAndSorted = useMemo(() => {
+    const needle = search.toLowerCase();
+
+    let result = responses.filter(r => {
+      // Text search: form title, country, city
+      if (needle) {
+        const formTitle = formMap.get(r.formId)?.title?.toLowerCase() ?? '';
+        const country = (r.visitorCountry ?? '').toLowerCase();
+        const city = (r.visitorCity ?? '').toLowerCase();
+        if (!formTitle.includes(needle) && !country.includes(needle) && !city.includes(needle)) return false;
+      }
+
+      // Tag type filter — response must have at least one tag of a selected type
+      if (selectedTagTypes.length > 0) {
+        const hasMatch = r.tags?.some(t => selectedTagTypes.includes(t.type));
+        if (!hasMatch) return false;
+      }
+
+      // Date range
+      const submitted = toDate(r.submittedAt);
+      if (dateFrom && submitted < new Date(dateFrom)) return false;
+      if (dateTo   && submitted > new Date(dateTo + 'T23:59:59')) return false;
+
+      return true;
+    });
+
+    // Sort
+    switch (activeSort) {
+      case 'submitted_asc':  result = [...result].sort((a, b) => toDate(a.submittedAt).getTime() - toDate(b.submittedAt).getTime()); break;
+      case 'submitted_desc': result = [...result].sort((a, b) => toDate(b.submittedAt).getTime() - toDate(a.submittedAt).getTime()); break;
+      case 'form_asc':       result = [...result].sort((a, b) => (formMap.get(a.formId)?.title ?? '').localeCompare(formMap.get(b.formId)?.title ?? '')); break;
+      case 'form_desc':      result = [...result].sort((a, b) => (formMap.get(b.formId)?.title ?? '').localeCompare(formMap.get(a.formId)?.title ?? '')); break;
+      case 'country_asc':    result = [...result].sort((a, b) => (a.visitorCountry ?? '').localeCompare(b.visitorCountry ?? '')); break;
+      case 'country_desc':   result = [...result].sort((a, b) => (b.visitorCountry ?? '').localeCompare(a.visitorCountry ?? '')); break;
+      case 'time_asc':       result = [...result].sort((a, b) => (a.timeSpentSeconds ?? 0) - (b.timeSpentSeconds ?? 0)); break;
+      case 'time_desc':      result = [...result].sort((a, b) => (b.timeSpentSeconds ?? 0) - (a.timeSpentSeconds ?? 0)); break;
+    }
+
+    return result;
+  }, [responses, formMap, search, selectedTagTypes, dateFrom, dateTo, activeSort]);
 
   if (loading || tenantLoading || !authReady) {
     return (
@@ -151,29 +224,18 @@ export default function ResponsesPage() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Forms list */}
-      <section className="space-y-0">
-        <FeedbackFormsList
-          forms={forms}
-          responses={responses}
-          onFormsChange={setForms}
-        />
-      </section>
-
-      <hr className="border-gray-200" />
-
-      {/* Header */}
+      {/* Responses header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Responses</h1>
+          <h1 className="text-xl font-bold text-gray-900">Responses</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Showing <span className="font-medium text-gray-700">{filtered.length}</span> of{' '}
+            Showing <span className="font-medium text-gray-700">{filteredAndSorted.length}</span> of{' '}
             <span className="font-medium text-gray-700">{responses.length}</span> total responses
           </p>
         </div>
         <button
-          onClick={() => exportToExcel(filtered, forms)}
-          disabled={filtered.length === 0}
+          onClick={() => exportToExcel(filteredAndSorted, forms)}
+          disabled={filteredAndSorted.length === 0}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-40"
           style={{ backgroundColor: 'var(--brand)' }}
         >
@@ -184,19 +246,29 @@ export default function ResponsesPage() {
         </button>
       </div>
 
-      {/* Filter bar */}
-      <FeedbackFilterBar
-        filters={filters}
-        forms={forms}
-        responses={responses}
-        setField={setField}
-        toggleTag={toggleTag}
-        reset={reset}
+      {/* Filter/sort bar */}
+      <FilterSortBar
+        searchPlaceholder="Search by form, country, or city…"
+        search={search}
+        onSearchChange={setSearch}
+        statusPills={TAG_STATUS_PILLS}
+        selectedStatuses={selectedTagTypes}
+        onStatusToggle={handleTagTypeToggle}
+        statusLabel="Tag Type"
+        dateLabel="Submitted Date"
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onDateFromChange={setDateFrom}
+        onDateToChange={setDateTo}
+        sortOptions={SORT_OPTIONS}
+        activeSort={activeSort}
+        onSortChange={k => setActiveSort(k as SortKey)}
+        onClearFilters={handleClearFilters}
       />
 
       {/* Table */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        {filtered.length === 0 ? (
+        {filteredAndSorted.length === 0 ? (
           <div className="py-16 text-center">
             <svg className="mx-auto w-10 h-10 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -216,7 +288,7 @@ export default function ResponsesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
-                {filtered.map(r => (
+                {filteredAndSorted.map(r => (
                   <ResponseRow key={r.id} response={r} form={formMap.get(r.formId)} />
                 ))}
               </tbody>

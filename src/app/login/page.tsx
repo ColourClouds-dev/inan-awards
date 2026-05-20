@@ -147,7 +147,7 @@ export default function LoginPage() {
               <img src={tenantLogo} alt={tenantName} className="h-12 w-auto max-w-[200px] object-contain" />
             </div>
           ) : null}
-          <h1 className="mt-2 text-center text-3xl font-extrabold text-gray-900">
+          <h1 className="mt-2 text-center text-xl font-bold text-gray-900">
             {tenantName ? `${tenantName} — Admin` : 'Feedback Management System'}
           </h1>
         </div>

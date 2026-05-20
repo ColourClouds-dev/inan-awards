@@ -127,7 +127,7 @@ export default function CreateAccountModal({ isOpen, onClose }: CreateAccountMod
           /* ── Registration form ── */
           <>
             <div className="mb-6">
-              <h2 id="create-account-title" className="text-2xl font-bold text-gray-900">
+              <h2 id="create-account-title" className="text-lg font-bold text-gray-900">
                 Create an account
               </h2>
               <p className="text-sm text-gray-500 mt-1">

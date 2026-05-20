@@ -45,7 +45,7 @@ function QuestionBlock({
           {index + 1}
         </span>
         <div className="ml-4 flex-grow">
-          <h3 className="text-lg font-medium text-gray-900">
+          <h3 className="text-base font-medium text-gray-900">
             {question.question}
             {question.required && <span className="text-red-500 ml-1">*</span>}
           </h3>
@@ -231,17 +231,27 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [visitorInfo, setVisitorInfo] = useState<VisitorInfo | null>(null);
   const [duplicateIp, setDuplicateIp] = useState(false);
-  const [checkingIp, setCheckingIp] = useState(true);
-  const [formOpenedAt] = useState<number>(Date.now());
+  // Start as true only if localStorage already has a submission flag — avoids any flash
+  const [checkingIp, setCheckingIp] = useState(
+    () => typeof window === 'undefined' || !localStorage.getItem(`submitted_${form.id}`)
+  );
 
   // Step-by-step state
   const [currentStep, setCurrentStep] = useState(0);
+  const [formOpenedAt] = useState<number>(Date.now());
 
   const { toasts, showToast, dismissToast } = useToast();
   const { executeRecaptcha } = useGoogleReCaptcha();
-  const { tenant } = useTenant();
+  const { tenant, tenantId } = useTenant();
 
   useEffect(() => {
+    // If the user already submitted this form (stored locally), block immediately
+    if (localStorage.getItem(`submitted_${form.id}`)) {
+      setDuplicateIp(true);
+      setCheckingIp(false);
+      return;
+    }
+
     const init = async () => {
       try {
         const info = await getVisitorInfo();
@@ -323,6 +333,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
         submittedAt: new Date(),
         timeSpentSeconds,
         tags,
+        tenantId,
         ...(visitorInfo ? {
           visitorIp: visitorInfo.ip,
           visitorCity: visitorInfo.city,
@@ -349,6 +360,8 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
       }
 
       showToast('Your feedback has been submitted successfully!', 'success');
+      // Persist submission flag so the form is blocked immediately on any future visit/refresh
+      localStorage.setItem(`submitted_${form.id}`, '1');
       setSubmitted(true);
     } catch (err) {
       console.error('Error submitting feedback:', err);
@@ -365,7 +378,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
     return (
       <div className="max-w-2xl mx-auto p-6">
         <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-          <p className="text-gray-600 text-lg">This form is no longer active.</p>
+          <p className="text-gray-600 text-base">This form is no longer active.</p>
         </div>
       </div>
     );
@@ -397,7 +410,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-green-600 mb-4">Thank You!</h2>
+          <h2 className="text-xl font-bold text-green-600 mb-4">Thank You!</h2>
           <p className="text-gray-600">Your feedback has been submitted successfully.</p>
         </div>
       </div>
@@ -421,7 +434,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
         {form.ogImageUrl && (
           <img src={form.ogImageUrl} alt={form.title} className="w-full h-48 object-cover rounded-lg mb-6" />
         )}
-        <h1 className="text-3xl font-bold mb-2">{form.title}</h1>
+        <h1 className="text-xl font-bold mb-2">{form.title}</h1>
         <div className="flex items-center text-gray-600 mb-6">
           <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -430,7 +443,6 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
           <span>{form.location}</span>
         </div>
         {form.description && <p className="text-gray-700 text-sm mb-4">{form.description}</p>}
-        <p className="text-gray-600 text-sm">Your feedback helps us improve our services. All responses are anonymous.</p>
       </div>
     </>
   );
@@ -458,6 +470,13 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
       if (valid) setCurrentStep(s => s + 1);
     };
 
+    const handleStepSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      // Trigger full validation across all fields before submitting
+      const valid = await trigger();
+      if (valid) handleSubmit(onSubmit)(e);
+    };
+
     return (
       <div className="max-w-2xl mx-auto p-6">
         <Toast toasts={toasts} onDismiss={dismissToast} />
@@ -474,13 +493,18 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
           <p className="text-xs text-gray-500 text-right mt-1">{currentStep + 1} of {total}</p>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <QuestionBlock
-            question={question}
-            index={currentStep}
-            control={control}
-            errors={errors}
-          />
+        <form onSubmit={handleStepSubmit} className="space-y-6">
+          {/* Render all questions — hide non-current ones so RHF keeps their values registered */}
+          {form.questions.map((q, i) => (
+            <div key={q.id} className={i === currentStep ? '' : 'hidden'}>
+              <QuestionBlock
+                question={q}
+                index={i}
+                control={control}
+                errors={errors}
+              />
+            </div>
+          ))}
 
           {submitError && isLast && (
             <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">

@@ -72,6 +72,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       icon: IconFeedback,
       show: true,
       children: [
+        { href: '/dashboard/feedback/forms',     label: 'Forms' },
         { href: '/dashboard/feedback/responses', label: 'Responses' },
         { href: '/dashboard/feedback/analytics', label: 'Analytics' },
       ],

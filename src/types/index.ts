@@ -11,9 +11,12 @@ export interface Tenant {
   id: string; // slug e.g. "inan", "acme-corp"
   name: string; // display name e.g. "Inan Hotels"
   domain: string; // e.g. "feedback.inan.com.ng"
+  emailDomain?: string; // e.g. "inan.com.ng" — used for email domain validation
   features: TenantFeatures;
   formLimit: number; // max feedback forms allowed
   formCount: number; // current count
+  nominationFormLimit?: number; // kept for super-admin config compatibility
+  nominationFormCount?: number; // kept for super-admin config compatibility
   status: 'active' | 'inactive' | 'trial';
   plan: 'trial' | 'basic' | 'pro';
   createdAt: Date | Timestamp;

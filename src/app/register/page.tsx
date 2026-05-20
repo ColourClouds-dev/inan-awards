@@ -192,7 +192,7 @@ export default function RegisterPage() {
                   <img src={tenantLogo} alt={tenantName} className="h-10 w-auto max-w-[180px] object-contain" />
                 </div>
               )}
-              <h1 className="text-3xl font-bold text-gray-900">Create Your Account</h1>
+              <h1 className="text-xl font-bold text-gray-900">Create Your Account</h1>
               <p className="text-gray-500 text-sm mt-2">
                 {tenantName ? `Start collecting feedback for ${tenantName}.` : 'Start collecting feedback for your organisation.'}
               </p>
@@ -229,7 +229,7 @@ export default function RegisterPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h1 className="text-2xl font-bold text-gray-900">Account Created!</h1>
+              <h1 className="text-xl font-bold text-gray-900">Account Created!</h1>
               <p className="text-gray-500 text-sm mt-1">
                 Optionally upload your staff list now, or skip and add them later in Settings.
               </p>

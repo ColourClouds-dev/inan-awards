@@ -65,7 +65,7 @@ export default function FormAnalyticsPanel({ form, responses }: FormAnalyticsPan
           {avgTime !== null && (
             <div>
               <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">Avg Completion Time</h4>
-              <p className="text-2xl font-bold text-purple-600">{formatTime(avgTime)}</p>
+              <p className="text-xl font-bold text-purple-600">{formatTime(avgTime)}</p>
               <div className="flex gap-3 mt-2 flex-wrap">
                 {['Fast (<1 min)', 'Normal (1-5 min)', 'Slow (>5 min)'].map(label => {
                   const count = formResponses.filter(r => r.tags?.some(t => t.type === 'time' && t.label === label)).length;

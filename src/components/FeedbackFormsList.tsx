@@ -5,6 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { deactivateForm, reactivateForm, deleteForm } from '../lib/firestore';
 import Modal from './Modal';
 import Toast from './Toast';
+import FilterSortBar from './FilterSortBar';
 import { useToast } from '../hooks/useToast';
 import type { FeedbackForm, FeedbackResponse } from '../types';
 
@@ -17,7 +18,28 @@ function toDate(value: unknown): Date {
   return new Date();
 }
 
-type SortTab = 'title' | 'location' | 'date';
+type SortKey =
+  | 'title_asc' | 'title_desc'
+  | 'location_asc' | 'location_desc'
+  | 'date_desc' | 'date_asc'
+  | 'responses_desc' | 'responses_asc';
+
+const SORT_OPTIONS = [
+  { key: 'date_desc',       label: 'Date Created ↓' },
+  { key: 'date_asc',        label: 'Date Created ↑' },
+  { key: 'title_asc',       label: 'Title A → Z' },
+  { key: 'title_desc',      label: 'Title Z → A' },
+  { key: 'location_asc',    label: 'Location A → Z' },
+  { key: 'location_desc',   label: 'Location Z → A' },
+  { key: 'responses_desc',  label: 'Responses ↓' },
+  { key: 'responses_asc',   label: 'Responses ↑' },
+];
+
+const STATUS_PILLS = [
+  { key: 'active',   label: 'Active',   selectedClass: 'bg-green-100 text-green-800',  unselectedClass: 'border-green-200 text-green-700 hover:bg-green-50' },
+  { key: 'inactive', label: 'Inactive', selectedClass: 'bg-gray-200 text-gray-700',    unselectedClass: 'border-gray-200 text-gray-500 hover:bg-gray-50' },
+  { key: 'step',     label: 'Step-by-step', selectedClass: 'bg-blue-100 text-blue-800', unselectedClass: 'border-blue-200 text-blue-700 hover:bg-blue-50' },
+];
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
@@ -265,12 +287,27 @@ interface FeedbackFormsListProps {
 
 export default function FeedbackFormsList({ forms, responses, onFormsChange }: FeedbackFormsListProps) {
   const { toasts, showToast, dismissToast } = useToast();
-  const [sortTab, setSortTab] = useState<SortTab>('date');
+
+  // Filter/sort state
   const [search, setSearch] = useState('');
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [activeSort, setActiveSort] = useState<SortKey>('date_desc');
+
   const [viewForm, setViewForm] = useState<FeedbackForm | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FeedbackForm | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const handleStatusToggle = (key: string) =>
+    setSelectedStatuses(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+
+  const handleClearFilters = () => {
+    setSelectedStatuses([]);
+    setDateFrom('');
+    setDateTo('');
+  };
 
   const handleToggleActive = async (form: FeedbackForm) => {
     try {
@@ -332,67 +369,80 @@ export default function FeedbackFormsList({ forms, responses, onFormsChange }: F
   };
 
   const sortedForms = useMemo(() => {
-    let filtered = forms.filter(f =>
-      f.title.toLowerCase().includes(search.toLowerCase()) ||
-      f.location.toLowerCase().includes(search.toLowerCase())
-    );
-    if (sortTab === 'title')    filtered = [...filtered].sort((a, b) => a.title.localeCompare(b.title));
-    if (sortTab === 'location') filtered = [...filtered].sort((a, b) => a.location.localeCompare(b.location));
-    if (sortTab === 'date')     filtered = [...filtered].sort((a, b) => {
-      const aT = a.createdAt instanceof Date ? a.createdAt.getTime() : (a.createdAt as any).seconds * 1000;
-      const bT = b.createdAt instanceof Date ? b.createdAt.getTime() : (b.createdAt as any).seconds * 1000;
-      return bT - aT;
+    const needle = search.toLowerCase();
+    let result = forms.filter(f => {
+      // Text search
+      if (needle && !f.title.toLowerCase().includes(needle) && !f.location.toLowerCase().includes(needle)) return false;
+      // Status filter
+      if (selectedStatuses.length > 0) {
+        const matchActive   = selectedStatuses.includes('active')   && f.isActive;
+        const matchInactive = selectedStatuses.includes('inactive') && !f.isActive;
+        const matchStep     = selectedStatuses.includes('step')     && f.stepByStep;
+        if (!matchActive && !matchInactive && !matchStep) return false;
+      }
+      // Date range filter
+      const created = toDate(f.createdAt);
+      if (dateFrom && created < new Date(dateFrom)) return false;
+      if (dateTo   && created > new Date(dateTo + 'T23:59:59')) return false;
+      return true;
     });
-    return filtered;
-  }, [forms, sortTab, search]);
 
-  const tabs: { key: SortTab; label: string }[] = [
-    { key: 'date',     label: 'Date Created' },
-    { key: 'title',    label: 'Title' },
-    { key: 'location', label: 'Location' },
-  ];
+    const responseCount = (f: FeedbackForm) => responses.filter(r => r.formId === f.id).length;
+    const getTime = (f: FeedbackForm) => {
+      const d = f.createdAt;
+      return d instanceof Date ? d.getTime() : (d as any).seconds * 1000;
+    };
+
+    switch (activeSort) {
+      case 'title_asc':      result = [...result].sort((a, b) => a.title.localeCompare(b.title)); break;
+      case 'title_desc':     result = [...result].sort((a, b) => b.title.localeCompare(a.title)); break;
+      case 'location_asc':   result = [...result].sort((a, b) => a.location.localeCompare(b.location)); break;
+      case 'location_desc':  result = [...result].sort((a, b) => b.location.localeCompare(a.location)); break;
+      case 'date_asc':       result = [...result].sort((a, b) => getTime(a) - getTime(b)); break;
+      case 'date_desc':      result = [...result].sort((a, b) => getTime(b) - getTime(a)); break;
+      case 'responses_asc':  result = [...result].sort((a, b) => responseCount(a) - responseCount(b)); break;
+      case 'responses_desc': result = [...result].sort((a, b) => responseCount(b) - responseCount(a)); break;
+    }
+    return result;
+  }, [forms, responses, search, selectedStatuses, dateFrom, dateTo, activeSort]);
 
   return (
     <>
       <Toast toasts={toasts} onDismiss={dismissToast} />
 
-      {/* Header row */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <h2 className="text-xl font-semibold text-gray-900">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-gray-900">
           Feedback Forms <span className="text-gray-400 font-normal text-base">({forms.length})</span>
         </h2>
-        <input
-          type="text"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search by title or location…"
-          className="w-full sm:w-64 px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2"
-          style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
-        />
       </div>
 
-      {/* Sort tabs */}
-      <div className="flex gap-1 mb-4 border-b border-gray-200">
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setSortTab(tab.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-              sortTab === tab.key
-                ? 'text-purple-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-            style={sortTab === tab.key ? { borderColor: 'var(--brand)', color: 'var(--brand)' } : undefined}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Filter/sort bar */}
+      <div className="mb-4">
+        <FilterSortBar
+          searchPlaceholder="Search by title or location…"
+          search={search}
+          onSearchChange={setSearch}
+          statusPills={STATUS_PILLS}
+          selectedStatuses={selectedStatuses}
+          onStatusToggle={handleStatusToggle}
+          statusLabel="Status"
+          dateLabel="Created Date"
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo}
+          sortOptions={SORT_OPTIONS}
+          activeSort={activeSort}
+          onSortChange={k => setActiveSort(k as SortKey)}
+          onClearFilters={handleClearFilters}
+        />
       </div>
 
       {/* Cards */}
       {sortedForms.length === 0 ? (
         <div className="min-h-[160px] bg-white rounded-lg shadow p-6 flex items-center justify-center text-gray-500 text-sm">
-          {forms.length === 0 ? 'No forms yet.' : 'No forms match your search.'}
+          {forms.length === 0 ? 'No forms yet.' : 'No forms match your filters.'}
         </div>
       ) : (
         <div className="space-y-4">
