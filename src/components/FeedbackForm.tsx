@@ -410,6 +410,44 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
+          {/* Animated checkmark — tick extends beyond the circle */}
+          <div className="flex justify-center mb-6">
+            <svg viewBox="0 0 80 80" className="w-24 h-24">
+              {/* Circle draws itself */}
+              <circle
+                cx="40" cy="40" r="34"
+                fill="none"
+                stroke="#22c55e"
+                strokeWidth="3"
+                strokeLinecap="round"
+                style={{
+                  strokeDasharray: 214,
+                  strokeDashoffset: 214,
+                  animation: 'thankCircle 0.55s cubic-bezier(0.65,0,0.45,1) 0.1s forwards',
+                }}
+              />
+              {/* Tick — starts inside, tip extends outside the circle */}
+              <polyline
+                points="22,42 35,55 62,24"
+                fill="none"
+                stroke="#22c55e"
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{
+                  strokeDasharray: 60,
+                  strokeDashoffset: 60,
+                  animation: 'thankTick 0.38s cubic-bezier(0.65,0,0.45,1) 0.6s forwards',
+                }}
+              />
+            </svg>
+          </div>
+
+          <style>{`
+            @keyframes thankCircle { to { stroke-dashoffset: 0; } }
+            @keyframes thankTick   { to { stroke-dashoffset: 0; } }
+          `}</style>
+
           <h2 className="text-xl font-bold text-green-600 mb-4">Thank You!</h2>
           <p className="text-gray-600">Your feedback has been submitted successfully.</p>
         </div>

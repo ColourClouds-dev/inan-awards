@@ -51,7 +51,7 @@ export default function HomePage() {
               href="/register"
               className="inline-flex items-center px-4 py-2 border border-purple-600 text-sm font-medium rounded-md text-purple-600 bg-white hover:bg-purple-50 transition-colors"
             >
-              Get Started Free
+              Get Started
             </Link>
             </div>
           </div>
