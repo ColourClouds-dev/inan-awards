@@ -59,6 +59,19 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           setIsSuperAdmin(isSuper);
           setRole(isSuper ? 'Super Admin' : 'Admin');
         });
+
+        // Fire welcome email once — the API guards against duplicates server-side
+        if (user.emailVerified) {
+          fetch('/api/welcome-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              uid: user.uid,
+              email: user.email,
+              companyName: user.displayName || '',
+            }),
+          }).catch(() => { /* non-fatal */ });
+        }
       }
     });
     return () => unsubscribe();

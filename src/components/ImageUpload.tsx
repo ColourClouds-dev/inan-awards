@@ -49,7 +49,9 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       if (!signRes.ok) throw new Error('Failed to get upload signature');
       const { signature, timestamp, cloudName, apiKey, folder: signedFolder } = await signRes.json();
 
-      // 2. Upload directly to Cloudinary using signed params
+      // 2. Upload directly to Cloudinary.
+      // IMPORTANT: FormData must contain ONLY the parameters that were signed
+      // (timestamp + folder). Any extra unsigned params cause a signature mismatch.
       const formData = new FormData();
       formData.append('file', file);
       formData.append('api_key', apiKey);
@@ -61,14 +63,20 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
         `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
         { method: 'POST', body: formData }
       );
-      if (!uploadRes.ok) throw new Error('Cloudinary upload failed');
-      const uploadData = await uploadRes.json();
 
+      if (!uploadRes.ok) {
+        const errData = await uploadRes.json().catch(() => ({}));
+        const msg = (errData as { error?: { message?: string } }).error?.message ?? `Upload failed (${uploadRes.status})`;
+        throw new Error(msg);
+      }
+
+      const uploadData = await uploadRes.json();
       const url: string = uploadData.secure_url;
       setPreview(url);
       onUploaded(url);
-    } catch {
-      setError('Upload failed. Please try again.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed. Please try again.';
+      setError(msg);
     } finally {
       setUploading(false);
     }

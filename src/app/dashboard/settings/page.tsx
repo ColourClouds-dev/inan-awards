@@ -104,6 +104,10 @@ export default function SettingsPage() {
 
   // ── Auth guard + load ──────────────────────────────────────────────────────
   useEffect(() => {
+    // Don't run until the tenant context has resolved — otherwise tenantId
+    // is still the default 'inan' and Firestore rules reject the reads.
+    if (tenantLoading) return;
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) { router.push('/login'); return; }
       setDisplayName(user.displayName || '');
@@ -150,7 +154,7 @@ export default function SettingsPage() {
       }
     });
     return () => unsubscribe();
-  }, [router]);
+  }, [router, tenantLoading]);
 
   // ── Profile save ───────────────────────────────────────────────────────────
   const handleProfileSave = async (e: React.FormEvent) => {
@@ -644,7 +648,12 @@ export default function SettingsPage() {
             <div key={em} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-md border border-gray-200">
               <span className="text-sm text-gray-700">{em}</span>
               <button onClick={() => removeNotifEmail(em)} disabled={notifSaving}
-                className="text-red-500 hover:text-red-700 text-xs font-medium">Remove</button>
+                title="Remove email"
+                className="text-red-400 hover:text-red-600 disabled:opacity-40 transition-colors">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
             </div>
           ))}
         </div>

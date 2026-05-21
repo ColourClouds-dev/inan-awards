@@ -35,7 +35,10 @@ service cloud.firestore {
     // ── Tenants ─────────────────────────────────────────────────────────────
     match /tenants/{tenantId} {
       allow read: if isSuperAdmin() || ownsTenantClaim(tenantId);
-      allow write: if isSuperAdmin();
+      // Super admins can write anything; tenant admins can update their own doc
+      // (e.g. branding, settings) but cannot create or delete tenants.
+      allow create, delete: if isSuperAdmin();
+      allow update: if isSuperAdmin() || ownsTenantClaim(tenantId);
     }
 
     // ── Tenant admins mapping ───────────────────────────────────────────────
