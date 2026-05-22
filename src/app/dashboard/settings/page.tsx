@@ -571,43 +571,6 @@ export default function SettingsPage() {
         </form>
       </Section>
 
-      {/* ── Profile / Account ─────────────────────────────────────────────── */}
-      <Section title="Profile & Account" description="Update your display name and password.">
-        <form onSubmit={handleProfileSave} className="space-y-4">
-          <div>
-            <Input
-              label="Display Name"
-              value={displayName}
-              onChange={e => setDisplayName(e.target.value)}
-              placeholder="Your name"
-              maxLength={50}
-            />
-            <p className={`text-xs mt-1 text-right ${displayName.length >= 50 ? 'text-red-500' : 'text-gray-400'}`}>
-              {displayName.length}/50
-            </p>
-          </div>
-          <div>
-            <label className="block text-base font-semibold ext-gray-700 mb-1">Email</label>
-            <p className="px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-lg text-gray-500 text-sm">{email}</p>
-            <p className="text-xs text-gray-400 mt-1">Email cannot be changed here.</p>
-          </div>
-          <div className="border-t pt-4 space-y-3">
-            <p className="text-base font-semibold text-gray-700">Change Password</p>
-            <Input label="Current Password" type="password" value={currentPassword}
-              onChange={e => setCurrentPassword(e.target.value)} placeholder="Enter current password" />
-            <Input label="New Password" type="password" value={newPassword}
-              onChange={e => setNewPassword(e.target.value)} placeholder="At least 6 characters" />
-            <Input label="Confirm New Password" type="password" value={confirmPassword}
-              onChange={e => setConfirmPassword(e.target.value)} placeholder="Repeat new password" />
-          </div>
-          <div className="flex justify-end">
-            <Button type="submit" disabled={profileSaving || !hasProfileChanges} isLoading={profileSaving} loadingText="Saving…">
-              Save Profile
-            </Button>
-          </div>
-        </form>
-      </Section>
-
       {/* ── Locations ─────────────────────────────────────────────────────── */}
       <Section title="Locations" description="Manage the hotel locations available when creating feedback forms.">
         <div className="space-y-2">

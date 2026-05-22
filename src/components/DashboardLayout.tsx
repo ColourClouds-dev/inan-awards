@@ -6,8 +6,9 @@ import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { useTenant } from '../contexts/TenantContext';
 import Sidebar from './Sidebar';
+import DashboardHeader from './DashboardHeader';
 
-// ── Nav icons (inline SVG, consistent with the rest of the project) ────────
+// ── Nav icons ─────────────────────────────────────────────────────────────────
 
 const IconOverview = (
   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="w-5 h-5">
@@ -34,7 +35,7 @@ const IconSuperAdmin = (
   </svg>
 );
 
-// ──────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -47,6 +48,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [displayName, setDisplayName] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
   const [role, setRole] = useState('Admin');
   const { tenant, isImpersonating } = useTenant();
 
@@ -54,6 +56,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setDisplayName(user.displayName || user.email || '');
+        setPhotoUrl(user.photoURL || '');
         user.getIdTokenResult().then((result) => {
           const isSuper = result.claims.superAdmin === true;
           setIsSuperAdmin(isSuper);
@@ -119,7 +122,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* ── Impersonation banner (full width, above everything) ────────── */}
+      {/* ── Impersonation banner ───────────────────────────────────────── */}
       {isImpersonating && (
         <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-400 text-yellow-900 px-4 py-2 flex items-center justify-between text-sm font-medium">
           <div className="flex items-center gap-2">
@@ -150,6 +153,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           navigationItems={allNavItems}
           displayName={displayName}
           role={role}
+          photoUrl={photoUrl}
           isSigningOut={isSigningOut}
           onSignOut={handleSignOut}
           logoUrl={tenant?.branding?.logoUrl}
@@ -158,22 +162,16 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
         {/* ── Content area ──────────────────────────────────────────────── */}
         <div className="flex-1 flex flex-col min-w-0 md:ml-60">
-          {/* Mobile top bar (hamburger only) */}
-          <div className="flex items-center h-14 px-4 bg-white border-b border-gray-200 md:hidden">
-            <button
-              onClick={() => setIsMobileOpen(true)}
-              className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-inset"
-              style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
-              aria-label="Open menu"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            <span className="ml-3 text-base font-semibold text-gray-800 truncate">
-              {tenant?.name ?? 'Feedback System'}
-            </span>
-          </div>
+          {/* Persistent header — desktop + mobile */}
+          <DashboardHeader
+            displayName={displayName}
+            role={role}
+            photoUrl={photoUrl}
+            tenantName={tenant?.name}
+            isSigningOut={isSigningOut}
+            onSignOut={handleSignOut}
+            onMobileMenuOpen={() => setIsMobileOpen(true)}
+          />
 
           {/* Sign-out error */}
           {signOutError && (
