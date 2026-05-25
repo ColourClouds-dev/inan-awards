@@ -8,6 +8,7 @@ import { exportToExcel } from '../../../../lib/exportToExcel';
 import { useTenant } from '../../../../contexts/TenantContext';
 import { toDate } from '../../../../hooks/useFeedbackFilters';
 import FilterSortBar from '../../../../components/FilterSortBar';
+import { FilterBarSkeleton, TableRowSkeleton } from '../../../../components/Skeleton';
 import type { FeedbackForm, FeedbackResponse, ResponseTag } from '../../../../types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -205,8 +206,23 @@ export default function ResponsesPage() {
 
   if (loading || tenantLoading || !authReady) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+      <div className="p-6 space-y-6">
+        <div className="h-7 w-32 skeleton-shimmer rounded" />
+        <FilterBarSkeleton />
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-100 text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                {['Form','Submitted','Country','City','Tags','Time Spent',''].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {[1,2,3,4,5].map(i => <TableRowSkeleton key={i} cols={7} />)}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   }

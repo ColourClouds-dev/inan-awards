@@ -7,6 +7,7 @@ import { getAllForms, getAllResponses } from '../../../../lib/firestore';
 import { useTenant } from '../../../../contexts/TenantContext';
 import { useFeedbackFilters, applyFilters, resolveDateRange, toDate } from '../../../../hooks/useFeedbackFilters';
 import FeedbackFilterBar from '../../../../components/FeedbackFilterBar';
+import { ChartSkeleton } from '../../../../components/Skeleton';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer,
@@ -162,8 +163,10 @@ export default function AnalyticsPage() {
 
   if (loading || tenantLoading || !authReady) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+      <div className="p-6 space-y-6">
+        <div className="h-7 w-32 skeleton-shimmer rounded" />
+        <div className="h-16 skeleton-shimmer rounded-xl" />
+        <ChartSkeleton />
       </div>
     );
   }
@@ -223,7 +226,7 @@ export default function AnalyticsPage() {
           {/* Granularity toggle */}
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Granularity</span>
-            <div className="flex rounded-md border border-gray-200 overflow-hidden h-8">
+            <div className="flex rounded-md border border-gray-200 overflow-hidden min-h-8">
               {GRANULARITIES.map(({ key, label }) => (
                 <button
                   key={key}

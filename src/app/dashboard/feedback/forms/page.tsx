@@ -6,6 +6,7 @@ import { auth } from '../../../../lib/firebase';
 import { getAllForms, getAllResponses } from '../../../../lib/firestore';
 import { useTenant } from '../../../../contexts/TenantContext';
 import FeedbackFormsList from '../../../../components/FeedbackFormsList';
+import { FormCardSkeleton, FilterBarSkeleton } from '../../../../components/Skeleton';
 import type { FeedbackForm, FeedbackResponse } from '../../../../types';
 
 export default function FormsPage() {
@@ -40,8 +41,14 @@ export default function FormsPage() {
 
   if (loading || tenantLoading || !authReady) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+      <div className="p-6 space-y-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="h-6 w-40 skeleton-shimmer rounded" />
+        </div>
+        <FilterBarSkeleton />
+        <FormCardSkeleton />
+        <FormCardSkeleton />
+        <FormCardSkeleton />
       </div>
     );
   }

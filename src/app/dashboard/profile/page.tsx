@@ -12,6 +12,7 @@ import Button from '../../../components/Button';
 import Toast from '../../../components/Toast';
 import { useToast } from '../../../hooks/useToast';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
+import { ProfileHeaderSkeleton, SectionSkeleton } from '../../../components/Skeleton';
 
 // ── Section wrapper ────────────────────────────────────────────────────────────
 const Section = ({ title, description, children }: {
@@ -159,8 +160,12 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+      <div className="max-w-2xl mx-auto space-y-6 p-4 sm:p-6">
+        <ProfileHeaderSkeleton />
+        <SectionSkeleton rows={1} />
+        <SectionSkeleton rows={1} />
+        <SectionSkeleton rows={1} />
+        <SectionSkeleton rows={3} />
       </div>
     );
   }

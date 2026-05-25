@@ -852,8 +852,8 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         </div>
       </div>
 
-      {/* Animated step content */}
-      <div className="overflow-hidden">
+      {/* Animated step content — fixed height prevents layout shift between steps */}
+      <div className="overflow-hidden min-h-[520px]">
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
             key={currentStep}

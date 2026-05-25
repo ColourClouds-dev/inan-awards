@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import Button from './Button';
 import Toast from './Toast';
@@ -505,12 +506,19 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
 
     const handleNext = async () => {
       const valid = await trigger(question.id as never);
-      if (valid) setCurrentStep(s => s + 1);
+      if (valid) {
+        setSubmitError(null); // clear any lingering error when moving forward
+        setCurrentStep(s => s + 1);
+      }
+    };
+
+    const handleBack = () => {
+      setSubmitError(null);
+      setCurrentStep(s => s - 1);
     };
 
     const handleStepSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      // Trigger full validation across all fields before submitting
       const valid = await trigger();
       if (valid) handleSubmit(onSubmit)(e);
     };
@@ -532,18 +540,32 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
         </div>
 
         <form onSubmit={handleStepSubmit} className="space-y-6">
-          {/* Render all questions — hide non-current ones so RHF keeps their values registered */}
-          {form.questions.map((q, i) => (
-            <div key={q.id} className={i === currentStep ? '' : 'hidden'}>
-              <QuestionBlock
-                question={q}
-                index={i}
-                control={control}
-                errors={errors}
-              />
-            </div>
-          ))}
+          {/* Fixed-height container prevents layout shift between steps */}
+          <div className="relative overflow-hidden min-h-[280px]">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={currentStep}
+                initial={{ opacity: 0, x: 40 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -40 }}
+                transition={{ type: 'tween' as const, ease: 'easeInOut' as const, duration: 0.22 }}
+              >
+                {/* Render only the current question — RHF keeps all values via hidden inputs */}
+                {form.questions.map((q, i) => (
+                  <div key={q.id} className={i === currentStep ? '' : 'hidden'}>
+                    <QuestionBlock
+                      question={q}
+                      index={i}
+                      control={control}
+                      errors={errors}
+                    />
+                  </div>
+                ))}
+              </motion.div>
+            </AnimatePresence>
+          </div>
 
+          {/* Submit error — only shown on last step and only when there's an actual error */}
           {submitError && isLast && (
             <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">
               <p className="text-sm text-red-600">{submitError}</p>
@@ -554,7 +576,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
             {currentStep > 0 ? (
               <button
                 type="button"
-                onClick={() => setCurrentStep(s => s - 1)}
+                onClick={handleBack}
                 className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
               >
                 ← Back
@@ -578,14 +600,14 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
               <button
                 key={i}
                 type="button"
-                onClick={() => setCurrentStep(i)}
+                onClick={() => { setSubmitError(null); setCurrentStep(i); }}
                 className="w-2.5 h-2.5 rounded-full transition-colors"
                 style={{
                   backgroundColor: i === currentStep
                     ? 'var(--brand)'
                     : i < currentStep
-                    ? '#86EFAC' // green-300 — answered
-                    : '#D1D5DB', // gray-300 — unanswered
+                    ? '#86EFAC'
+                    : '#D1D5DB',
                 }}
                 title={`Question ${i + 1}`}
               />
@@ -606,15 +628,18 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
       <FormHeader />
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-        {form.questions.map((question, index) => (
-          <QuestionBlock
-            key={question.id}
-            question={question}
-            index={index}
-            control={control}
-            errors={errors}
-          />
-        ))}
+        {/* min-h prevents the form from collapsing while questions render */}
+        <div className="space-y-8 min-h-[320px]">
+          {form.questions.map((question, index) => (
+            <QuestionBlock
+              key={question.id}
+              question={question}
+              index={index}
+              control={control}
+              errors={errors}
+            />
+          ))}
+        </div>
 
         {submitError && (
           <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">

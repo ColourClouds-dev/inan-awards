@@ -5,6 +5,7 @@ import { collection, query, getDocs, where } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '../../lib/firebase';
 import { useTenant } from '../../contexts/TenantContext';
+import { StatCardSkeleton } from '../../components/Skeleton';
 
 interface Stats {
   totalFeedback: number;
@@ -84,8 +85,19 @@ export default function DashboardPage() {
 
   if (loading || tenantLoading || !authReady) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+      <div className="p-6 space-y-8">
+        <div className="h-7 w-48 skeleton-shimmer rounded" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+        <div className="bg-white rounded-lg shadow p-6 space-y-4">
+          <div className="h-5 w-32 skeleton-shimmer rounded" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1,2,3].map(i => <div key={i} className="h-16 skeleton-shimmer rounded-lg" />)}
+          </div>
+        </div>
       </div>
     );
   }

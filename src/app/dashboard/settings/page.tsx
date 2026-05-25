@@ -15,6 +15,7 @@ import Toast from '../../../components/Toast';
 import ImageUpload from '../../../components/ImageUpload';
 import { useToast } from '../../../hooks/useToast';
 import { useTenant } from '../../../contexts/TenantContext';
+import { SectionSkeleton } from '../../../components/Skeleton';
 import {
   getAllEmployees,
   saveEmployee,
@@ -489,8 +490,12 @@ export default function SettingsPage() {
 
   if (pageLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+      <div className="space-y-8 max-w-3xl mx-auto p-4 sm:p-6">
+        <div className="h-7 w-28 skeleton-shimmer rounded" />
+        <SectionSkeleton rows={3} />
+        <SectionSkeleton rows={2} />
+        <SectionSkeleton rows={1} />
+        <SectionSkeleton rows={2} />
       </div>
     );
   }

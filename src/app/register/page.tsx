@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
@@ -13,47 +12,12 @@ function slugify(name: string): string {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
-type ParsedEmployee = {
-  '#': number; Id: number; 'Employee ID': number;
-  Employee: string; Email: string; Role: string;
-  'Reporting To': string; 'Joining Date': string; Status: string;
-  'Employment Type'?: string;
-};
-
-function parseCsv(text: string): ParsedEmployee[] {
-  const lines = text.split('\n').filter(l => l.trim());
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-  const result: ParsedEmployee[] = [];
-  lines.slice(1).forEach((line, idx) => {
-    const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-    const row: Record<string, string> = {};
-    headers.forEach((h, i) => { row[h] = values[i] ?? ''; });
-    const name = row['Employee'] || row['Name'] || row['Full Name'] || '';
-    const email = row['Email'] || row['Email Address'] || '';
-    if (!name || !email) return;
-    result.push({
-      '#': idx + 1, Id: idx + 1, 'Employee ID': idx + 1,
-      Employee: name, Email: email,
-      Role: row['Role'] || row['Position'] || '',
-      'Reporting To': row['Reporting To'] || row['Manager'] || '',
-      'Joining Date': row['Joining Date'] || new Date().toISOString().split('T')[0],
-      Status: row['Status'] || 'Active',
-      ...(row['Employment Type'] ? { 'Employment Type': row['Employment Type'] } : {}),
-    });
-  });
-  return result;
-}
-
 export default function RegisterPage() {
-  const router = useRouter();
   const { toasts, showToast, dismissToast } = useToast();
 
-  // Branding
   const [tenantName, setTenantName] = useState('');
   const [tenantLogo, setTenantLogo] = useState('');
 
-  // Step 1 — account details
   const [companyName, setCompanyName] = useState('');
   const [yourName, setYourName] = useState('');
   const [workEmail, setWorkEmail] = useState('');
@@ -62,12 +26,9 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Step 2 — optional employee CSV
-  const [step, setStep] = useState<'details' | 'employees'>('details');
-  const [createdTenantId, setCreatedTenantId] = useState('');
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvPreview, setCsvPreview] = useState<string[]>([]);
-  const [csvUploading, setCsvUploading] = useState(false);
+  const [step, setStep] = useState<'details' | 'verify'>('details');
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
 
   useEffect(() => {
     fetch('/api/tenant/current')
@@ -82,7 +43,13 @@ export default function RegisterPage() {
       .catch(() => {});
   }, []);
 
-  // ── Step 1 submit ──────────────────────────────────────────────────────────
+  // Countdown timer for resend cooldown
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyName.trim()) { showToast('Company name is required.', 'error'); return; }
@@ -113,19 +80,11 @@ export default function RegisterPage() {
         throw new Error(data.error || 'Failed to set up your account.');
       }
 
-      // Wait for the tenantId custom claim to propagate into the token
-      // before moving on — Firestore rules depend on it being present.
-      let attempts = 0;
-      while (attempts < 10) {
-        const tokenResult = await auth.currentUser?.getIdTokenResult(true);
-        if (tokenResult?.claims?.tenantId) break;
-        await new Promise(resolve => setTimeout(resolve, 800));
-        attempts++;
-      }
+      // Send Firebase email verification
+      await sendEmailVerification(user);
 
-      setCreatedTenantId(tenantId);
-      showToast('Account created! Optionally upload your staff list below.', 'success');
-      setStep('employees');
+      setStep('verify');
+      setResendCooldown(60);
     } catch (err: any) {
       if (err?.code === 'auth/email-already-in-use') showToast('An account with this email already exists.', 'error');
       else if (err?.code === 'auth/invalid-email') showToast('Please enter a valid email address.', 'error');
@@ -135,37 +94,20 @@ export default function RegisterPage() {
     }
   };
 
-  // ── Step 2 CSV handlers ────────────────────────────────────────────────────
-  const handleCsvSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setCsvFile(file);
-    file.text().then(text => {
-      const lines = text.split('\n').filter(l => l.trim()).slice(0, 4);
-      setCsvPreview(lines);
-    });
-  };
-
-  const handleCsvUpload = async () => {
-    if (!csvFile) { router.push('/dashboard?welcome=1'); return; }
-    setCsvUploading(true);
+  const handleResend = async () => {
+    if (resendCooldown > 0 || resending) return;
+    setResending(true);
     try {
-      const text = await csvFile.text();
-      const parsed = parseCsv(text);
-      if (parsed.length === 0) { showToast('No valid rows found. Check that your CSV has Employee and Email columns.', 'error'); return; }
-
-      const res = await fetch('/api/import-employees', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId: createdTenantId, employees: parsed }),
-      });
-      if (!res.ok) throw new Error('Upload failed');
-      showToast(`Imported ${parsed.length} employee${parsed.length !== 1 ? 's' : ''} successfully.`, 'success');
+      const user = auth.currentUser;
+      if (user) {
+        await sendEmailVerification(user);
+        showToast('Verification email resent.', 'success');
+        setResendCooldown(60);
+      }
     } catch {
-      showToast('Failed to upload employees. You can add them later in Settings.', 'error');
+      showToast('Failed to resend. Please try again.', 'error');
     } finally {
-      setCsvUploading(false);
-      router.push('/dashboard?welcome=1');
+      setResending(false);
     }
   };
 
@@ -220,56 +162,75 @@ export default function RegisterPage() {
           </>
         )}
 
-        {/* ── Step 2: Optional employee CSV upload ────────────────────────── */}
-        {step === 'employees' && (
+        {/* ── Step 2: Check your email ────────────────────────────────────── */}
+        {step === 'verify' && (
           <>
             <div className="text-center">
-              <div className="flex items-center justify-center w-14 h-14 rounded-full bg-green-100 mx-auto mb-3">
-                <svg className="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+              {/* Animated envelope */}
+              <div className="flex justify-center mb-4">
+                <div
+                  className="w-20 h-20 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: 'color-mix(in srgb, var(--brand) 12%, white)' }}
+                >
+                  <svg
+                    className="w-10 h-10"
+                    style={{ color: 'var(--brand)' }}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                      style={{
+                        strokeDasharray: 80,
+                        strokeDashoffset: 80,
+                        animation: 'envelopeDraw 0.7s ease-out 0.1s forwards',
+                      }}
+                    />
+                  </svg>
+                </div>
               </div>
-              <h1 className="text-xl font-bold text-gray-900">Account Created!</h1>
-              <p className="text-gray-500 text-sm mt-1">
-                Optionally upload your staff list now, or skip and add them later in Settings.
+
+              <style>{`
+                @keyframes envelopeDraw { to { stroke-dashoffset: 0; } }
+              `}</style>
+
+              <h1 className="text-xl font-bold text-gray-900 mb-2">Check your email</h1>
+              <p className="text-gray-500 text-sm">
+                We sent a verification link to
+              </p>
+              <p className="font-semibold text-gray-800 text-sm mt-1 mb-4">{workEmail}</p>
+              <p className="text-gray-500 text-sm max-w-xs mx-auto">
+                Click the link in the email to verify your account. Once verified, you can sign in.
               </p>
             </div>
 
-            <div className="bg-white rounded-xl shadow-lg p-8 space-y-5">
-              <div>
-                <p className="text-sm font-medium text-gray-700 mb-1">Upload Staff List (CSV)</p>
-                <p className="text-xs text-gray-400 mb-3">
-                  Required columns: <strong>Employee</strong>, <strong>Email</strong>. Optional: Role, Reporting To, Joining Date, Status, Employment Type.
-                </p>
-
-                <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-colors">
-                  <svg className="w-7 h-7 text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                  <span className="text-sm text-gray-500">{csvFile ? csvFile.name : 'Click to select a CSV file'}</span>
-                  <input type="file" accept=".csv" className="hidden" onChange={handleCsvSelect} />
-                </label>
-
-                {/* Preview */}
-                {csvPreview.length > 0 && (
-                  <div className="mt-3 bg-gray-50 rounded-lg p-3 overflow-x-auto">
-                    <p className="text-xs text-gray-400 mb-1">Preview (first 3 rows):</p>
-                    {csvPreview.map((line, i) => (
-                      <p key={i} className={`text-xs font-mono truncate ${i === 0 ? 'font-semibold text-gray-700' : 'text-gray-500'}`}>{line}</p>
-                    ))}
-                  </div>
-                )}
+            <div className="bg-white rounded-xl shadow-lg p-6 space-y-4">
+              {/* Resend */}
+              <div className="text-center">
+                <p className="text-sm text-gray-500 mb-3">Didn't receive it? Check your spam folder or resend.</p>
+                <Button
+                  onClick={handleResend}
+                  disabled={resendCooldown > 0 || resending}
+                  isLoading={resending}
+                  loadingText="Sending…"
+                  fullWidth={false}
+                >
+                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Email'}
+                </Button>
               </div>
 
-              <div className="flex flex-col gap-2">
-                <Button
-                  onClick={handleCsvUpload}
-                  disabled={csvUploading}
-                  isLoading={csvUploading}
-                  loadingText="Uploading…"
+              <div className="border-t border-gray-100 pt-4 text-center">
+                <a
+                  href="/login"
+                  className="text-sm font-medium hover:underline"
+                  style={{ color: 'var(--brand)' }}
                 >
-                  {csvFile ? 'Upload & Go to Dashboard' : 'Skip & Go to Dashboard'}
-                </Button>
+                  ← Back to Sign In
+                </a>
               </div>
             </div>
 
