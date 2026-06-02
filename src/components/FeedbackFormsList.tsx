@@ -150,10 +150,10 @@ function FormCard({ form, responses, onView, onToggleActive, onDelete }: {
       {/* Quick links */}
       <div className="border-t border-gray-100 px-5 py-3 flex items-center gap-4 bg-gray-50">
         <span className="text-xs text-gray-400">{formResponses.length} response{formResponses.length !== 1 ? 's' : ''}</span>
-        <a href="/dashboard/feedback/responses" className="text-xs font-medium hover:underline" style={{ color: 'var(--brand)' }}>
+        <a href={`/dashboard/feedback/responses?formId=${form.id}`} className="text-xs font-medium hover:underline" style={{ color: 'var(--brand)' }}>
           View Responses →
         </a>
-        <a href="/dashboard/feedback/analytics" className="text-xs font-medium hover:underline" style={{ color: 'var(--brand)' }}>
+        <a href={`/dashboard/feedback/analytics?formId=${form.id}`} className="text-xs font-medium hover:underline" style={{ color: 'var(--brand)' }}>
           View Analytics →
         </a>
       </div>

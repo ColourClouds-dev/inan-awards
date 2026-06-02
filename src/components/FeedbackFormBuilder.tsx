@@ -15,6 +15,7 @@ import Toast from './Toast';
 import ImageUpload from './ImageUpload';
 import { useToast } from '../hooks/useToast';
 import { useTenant } from '../contexts/TenantContext';
+import { sanitizeAndLimit, sanitizeText } from '../lib/sanitize';
 import type { FeedbackForm, FeedbackQuestion, CustomTagRule, LocationSettings } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -446,7 +447,15 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
     if (!tenant) { showToast('Still loading your account. Please try again.', 'error'); return; }
 
     const form: FeedbackForm = {
-      id: uuidv4(), title, description, location, questions,
+      id: uuidv4(),
+      title: sanitizeAndLimit(title, 100),
+      description: sanitizeAndLimit(description, 500),
+      location,
+      questions: questions.map(q => ({
+        ...q,
+        question: sanitizeAndLimit(q.question, 200),
+        options: q.options?.map(o => sanitizeAndLimit(o, 100)),
+      })),
       createdAt: new Date(), isActive: true, stepByStep,
       ...(customTagRules.length > 0 ? { customTagRules } : {}),
       ...(ogImageUrl ? { ogImageUrl } : {}),
@@ -528,8 +537,8 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
       <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-gray-100">
         <h2 className="text-lg font-semibold mb-4">Form Details</h2>
         <div className="space-y-4">
-          <Input label="Form Title" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g., Guest Satisfaction Survey" required />
-          <Input label="Description" value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe what this form will do…" />
+          <Input label="Form Title" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g., Guest Satisfaction Survey" required maxLength={100} />
+          <Input label="Description" value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe what this form will do…" maxLength={500} />
           <Input label="Location" as="select" value={location} onChange={e => setLocation(e.target.value)} required>
             <option value="">Select Location</option>
             {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}

@@ -48,6 +48,11 @@ export interface FilterSortBarProps {
   onSortChange: (key: string) => void;
 
   onClearFilters: () => void;
+
+  /** Optional external form selector (used when the page owns formId state) */
+  forms?: { id: string; title: string }[];
+  formSelectorValue?: string;
+  onFormSelectorChange?: (formId: string) => void;
 }
 
 // ── Shared icons ──────────────────────────────────────────────────────────────
@@ -113,6 +118,9 @@ export default function FilterSortBar({
   activeSort,
   onSortChange,
   onClearFilters,
+  forms,
+  formSelectorValue,
+  onFormSelectorChange,
 }: FilterSortBarProps) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
@@ -121,12 +129,16 @@ export default function FilterSortBar({
   const [stagedStatuses, setStagedStatuses] = useState<string[]>(selectedStatuses);
   const [stagedFrom, setStagedFrom] = useState(dateFrom);
   const [stagedTo, setStagedTo] = useState(dateTo);
+  const [pillSearch, setPillSearch] = useState('');
+  const [formSearch, setFormSearch] = useState('');
 
   // Sync staged state when panel opens
   const handleFilterOpen = () => {
     setStagedStatuses(selectedStatuses);
     setStagedFrom(dateFrom);
     setStagedTo(dateTo);
+    setPillSearch('');
+    setFormSearch('');
     setFilterOpen(true);
     setSortOpen(false);
   };
@@ -159,7 +171,7 @@ export default function FilterSortBar({
   useOutsideClick(sortRef, useCallback(() => setSortOpen(false), []));
 
   // Active filter count for badge
-  const activeFilterCount = selectedStatuses.length + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0);
+  const activeFilterCount = selectedStatuses.length + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0) + (formSelectorValue ? 1 : 0);
 
   // Active sort label
   const activeSortLabel = sortOptions.find(o => o.key === activeSort)?.label ?? 'Sort';
@@ -215,11 +227,86 @@ export default function FilterSortBar({
         {filterOpen && (
           <div className="absolute left-0 sm:left-0 right-0 sm:right-auto top-full mt-2 w-screen sm:w-72 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl shadow-lg border border-gray-200 z-50 p-4 space-y-4">
 
+          {/* External form selector — searchable list */}
+            {forms && forms.length > 0 && onFormSelectorChange && (
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Form</p>
+                <div className="relative mb-1.5">
+                  <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search forms…"
+                    value={formSearch}
+                    onChange={e => setFormSearch(e.target.value)}
+                    className="w-full h-8 rounded-md border border-gray-200 pl-7 pr-3 text-xs text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-1"
+                    style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
+                  />
+                </div>
+                {/* All forms option */}
+                <button
+                  onClick={() => { onFormSelectorChange(''); setFormSearch(''); }}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-colors ${
+                    !formSelectorValue
+                      ? 'font-medium text-white'
+                      : 'text-gray-600 hover:bg-gray-50'
+                  }`}
+                  style={!formSelectorValue ? { backgroundColor: 'var(--brand)' } : undefined}
+                >
+                  All forms
+                </button>
+                {/* Filtered form list */}
+                <div className="max-h-36 overflow-y-auto mt-0.5 space-y-0.5">
+                  {forms
+                    .filter(f => !formSearch || f.title.toLowerCase().includes(formSearch.toLowerCase()))
+                    .map(f => (
+                      <button
+                        key={f.id}
+                        onClick={() => { onFormSelectorChange(f.id); setFormSearch(''); }}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-md text-xs truncate transition-colors ${
+                          formSelectorValue === f.id
+                            ? 'font-medium text-white'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                        style={formSelectorValue === f.id ? { backgroundColor: 'var(--brand)' } : undefined}
+                        title={f.title}
+                      >
+                        {f.title}
+                      </button>
+                    ))}
+                  {forms.filter(f => !formSearch || f.title.toLowerCase().includes(formSearch.toLowerCase())).length === 0 && (
+                    <p className="text-xs text-gray-400 italic px-2.5 py-1.5">No forms match</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="border-t border-gray-100" />
+
             {/* Status pills */}
             <div>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">{statusLabel}</p>
+              {/* Search input — only shown when there are more than 4 pills */}
+              {statusPills.length > 4 && (
+                <div className="relative mb-2">
+                  <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder={`Search ${statusLabel.toLowerCase()}…`}
+                    value={pillSearch}
+                    onChange={e => setPillSearch(e.target.value)}
+                    className="w-full h-7 rounded-md border border-gray-200 pl-7 pr-3 text-xs text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-1"
+                    style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
+                  />
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
-                {statusPills.map(pill => {
+                {statusPills
+                  .filter(pill => !pillSearch || pill.label.toLowerCase().includes(pillSearch.toLowerCase()))
+                  .map(pill => {
                   const active = stagedStatuses.includes(pill.key);
                   return (
                     <button

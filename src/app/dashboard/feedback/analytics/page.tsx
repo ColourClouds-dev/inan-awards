@@ -2,11 +2,13 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { auth } from '../../../../lib/firebase';
 import { getAllForms, getAllResponses } from '../../../../lib/firestore';
 import { useTenant } from '../../../../contexts/TenantContext';
-import { useFeedbackFilters, applyFilters, resolveDateRange, toDate } from '../../../../hooks/useFeedbackFilters';
-import FeedbackFilterBar from '../../../../components/FeedbackFilterBar';
+import { resolveDateRange, toDate } from '../../../../hooks/useFeedbackFilters';
+import FilterSortBar from '../../../../components/FilterSortBar';
 import { ChartSkeleton } from '../../../../components/Skeleton';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -96,7 +98,14 @@ export default function AnalyticsPage() {
   const [tagType, setTagType] = useState<TagType>('sentiment');
   const [granularity, setGranularity] = useState<Granularity>('daily');
 
-  const { filters, setField, toggleTag, reset } = useFeedbackFilters();
+  // Pre-seed formId from ?formId= query param
+  const searchParams = useSearchParams();
+  const initialFormId = searchParams?.get('formId') ?? '';
+
+  // Filter state
+  const [formId, setFormId] = useState(initialFormId);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, user => { if (user) setAuthReady(true); });
@@ -120,26 +129,36 @@ export default function AnalyticsPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Apply date + form filters (no tag/rating/search — analytics scopes by tag type instead)
-  const filtered = useMemo(() => applyFilters(responses, { ...filters, tags: [], ratingMin: 0, ratingMax: 0, search: '' }), [responses, filters]);
+  // Build a minimal filters object for resolveDateRange
+  const dateFilters = useMemo(() => ({
+    formId, datePreset: 'custom' as const,
+    dateFrom, dateTo,
+    tags: [], country: '', ratingMin: 0, ratingMax: 0, search: '',
+  }), [formId, dateFrom, dateTo]);
 
-  // Resolve the effective date window for axis bounds
-  const { from: resolvedFrom, to: resolvedTo } = useMemo(() => resolveDateRange(filters), [filters]);
+  // Filter responses by form + date
+  const filtered = useMemo(() => {
+    return responses.filter(r => {
+      if (formId && r.formId !== formId) return false;
+      const submitted = toDate(r.submittedAt);
+      if (dateFrom && submitted < new Date(dateFrom)) return false;
+      if (dateTo   && submitted > new Date(dateTo + 'T23:59:59')) return false;
+      return true;
+    });
+  }, [responses, formId, dateFrom, dateTo]);
+
+  const { from: resolvedFrom, to: resolvedTo } = useMemo(() => resolveDateRange(dateFilters), [dateFilters]);
   const axisFrom = resolvedFrom ?? (filtered.length ? toDate(filtered[filtered.length - 1].submittedAt) : new Date());
   const axisTo   = resolvedTo   ?? new Date();
 
-  // Collect all tag labels of the selected type
   const tagLabels = useMemo(() => {
     const labels = new Set<string>();
     filtered.forEach(r => r.tags?.filter(t => t.type === tagType).forEach(t => labels.add(t.label)));
     return Array.from(labels).sort();
   }, [filtered, tagType]);
 
-  // Build bucketed data
   const chartData = useMemo(() => {
     if (tagLabels.length === 0) return [];
-
-    // Accumulate counts per bucket per label
     const bucketMap: Record<string, Record<string, number>> = {};
     filtered.forEach(r => {
       const date = toDate(r.submittedAt);
@@ -149,17 +168,17 @@ export default function AnalyticsPage() {
         bucketMap[key][t.label] = (bucketMap[key][t.label] ?? 0) + 1;
       });
     });
-
     return fillBuckets(bucketMap, tagLabels, granularity, axisFrom, axisTo);
   }, [filtered, tagType, granularity, tagLabels, axisFrom, axisTo]);
 
-  // Summary counts for the stat pills above the chart
   const summaryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     tagLabels.forEach(l => { counts[l] = 0; });
     filtered.forEach(r => r.tags?.filter(t => t.type === tagType).forEach(t => { counts[t.label] = (counts[t.label] ?? 0) + 1; }));
     return counts;
   }, [filtered, tagType, tagLabels]);
+
+  const activeFormName = formId ? forms.find(f => f.id === formId)?.title : null;
 
   if (loading || tenantLoading || !authReady) {
     return (
@@ -184,21 +203,49 @@ export default function AnalyticsPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Breadcrumb */}
+      {activeFormName && (
+        <div className="flex items-center gap-2 text-sm">
+          <Link href="/dashboard/feedback/forms" className="text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Forms
+          </Link>
+          <span className="text-gray-300">/</span>
+          <span className="text-gray-600 font-medium truncate max-w-[200px]">{activeFormName}</span>
+        </div>
+      )}
+
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-gray-900">Analytics</h1>
+        <h1 className="text-xl font-bold text-gray-900">
+          {activeFormName ? `Analytics — ${activeFormName}` : 'Analytics'}
+        </h1>
         <p className="text-sm text-gray-500 mt-0.5">Tag trends over time across your feedback forms</p>
       </div>
 
-      {/* Filter bar (compact — no tag pills / rating / search) */}
-      <FeedbackFilterBar
-        filters={filters}
+      {/* Filter bar */}
+      <FilterSortBar
+        searchPlaceholder="Search…"
+        search=""
+        onSearchChange={() => {}}
+        statusPills={[]}
+        selectedStatuses={[]}
+        onStatusToggle={() => {}}
+        statusLabel="Tag Type"
+        dateLabel="Submitted Date"
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onDateFromChange={setDateFrom}
+        onDateToChange={setDateTo}
+        sortOptions={[]}
+        activeSort=""
+        onSortChange={() => {}}
+        onClearFilters={() => { setFormId(''); setDateFrom(''); setDateTo(''); }}
         forms={forms}
-        responses={responses}
-        setField={setField}
-        toggleTag={toggleTag}
-        reset={reset}
-        compact
+        formSelectorValue={formId}
+        onFormSelectorChange={setFormId}
       />
 
       {/* Chart controls */}
@@ -247,14 +294,8 @@ export default function AnalyticsPage() {
         {tagLabels.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {tagLabels.map((label, i) => (
-              <div
-                key={label}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 border border-gray-200 text-sm"
-              >
-                <span
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: LINE_COLORS[i % LINE_COLORS.length] }}
-                />
+              <div key={label} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 border border-gray-200 text-sm">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: LINE_COLORS[i % LINE_COLORS.length] }} />
                 <span className="text-gray-700 font-medium">{label}</span>
                 <span className="text-gray-400">{summaryCounts[label] ?? 0}</span>
               </div>
@@ -268,47 +309,19 @@ export default function AnalyticsPage() {
             <svg className="w-10 h-10 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
-            <p className="text-sm text-gray-400">
-              No <span className="font-medium">{tagType}</span> tags found in the selected period.
-            </p>
+            <p className="text-sm text-gray-400">No <span className="font-medium">{tagType}</span> tags found in the selected period.</p>
             <p className="text-xs text-gray-400 mt-1">Try a different tag type, form, or date range.</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={320}>
             <LineChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis
-                dataKey="bucket"
-                tick={{ fontSize: 11, fill: '#9CA3AF' }}
-                tickLine={false}
-                axisLine={{ stroke: '#E5E7EB' }}
-              />
-              <YAxis
-                allowDecimals={false}
-                tick={{ fontSize: 11, fill: '#9CA3AF' }}
-                tickLine={false}
-                axisLine={false}
-                width={28}
-              />
-              <Tooltip
-                contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
-                labelStyle={{ fontWeight: 600, color: '#374151', marginBottom: 4 }}
-              />
-              <Legend
-                wrapperStyle={{ fontSize: 12, paddingTop: 12 }}
-                iconType="circle"
-                iconSize={8}
-              />
+              <XAxis dataKey="bucket" tick={{ fontSize: 11, fill: '#9CA3AF' }} tickLine={false} axisLine={{ stroke: '#E5E7EB' }} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#9CA3AF' }} tickLine={false} axisLine={false} width={28} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }} labelStyle={{ fontWeight: 600, color: '#374151', marginBottom: 4 }} />
+              <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} iconType="circle" iconSize={8} />
               {tagLabels.map((label, i) => (
-                <Line
-                  key={label}
-                  type="monotone"
-                  dataKey={label}
-                  stroke={LINE_COLORS[i % LINE_COLORS.length]}
-                  strokeWidth={2}
-                  dot={{ r: 3, strokeWidth: 0 }}
-                  activeDot={{ r: 5 }}
-                />
+                <Line key={label} type="monotone" dataKey={label} stroke={LINE_COLORS[i % LINE_COLORS.length]} strokeWidth={2} dot={{ r: 3, strokeWidth: 0 }} activeDot={{ r: 5 }} />
               ))}
             </LineChart>
           </ResponsiveContainer>

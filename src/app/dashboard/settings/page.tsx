@@ -24,6 +24,7 @@ import {
   seedEmployeesIfEmpty,
   bulkSaveEmployees,
 } from '../../../lib/employeesFirestore';
+import { sanitizeText, sanitizeEmail, sanitizeAndLimit } from '../../../lib/sanitize';
 
 // ─── Section wrapper ──────────────────────────────────────────────────────────
 const Section = ({ title, description, children }: {
@@ -43,7 +44,6 @@ const Section = ({ title, description, children }: {
 export default function SettingsPage() {
   const router = useRouter();
   const { toasts, showToast, dismissToast } = useToast();
-  const { executeRecaptcha } = useGoogleReCaptcha();
   const [pageLoading, setPageLoading] = useState(true);
   const { tenantId, tenant, isLoading: tenantLoading } = useTenant();
 
@@ -170,21 +170,6 @@ export default function SettingsPage() {
       return;
     }
 
-    // reCAPTCHA verification
-    if (executeRecaptcha) {
-      const token = await executeRecaptcha('profile_save');
-      const res = await fetch('/api/verify-recaptcha', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      });
-      const data = await res.json();
-      if (!data.success) {
-        showToast('Bot detection triggered. Please try again.', 'error');
-        return;
-      }
-    }
-
     setProfileSaving(true);
     try {
       const user = auth.currentUser;
@@ -232,7 +217,7 @@ export default function SettingsPage() {
   };
 
   const addLocation = () => {
-    const trimmed = newLocation.trim();
+    const trimmed = sanitizeAndLimit(newLocation, 80);
     if (!trimmed || locations.includes(trimmed)) return;
     setNewLocation('');
     saveLocations([...locations, trimmed]);
@@ -255,7 +240,7 @@ export default function SettingsPage() {
   };
 
   const addNotifEmail = () => {
-    const trimmed = newEmail.trim().toLowerCase();
+    const trimmed = sanitizeEmail(newEmail).slice(0, 254);
     if (!trimmed || notifEmails.includes(trimmed)) return;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
       showToast('Please enter a valid email address.', 'error');
@@ -296,13 +281,13 @@ export default function SettingsPage() {
         '#': employees.length + 1,
         Id: maxId + 1,
         'Employee ID': maxEmpId + 1,
-        Employee: newEmp.Employee!.trim(),
-        Email: newEmp.Email!.trim(),
-        Role: newEmp.Role!.trim(),
-        'Reporting To': newEmp['Reporting To']?.trim() || '',
+        Employee: sanitizeAndLimit(newEmp.Employee!, 80),
+        Email: sanitizeEmail(newEmp.Email!).slice(0, 254),
+        Role: sanitizeAndLimit(newEmp.Role!, 80),
+        'Reporting To': sanitizeAndLimit(newEmp['Reporting To'] ?? '', 80),
         'Joining Date': newEmp['Joining Date'] || new Date().toISOString().split('T')[0],
         Status: newEmp.Status || 'Active',
-        ...(newEmp['Employment Type']?.trim() ? { 'Employment Type': newEmp['Employment Type'].trim() } : {}),
+        ...(newEmp['Employment Type']?.trim() ? { 'Employment Type': sanitizeAndLimit(newEmp['Employment Type'], 80) } : {}),
       };
       await saveEmployee(emp, tenantId);
       setEmployees(prev => [...prev, emp].sort((a, b) => a.Employee.localeCompare(b.Employee)));
@@ -431,7 +416,7 @@ export default function SettingsPage() {
         branding: {
           ...(brandLogoUrl ? { logoUrl: brandLogoUrl } : {}),
           ...(brandColor ? { primaryColor: brandColor } : {}),
-          ...(brandEmailName.trim() ? { emailDisplayName: brandEmailName.trim() } : {}),
+          ...(brandEmailName.trim() ? { emailDisplayName: sanitizeAndLimit(brandEmailName, 80) } : {}),
         },
       });
       showToast('Branding saved.', 'success');
@@ -455,9 +440,9 @@ export default function SettingsPage() {
     setSeoSaving(true);
     try {
       const payload: SeoSettings = {
-        siteUrl: seoSiteUrl.trim().replace(/\/$/, ''),
-        siteName: seoSiteName.trim(),
-        defaultDescription: seoDescription.trim(),
+        siteUrl: sanitizeAndLimit(seoSiteUrl.trim().replace(/\/$/, ''), 253),
+        siteName: sanitizeAndLimit(seoSiteName, 100),
+        defaultDescription: sanitizeAndLimit(seoDescription, 300),
         ...(seoOgImageUrl ? { ogImageUrl: seoOgImageUrl } : {}),
       };
       await setDoc(doc(db, 'tenant-settings', tenantId, 'config', 'seo'), payload);

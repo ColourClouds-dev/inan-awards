@@ -6,6 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { getAllTenants, saveTenant, updateTenant } from '../../lib/tenantFirestore';
 import type { Tenant, TenantFeatures } from '../../types';
+import { sanitizeAndLimit, sanitizeEmail } from '../../lib/sanitize';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import Modal from '../../components/Modal';
@@ -78,8 +79,8 @@ export default function SuperAdminPage() {
     try {
       const tenant: Tenant = {
         id: newTenant.id!.trim().toLowerCase().replace(/\s+/g, '-'),
-        name: newTenant.name!.trim(),
-        domain: newTenant.domain!.trim(),
+        name: sanitizeAndLimit(newTenant.name!, 100),
+        domain: sanitizeAndLimit(newTenant.domain!, 253),
         emailDomain: newTenant.emailDomain?.trim() || undefined,
         plan: newTenant.plan as Tenant['plan'] ?? 'trial',
         status: newTenant.status as Tenant['status'] ?? 'trial',
@@ -165,8 +166,8 @@ export default function SuperAdminPage() {
     setEditSaving(true);
     try {
       const updates: Partial<Tenant> = {
-        name: editForm.name!.trim(),
-        domain: editForm.domain!.trim(),
+        name: sanitizeAndLimit(editForm.name!, 100),
+        domain: sanitizeAndLimit(editForm.domain!, 253),
         emailDomain: editForm.emailDomain?.trim() || undefined,
         plan: editForm.plan as Tenant['plan'],
         formLimit: Number(editForm.formLimit) || 5,

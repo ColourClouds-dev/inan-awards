@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { auth } from '../../../../lib/firebase';
 import { getAllForms, getAllResponses } from '../../../../lib/firestore';
 import { exportToExcel } from '../../../../lib/exportToExcel';
@@ -123,12 +125,17 @@ export default function ResponsesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Pre-seed formId from ?formId= query param
+  const searchParams = useSearchParams();
+  const initialFormId = searchParams?.get('formId') ?? '';
+
   // Filter/sort state
   const [search, setSearch] = useState('');
   const [selectedTagTypes, setSelectedTagTypes] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [activeSort, setActiveSort] = useState<SortKey>('submitted_desc');
+  const [formId, setFormId] = useState(initialFormId);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, user => { if (user) setAuthReady(true); });
@@ -161,12 +168,20 @@ export default function ResponsesPage() {
     setSelectedTagTypes([]);
     setDateFrom('');
     setDateTo('');
+    setFormId('');
+    setSearch('');
   };
+
+  // Derive the active form name for the breadcrumb
+  const activeFormName = formId ? formMap.get(formId)?.title : null;
 
   const filteredAndSorted = useMemo(() => {
     const needle = search.toLowerCase();
 
     let result = responses.filter(r => {
+      // Form filter
+      if (formId && r.formId !== formId) return false;
+
       // Text search: form title, country, city
       if (needle) {
         const formTitle = formMap.get(r.formId)?.title?.toLowerCase() ?? '';
@@ -175,7 +190,7 @@ export default function ResponsesPage() {
         if (!formTitle.includes(needle) && !country.includes(needle) && !city.includes(needle)) return false;
       }
 
-      // Tag type filter — response must have at least one tag of a selected type
+      // Tag type filter
       if (selectedTagTypes.length > 0) {
         const hasMatch = r.tags?.some(t => selectedTagTypes.includes(t.type));
         if (!hasMatch) return false;
@@ -240,10 +255,26 @@ export default function ResponsesPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Breadcrumb — shown when pre-filtered to a specific form */}
+      {activeFormName && (
+        <div className="flex items-center gap-2 text-sm">
+          <Link href="/dashboard/feedback/forms" className="text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Forms
+          </Link>
+          <span className="text-gray-300">/</span>
+          <span className="text-gray-600 font-medium truncate max-w-[200px]">{activeFormName}</span>
+        </div>
+      )}
+
       {/* Responses header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Responses</h1>
+          <h1 className="text-xl font-bold text-gray-900">
+            {activeFormName ? `Responses — ${activeFormName}` : 'Responses'}
+          </h1>
           <p className="text-sm text-gray-500 mt-0.5">
             Showing <span className="font-medium text-gray-700">{filteredAndSorted.length}</span> of{' '}
             <span className="font-medium text-gray-700">{responses.length}</span> total responses
@@ -280,6 +311,10 @@ export default function ResponsesPage() {
         activeSort={activeSort}
         onSortChange={k => setActiveSort(k as SortKey)}
         onClearFilters={handleClearFilters}
+        // form selector driven by local state so query param pre-filter works
+        formSelectorValue={formId}
+        onFormSelectorChange={setFormId}
+        forms={forms}
       />
 
       {/* Table */}

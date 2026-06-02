@@ -13,6 +13,7 @@ import Toast from '../../../components/Toast';
 import { useToast } from '../../../hooks/useToast';
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import { ProfileHeaderSkeleton, SectionSkeleton } from '../../../components/Skeleton';
+import { sanitizeAndLimit } from '../../../lib/sanitize';
 
 // ── Section wrapper ────────────────────────────────────────────────────────────
 const Section = ({ title, description, children }: {
@@ -109,8 +110,9 @@ export default function ProfilePage() {
     try {
       const user = auth.currentUser;
       if (!user) throw new Error('Not authenticated');
-      await updateProfile(user, { displayName: displayName.trim() });
-      setOriginalDisplayName(displayName.trim());
+      const sanitizedName = sanitizeAndLimit(displayName, 50);
+      await updateProfile(user, { displayName: sanitizedName });
+      setOriginalDisplayName(sanitizedName);
       showToast('Display name updated.', 'success');
     } catch {
       showToast('Failed to update display name.', 'error');
