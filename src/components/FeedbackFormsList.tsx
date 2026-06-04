@@ -2,7 +2,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { deactivateForm, reactivateForm, deleteForm } from '../lib/firestore';
+import { deactivateForm, reactivateForm, deleteForm, updateForm } from '../lib/firestore';
+import FeedbackFormEditor from './FeedbackFormEditor';
 import Modal from './Modal';
 import Toast from './Toast';
 import FilterSortBar from './FilterSortBar';
@@ -78,12 +79,19 @@ const TrashIcon = () => (
   </svg>
 );
 
+const EditIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+  </svg>
+);
+
 // ── FormCard ──────────────────────────────────────────────────────────────────
 
-function FormCard({ form, responses, onView, onToggleActive, onDelete }: {
+function FormCard({ form, responses, onView, onEdit, onToggleActive, onDelete }: {
   form: FeedbackForm;
   responses: FeedbackResponse[];
   onView: () => void;
+  onEdit: () => void;
   onToggleActive: () => void;
   onDelete: () => void;
 }) {
@@ -133,6 +141,9 @@ function FormCard({ form, responses, onView, onToggleActive, onDelete }: {
         <div className="flex items-center gap-1 shrink-0">
           <IconBtn onClick={onView} title="View form details" className="text-purple-600 hover:bg-purple-50">
             <EyeIcon />
+          </IconBtn>
+          <IconBtn onClick={onEdit} title="Edit form" className="text-blue-600 hover:bg-blue-50">
+            <EditIcon />
           </IconBtn>
           <IconBtn
             onClick={onToggleActive}
@@ -297,6 +308,7 @@ export default function FeedbackFormsList({ forms, responses, onFormsChange }: F
 
   const [viewForm, setViewForm] = useState<FeedbackForm | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FeedbackForm | null>(null);
+  const [editForm, setEditForm] = useState<FeedbackForm | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -325,8 +337,14 @@ export default function FeedbackFormsList({ forms, responses, onFormsChange }: F
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
+  const handleUpdateForm = async (updated: FeedbackForm) => {
+    await updateForm(updated);
+    onFormsChange(forms.map(f => f.id === updated.id ? updated : f));
+    showToast('Form updated successfully.', 'success');
+    setEditForm(null);
+  };
+
+  const handleDelete = async () => {    if (!deleteTarget) return;
     setDeleting(true);
     try {
       await deleteForm(deleteTarget.id);
@@ -452,6 +470,7 @@ export default function FeedbackFormsList({ forms, responses, onFormsChange }: F
               form={form}
               responses={responses}
               onView={() => setViewForm(form)}
+              onEdit={() => setEditForm(form)}
               onToggleActive={() => handleToggleActive(form)}
               onDelete={() => setDeleteTarget(form)}
             />
@@ -476,6 +495,15 @@ export default function FeedbackFormsList({ forms, responses, onFormsChange }: F
           />
         )}
       </Modal>
+
+      {/* Edit form modal */}
+      {editForm && (
+        <FeedbackFormEditor
+          form={editForm}
+          onSave={handleUpdateForm}
+          onClose={() => setEditForm(null)}
+        />
+      )}
 
       {/* Delete confirm modal */}
       <Modal

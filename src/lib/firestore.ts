@@ -79,6 +79,12 @@ export async function saveForm(form: FeedbackForm, tenantId: string = DEFAULT_TE
   }
 }
 
+export async function updateForm(form: FeedbackForm, tenantId: string = DEFAULT_TENANT): Promise<void> {
+  const docRef = doc(db, 'feedback-forms', form.id);
+  const clean = JSON.parse(JSON.stringify({ ...form, tenantId }));
+  await updateDoc(docRef, clean);
+}
+
 export async function deleteForm(formId: string): Promise<void> {
   const docRef = doc(db, 'feedback-forms', formId);
   await deleteDoc(docRef);
