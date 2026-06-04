@@ -67,12 +67,29 @@ export default function CreateAccountModal({ isOpen, onClose }: CreateAccountMod
     setLoading(true);
     try {
       const credential = await createUserWithEmailAndPassword(auth, email, password);
-      await sendEmailVerification(credential.user);
-      // Sign out immediately — they must verify email before accessing the dashboard
+      const { user } = credential;
+
+      // Register the user under the tenant that is currently hosting this app.
+      // The API resolves the tenant from the subdomain header set by middleware.
+      const res = await fetch('/api/add-tenant-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: user.uid, email: user.email }),
+      });
+
+      if (!res.ok) {
+        // Clean up the orphaned auth account so the user can try again cleanly.
+        await user.delete();
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error || 'Failed to set up your account.');
+      }
+
+      await sendEmailVerification(user);
+      // Sign out immediately — they must verify email before accessing the dashboard.
       await auth.signOut();
       setSuccess(true);
     } catch (err: any) {
-      setError(getErrorMessage(err?.code));
+      setError(err?.code ? getErrorMessage(err.code) : (err?.message || getErrorMessage(undefined)));
     } finally {
       setLoading(false);
     }
