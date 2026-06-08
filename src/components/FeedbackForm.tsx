@@ -10,6 +10,7 @@ import Button from './Button';
 import Toast from './Toast';
 import { useToast } from '../hooks/useToast';
 import { useTenant } from '../contexts/TenantContext';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { submitFeedback, hasIpSubmittedForm } from '../lib/firestore';
 import { getVisitorInfo } from '../lib/visitorInfo';
 import { computeAllTags, isNegativeResponse, hasCustomTags } from '../lib/tagEngine';
@@ -244,6 +245,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
   const { toasts, showToast, dismissToast } = useToast();
   const { executeRecaptcha } = useGoogleReCaptcha();
   const { tenant, tenantId } = useTenant();
+  const { isOnline } = useNetworkStatus();
 
   useEffect(() => {
     // If the user already submitted this form (stored locally), block immediately
@@ -304,6 +306,11 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
   });
 
   const onSubmit = async (data: FormValues) => {
+    if (!isOnline) {
+      showToast('You\'re offline. Please check your connection and try again.', 'error');
+      setSubmitError('No internet connection. Please check your connection and try again.');
+      return;
+    }
     setSubmitError(null);
     setSubmitting(true);
     try {

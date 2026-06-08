@@ -6,6 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '../../lib/firebase';
 import { useTenant } from '../../contexts/TenantContext';
 import { StatCardSkeleton } from '../../components/Skeleton';
+import { useWithTimeout } from '../../hooks/useWithTimeout';
 
 interface Stats {
   totalFeedback: number;
@@ -17,6 +18,7 @@ interface Stats {
 export default function DashboardPage() {
   const { tenantId, isLoading: tenantLoading } = useTenant();
   const [authReady, setAuthReady] = useState(false);
+  const withTimeout = useWithTimeout();
   const [stats, setStats] = useState<Stats>({
     totalFeedback: 0,
     activeFeedbackForms: 0,
@@ -41,10 +43,10 @@ export default function DashboardPage() {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        const [formsSnap, responsesSnap] = await Promise.all([
+        const [formsSnap, responsesSnap] = await withTimeout(() => Promise.all([
           getDocs(query(collection(db, 'feedback-forms'), where('tenantId', '==', tenantId))),
           getDocs(query(collection(db, 'feedback-responses'), where('tenantId', '==', tenantId))),
-        ]);
+        ]));
 
         const activeFeedbackForms = formsSnap.docs.filter(d => d.data().isActive).length;
 
@@ -74,7 +76,11 @@ export default function DashboardPage() {
         });
       } catch (err) {
         console.error('Error fetching stats:', err);
-        setError('Failed to load dashboard statistics.');
+        setError(
+          (err as { isTimeout?: boolean }).isTimeout
+            ? 'Taking longer than expected. Check your connection and try again.'
+            : 'Failed to load dashboard statistics.'
+        );
       } finally {
         setLoading(false);
       }
@@ -107,6 +113,7 @@ export default function DashboardPage() {
       <div className="p-6">
         <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">
           <p className="text-sm text-red-700">{error}</p>
+          <button onClick={() => { setLoading(true); setError(null); }} className="mt-2 text-sm text-red-600 underline hover:text-red-800">Retry</button>
         </div>
       </div>
     );

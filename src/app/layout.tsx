@@ -5,6 +5,7 @@ import "../styles/globals.css";
 import RecaptchaProvider from "../components/RecaptchaProvider";
 import { TenantProvider } from "../contexts/TenantContext";
 import BrandProvider from "../components/BrandProvider";
+import OfflineBanner from "../components/OfflineBanner";
 import { getAdminDb } from "../lib/firebaseAdmin";
 
 const inter = Inter({
@@ -84,6 +85,7 @@ export default function RootLayout({
           <RecaptchaProvider>
             <TenantProvider>
               <BrandProvider />
+              <OfflineBanner />
               <div className="min-h-screen mx-auto relative">
                 {children}
               </div>

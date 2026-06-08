@@ -11,6 +11,7 @@ import { useTenant } from '../../../../contexts/TenantContext';
 import { toDate } from '../../../../hooks/useFeedbackFilters';
 import FilterSortBar from '../../../../components/FilterSortBar';
 import { FilterBarSkeleton, TableRowSkeleton } from '../../../../components/Skeleton';
+import { useWithTimeout } from '../../../../hooks/useWithTimeout';
 import type { FeedbackForm, FeedbackResponse, ResponseTag } from '../../../../types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -120,6 +121,7 @@ function ResponseRow({ response, form }: { response: FeedbackResponse; form: Fee
 export default function ResponsesPage() {
   const { tenantId, isLoading: tenantLoading } = useTenant();
   const [authReady, setAuthReady] = useState(false);
+  const withTimeout = useWithTimeout();
   const [forms, setForms] = useState<FeedbackForm[]>([]);
   const [responses, setResponses] = useState<FeedbackResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -147,11 +149,15 @@ export default function ResponsesPage() {
     setLoading(true);
     setError(null);
     try {
-      const [f, r] = await Promise.all([getAllForms(tenantId), getAllResponses(tenantId)]);
+      const [f, r] = await withTimeout(() => Promise.all([getAllForms(tenantId), getAllResponses(tenantId)]));
       setForms(f);
       setResponses(r);
-    } catch {
-      setError('Failed to load responses. Please try again.');
+    } catch (err) {
+      setError(
+        (err as { isTimeout?: boolean }).isTimeout
+          ? 'Taking longer than expected. Check your connection and try again.'
+          : 'Failed to load responses. Please try again.'
+      );
     } finally {
       setLoading(false);
     }

@@ -10,6 +10,7 @@ import { useTenant } from '../../../../contexts/TenantContext';
 import { resolveDateRange, toDate } from '../../../../hooks/useFeedbackFilters';
 import FilterSortBar from '../../../../components/FilterSortBar';
 import { ChartSkeleton } from '../../../../components/Skeleton';
+import { useWithTimeout } from '../../../../hooks/useWithTimeout';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer,
@@ -90,6 +91,7 @@ function fillBuckets(
 export default function AnalyticsPage() {
   const { tenantId, isLoading: tenantLoading } = useTenant();
   const [authReady, setAuthReady] = useState(false);
+  const withTimeout = useWithTimeout();
   const [forms, setForms] = useState<FeedbackForm[]>([]);
   const [responses, setResponses] = useState<FeedbackResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,11 +119,15 @@ export default function AnalyticsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [f, r] = await Promise.all([getAllForms(tenantId), getAllResponses(tenantId)]);
+      const [f, r] = await withTimeout(() => Promise.all([getAllForms(tenantId), getAllResponses(tenantId)]));
       setForms(f);
       setResponses(r);
-    } catch {
-      setError('Failed to load analytics data. Please try again.');
+    } catch (err) {
+      setError(
+        (err as { isTimeout?: boolean }).isTimeout
+          ? 'Taking longer than expected. Check your connection and try again.'
+          : 'Failed to load analytics data. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
