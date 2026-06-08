@@ -47,7 +47,7 @@ const Button: React.FC<ButtonProps> = ({
   };
 
   return (
-    <span className="relative inline-flex flex-col items-center gap-1 w-full min-[360px]:w-auto">
+    <span className={`relative flex flex-col items-center gap-1 ${fullWidth ? 'w-full' : 'w-full min-[360px]:w-auto'}`}>
       <button
         className={`${baseStyles} ${variants[variant]} ${widthClass} ${className}`}
         disabled={disabled || isLoading}
