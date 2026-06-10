@@ -137,6 +137,18 @@ node scripts/migrate-to-tenant.js                              # Backfill tenant
 
 ---
 
+## Quality Policy
+
+This project follows a defined quality policy covering data handling, service standards, and operational guidelines. See [`privacy-policy.pdf`](./privacy-policy.pdf) for the full document.
+
+---
+
+## Contact
+
+For questions, support, or data enquiries, reach out at [colourclouds042@gmail.com](mailto:colourclouds042@gmail.com).
+
+---
+
 ## Documentation
 
 The `docs/` folder contains the full technical manual, split into focused sections:
