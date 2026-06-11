@@ -21,23 +21,23 @@ This manual documents the INAN Feedback platform in full. It is split into focus
 
 | # | File | What It Covers |
 |---|---|---|
-| 1 | [01-overview-and-stack.md](./01-overview-and-stack.md) | What the product is, who it's for, the three user types, tech stack, third-party services |
-| 2 | [02-architecture.md](./02-architecture.md) | How the system is wired together, request lifecycle, multi-tenancy, branding system, impersonation |
-| 3 | [03-data-architecture.md](./03-data-architecture.md) | What data is stored, Firestore collections, field schemas, security rules |
-| 4 | [04-features.md](./04-features.md) | Every user-facing feature — what it does, how to use it, how it is built |
-| 5 | [05-setup-and-configuration.md](./05-setup-and-configuration.md) | Environment variables, Firebase setup, deployment, tenant onboarding, admin scripts |
-| 6 | [06-reference.md](./06-reference.md) | API routes, component library, hooks, known limits |
+| 1 | [Overview and Stack](./01-overview-and-stack.md) | What the product is, who it's for, the three user types, tech stack, third-party services |
+| 2 | [Architecture](./02-architecture.md) | How the system is wired together, request lifecycle, multi-tenancy, branding system, impersonation |
+| 3 | [Data Architecture](./03-data-architecture.md) | What data is stored, Firestore collections, field schemas, security rules |
+| 4 | [Features](./04-features.md) | Every user-facing feature — what it does, how to use it, how it is built |
+| 5 | [Setup and Configuration](./05-setup-and-configuration.md) | Environment variables, Firebase setup, deployment, tenant onboarding, admin scripts |
+| 6 | [Reference](./06-reference.md) | API routes, component library, hooks, known limits |
 
 ---
 
 ## Quick Links
 
-- Setting up a new tenant → [05-setup-and-configuration.md § Tenant Onboarding](./05-setup-and-configuration.md#tenant-onboarding)
-- Environment variables → [05-setup-and-configuration.md § Environment Variables](./05-setup-and-configuration.md#environment-variables)
-- Creating a feedback form → [04-features.md § Form Builder](./04-features.md#form-builder)
-- Super Admin panel → [04-features.md § Super Admin](./04-features.md#super-admin)
-- API routes reference → [06-reference.md § API Routes](./06-reference.md#api-routes)
-- Tag engine logic → [04-features.md § Auto-Tagging](./04-features.md#auto-tagging)
+- Setting up a new tenant → [Setup and Configuration § Tenant Onboarding](./05-setup-and-configuration.md#tenant-onboarding)
+- Environment variables → [Setup and Configuration § Environment Variables](./05-setup-and-configuration.md#environment-variables)
+- Creating a feedback form → [Features § Form Builder](./04-features.md#form-builder)
+- Super Admin panel → [Features § Super Admin](./04-features.md#super-admin)
+- API routes reference → [Reference § API Routes](./06-reference.md#api-routes)
+- Tag engine logic → [Features § Auto-Tagging](./04-features.md#auto-tagging)
 
 ---
 

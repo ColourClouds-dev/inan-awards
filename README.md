@@ -155,10 +155,10 @@ The `docs/` folder contains the full technical manual, split into focused sectio
 
 | Document | What it covers |
 |---|---|
-| [`docs/TECHNICAL_MANUAL.md`](./docs/TECHNICAL_MANUAL.md) | Index and quick links |
-| [`docs/01-overview-and-stack.md`](./docs/01-overview-and-stack.md) | Product overview, user types, tech stack, third-party services |
-| [`docs/02-architecture.md`](./docs/02-architecture.md) | System diagram, request lifecycle, multi-tenancy, branding system, impersonation |
-| [`docs/03-data-architecture.md`](./docs/03-data-architecture.md) | Firestore collections, field schemas, security rules |
-| [`docs/04-features.md`](./docs/04-features.md) | Every feature — what it does, how to use it, how it is built |
-| [`docs/05-setup-and-configuration.md`](./docs/05-setup-and-configuration.md) | Environment variables, Firebase setup, deployment, tenant onboarding, scripts |
-| [`docs/06-reference.md`](./docs/06-reference.md) | API routes, component library, hooks, utility libs, known limits |
+| [Technical Manual](./docs/TECHNICAL_MANUAL.md) | Index and quick links |
+| [Overview and Stack](./docs/01-overview-and-stack.md) | Product overview, user types, tech stack, third-party services |
+| [Architecture](./docs/02-architecture.md) | System diagram, request lifecycle, multi-tenancy, branding system, impersonation |
+| [Data Architecture](./docs/03-data-architecture.md) | Firestore collections, field schemas, security rules |
+| [Features](./docs/04-features.md) | Every feature — what it does, how to use it, how it is built |
+| [Setup and Configuration](./docs/05-setup-and-configuration.md) | Environment variables, Firebase setup, deployment, tenant onboarding, scripts |
+| [Reference](./docs/06-reference.md) | API routes, component library, hooks, utility libs, known limits |
