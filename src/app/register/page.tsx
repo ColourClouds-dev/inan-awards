@@ -134,9 +134,9 @@ export default function RegisterPage() {
                   <img src={tenantLogo} alt={tenantName} className="h-10 w-auto max-w-[180px] object-contain" />
                 </div>
               )}
-              <h1 className="text-xl font-bold text-gray-900">Create Your Account</h1>
+              <h1 className="text-xl font-bold text-gray-900">Set Up Your Organisation</h1>
               <p className="text-gray-500 text-sm mt-2">
-                {tenantName ? `Start collecting feedback for ${tenantName}.` : 'Start collecting feedback for your organisation.'}
+                Create your company profile and get started — build forms, collect feedback, and manage your team all in one place.
               </p>
             </div>
 
