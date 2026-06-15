@@ -11,7 +11,6 @@ const LOGIN_URL = `${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://inan.com.ng'}/
 
 const DEFAULT_FEATURES: TenantFeatures = {
   feedbackForms: true,
-  employeeRecords: false,
   seoSettings: false,
   hidePoweredBy: false,
 };
