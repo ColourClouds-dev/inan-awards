@@ -41,8 +41,20 @@ export async function saveTenant(tenant: Tenant): Promise<void> {
 }
 
 export async function updateTenant(tenantId: string, updates: Partial<Tenant>): Promise<void> {
+  // Force-refresh the ID token so the latest custom claims (including
+  // superAdmin) are present in the token before the Firestore write.
+  const { getAuth } = await import('firebase/auth');
+  const currentUser = getAuth().currentUser;
+  if (currentUser) {
+    await currentUser.getIdToken(true);
+  }
+
+  // Firestore rejects any value that is undefined — strip them out before writing.
+  // JSON round-trip is the simplest way to drop undefined fields recursively.
+  const clean = JSON.parse(JSON.stringify(updates));
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await updateDoc(doc(db, COL, tenantId), updates as Record<string, any>);
+  await updateDoc(doc(db, COL, tenantId), clean as Record<string, any>);
 }
 
 export async function incrementFormCount(tenantId: string): Promise<void> {

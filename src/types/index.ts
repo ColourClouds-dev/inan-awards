@@ -2,7 +2,6 @@ import { Timestamp } from 'firebase/firestore';
 
 export interface TenantFeatures {
   feedbackForms: boolean;
-  employeeRecords: boolean;
   seoSettings: boolean;
   hidePoweredBy: boolean;
 }

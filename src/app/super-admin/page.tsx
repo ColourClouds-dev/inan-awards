@@ -26,14 +26,12 @@ interface TenantAdminUser {
 
 const DEFAULT_FEATURES: TenantFeatures = {
   feedbackForms: true,
-  employeeRecords: false,
   seoSettings: false,
   hidePoweredBy: false,
 };
 
 const FEATURE_LABELS: Record<keyof TenantFeatures, string> = {
   feedbackForms: 'Feedback Forms',
-  employeeRecords: 'Employee Records',
   seoSettings: 'SEO Settings',
   hidePoweredBy: 'Hide "Powered by" badge',
 };
@@ -75,8 +73,8 @@ export default function SuperAdminPage() {
   const [newTenant, setNewTenant] = useState<Partial<Tenant>>({
     id: '', name: '', domain: '', emailDomain: '',
     plan: 'trial', status: 'trial',
-    formLimit: 5, nominationFormLimit: 2,
-    formCount: 0, nominationFormCount: 0,
+    formLimit: 5,
+    formCount: 0,
     features: { ...DEFAULT_FEATURES },
   });
 
@@ -116,8 +114,7 @@ export default function SuperAdminPage() {
         plan: newTenant.plan as Tenant['plan'] ?? 'trial',
         status: newTenant.status as Tenant['status'] ?? 'trial',
         formLimit: Number(newTenant.formLimit) || 5,
-        nominationFormLimit: Number(newTenant.nominationFormLimit) || 2,
-        formCount: 0, nominationFormCount: 0,
+        formCount: 0,
         features: newTenant.features as TenantFeatures ?? { ...DEFAULT_FEATURES },
         createdAt: new Date(),
       };
@@ -126,7 +123,7 @@ export default function SuperAdminPage() {
       setShowAddForm(false);
       setNewTenant({
         id: '', name: '', domain: '', emailDomain: '', plan: 'trial', status: 'trial',
-        formLimit: 5, nominationFormLimit: 2, formCount: 0, nominationFormCount: 0,
+        formLimit: 5, formCount: 0,
         features: { ...DEFAULT_FEATURES },
       });
       showToast('Tenant created.', 'success');
@@ -180,7 +177,6 @@ export default function SuperAdminPage() {
       emailDomain: tenant.emailDomain ?? '',
       plan: tenant.plan,
       formLimit: tenant.formLimit,
-      nominationFormLimit: tenant.nominationFormLimit,
       features: { ...tenant.features },
     });
   };
@@ -201,7 +197,6 @@ export default function SuperAdminPage() {
         emailDomain: editForm.emailDomain?.trim() || undefined,
         plan: editForm.plan as Tenant['plan'],
         formLimit: Number(editForm.formLimit) || 5,
-        nominationFormLimit: Number(editForm.nominationFormLimit) || 2,
         features: editForm.features as TenantFeatures,
       };
       await updateTenant(editingTenant.id, updates);
@@ -322,7 +317,6 @@ export default function SuperAdminPage() {
               </select>
             </div>
             <Input label="Form Limit" type="number" value={String(newTenant.formLimit ?? 5)} onChange={e => setNewTenant(p => ({ ...p, formLimit: parseInt(e.target.value) || 5 }))} />
-            <Input label="Nomination Form Limit" type="number" value={String(newTenant.nominationFormLimit ?? 2)} onChange={e => setNewTenant(p => ({ ...p, nominationFormLimit: parseInt(e.target.value) || 2 }))} />
           </div>
           <div>
             <p className="text-sm font-medium text-gray-700 mb-2">Features</p>
@@ -357,8 +351,8 @@ export default function SuperAdminPage() {
 
             {/* ── Tenant card header ─────────────────────────────────────── */}
             <div className="p-5 space-y-2">
-              <div className="flex items-start justify-between gap-4 flex-wrap">
-                <div>
+              <div className="flex items-start justify-between gap-4 flex-nowrap">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-semibold text-gray-900">{tenant.name}</h3>
                     <span className="text-xs text-gray-400 font-mono">{tenant.id}</span>
@@ -372,7 +366,7 @@ export default function SuperAdminPage() {
                   <p className="text-sm text-gray-500 mt-0.5">{tenant.domain}</p>
                   {tenant.emailDomain && <p className="text-xs text-gray-400">Email: @{tenant.emailDomain}</p>}
                   <p className="text-xs text-gray-400 mt-0.5">
-                    Forms: {tenant.formCount}/{tenant.formLimit} · Nominations: {tenant.nominationFormCount}/{tenant.nominationFormLimit}
+                    Forms: {tenant.formCount}/{tenant.formLimit}
                   </p>
                 </div>
 
@@ -531,7 +525,6 @@ export default function SuperAdminPage() {
                 </select>
               </div>
               <Input label="Form Limit" type="number" value={String(editForm.formLimit ?? 5)} onChange={e => setEditForm(p => ({ ...p, formLimit: parseInt(e.target.value) || 5 }))} />
-              <Input label="Nomination Form Limit" type="number" value={String(editForm.nominationFormLimit ?? 2)} onChange={e => setEditForm(p => ({ ...p, nominationFormLimit: parseInt(e.target.value) || 2 }))} />
             </div>
             <div>
               <p className="text-sm font-medium text-gray-700 mb-2">Features</p>
