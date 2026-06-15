@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
+import Link from 'next/link';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import Toast from '../../components/Toast';
@@ -129,6 +130,12 @@ export default function RegisterPage() {
         {step === 'details' && (
           <>
             <div className="text-center">
+              <Link href="/" className="inline-flex items-center text-sm text-purple-600 hover:text-purple-800 mb-4">
+                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Back to Home
+              </Link>
               {tenantLogo && (
                 <div className="flex justify-center mb-3">
                   <img src={tenantLogo} alt={tenantName} className="h-10 w-auto max-w-[180px] object-contain" />

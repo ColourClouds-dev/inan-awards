@@ -6,12 +6,23 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { getAllTenants, saveTenant, updateTenant } from '../../lib/tenantFirestore';
 import type { Tenant, TenantFeatures } from '../../types';
-import { sanitizeAndLimit, sanitizeEmail } from '../../lib/sanitize';
+import { sanitizeAndLimit } from '../../lib/sanitize';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import Modal from '../../components/Modal';
 import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface TenantAdminUser {
+  uid: string;
+  email: string;
+  createdAt?: { seconds: number } | null;
+  welcomeSent?: boolean;
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const DEFAULT_FEATURES: TenantFeatures = {
   feedbackForms: true,
@@ -27,21 +38,40 @@ const FEATURE_LABELS: Record<keyof TenantFeatures, string> = {
   hidePoweredBy: 'Hide "Powered by" badge',
 };
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatDate(ts?: { seconds: number } | null): string {
+  if (!ts?.seconds) return '—';
+  return new Date(ts.seconds * 1000).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export default function SuperAdminPage() {
   const router = useRouter();
   const { toasts, showToast, dismissToast } = useToast();
+
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Edit modal state
+  // ── Edit modal state ───────────────────────────────────────────────────────
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [editForm, setEditForm] = useState<Partial<Tenant>>({});
   const [editSaving, setEditSaving] = useState(false);
 
-  // New tenant form state
+  // ── Users state ───────────────────────────────────────────────────────────
+  const [tenantUsers, setTenantUsers] = useState<Record<string, TenantAdminUser[]>>({});
+  const [expandedTenant, setExpandedTenant] = useState<string | null>(null);
+  const [userLoading, setUserLoading] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ uid: string; email: string; tenantId: string } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // ── New tenant form state ──────────────────────────────────────────────────
   const [newTenant, setNewTenant] = useState<Partial<Tenant>>({
     id: '', name: '', domain: '', emailDomain: '',
     plan: 'trial', status: 'trial',
@@ -50,6 +80,7 @@ export default function SuperAdminPage() {
     features: { ...DEFAULT_FEATURES },
   });
 
+  // ── Auth check ────────────────────────────────────────────────────────────
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) { router.push('/dashboard'); return; }
@@ -68,7 +99,7 @@ export default function SuperAdminPage() {
     return () => unsubscribe();
   }, [router]);
 
-  // ── Add tenant ─────────────────────────────────────────────────────────────
+  // ── Add tenant ────────────────────────────────────────────────────────────
   const handleAddTenant = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTenant.id?.trim() || !newTenant.name?.trim() || !newTenant.domain?.trim()) {
@@ -106,7 +137,7 @@ export default function SuperAdminPage() {
     }
   };
 
-  // ── Toggle active/inactive ─────────────────────────────────────────────────
+  // ── Toggle active/inactive ────────────────────────────────────────────────
   const handleToggleStatus = async (tenant: Tenant) => {
     const newStatus: Tenant['status'] = tenant.status === 'active' ? 'inactive' : 'active';
     try {
@@ -118,7 +149,7 @@ export default function SuperAdminPage() {
     }
   };
 
-  // ── Impersonate tenant ─────────────────────────────────────────────────────
+  // ── Impersonate tenant ────────────────────────────────────────────────────
   const handleImpersonate = async (tenantId: string) => {
     try {
       const user = auth.currentUser;
@@ -130,7 +161,6 @@ export default function SuperAdminPage() {
         body: JSON.stringify({ tenantId }),
       });
       if (res.ok) {
-        // Hard reload so TenantProvider re-fetches with the new cookie
         window.location.href = '/dashboard';
       } else {
         const data = await res.json();
@@ -141,7 +171,7 @@ export default function SuperAdminPage() {
     }
   };
 
-  // ── Open edit modal ────────────────────────────────────────────────────────
+  // ── Open edit modal ───────────────────────────────────────────────────────
   const openEdit = (tenant: Tenant) => {
     setEditingTenant(tenant);
     setEditForm({
@@ -155,7 +185,7 @@ export default function SuperAdminPage() {
     });
   };
 
-  // ── Save edit ──────────────────────────────────────────────────────────────
+  // ── Save edit ─────────────────────────────────────────────────────────────
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTenant) return;
@@ -185,6 +215,73 @@ export default function SuperAdminPage() {
     }
   };
 
+  // ── Load users for a tenant ───────────────────────────────────────────────
+  const handleToggleUsers = async (tenantId: string) => {
+    // Collapse if already expanded
+    if (expandedTenant === tenantId) {
+      setExpandedTenant(null);
+      return;
+    }
+
+    setExpandedTenant(tenantId);
+
+    // Use cached result if already fetched
+    if (tenantUsers[tenantId]) return;
+
+    setUserLoading(tenantId);
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/tenant-users?tenantId=${encodeURIComponent(tenantId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to fetch users');
+      const data = await res.json();
+      setTenantUsers(prev => ({ ...prev, [tenantId]: data.users ?? [] }));
+    } catch {
+      showToast('Failed to load users for this tenant.', 'error');
+      setExpandedTenant(null);
+    } finally {
+      setUserLoading(null);
+    }
+  };
+
+  // ── Delete user ───────────────────────────────────────────────────────────
+  const handleDeleteUser = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Not authenticated');
+      const token = await user.getIdToken();
+      const res = await fetch('/api/delete-user', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ uid: deleteTarget.uid }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to delete user');
+      }
+      // Remove from local state
+      setTenantUsers(prev => ({
+        ...prev,
+        [deleteTarget.tenantId]: (prev[deleteTarget.tenantId] ?? []).filter(
+          u => u.uid !== deleteTarget.uid
+        ),
+      }));
+      showToast(`${deleteTarget.email} has been removed.`, 'success');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete user.', 'error');
+    } finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
+    }
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -206,7 +303,7 @@ export default function SuperAdminPage() {
         </Button>
       </div>
 
-      {/* ── Add Tenant Form ─────────────────────────────────────────────── */}
+      {/* ── Add Tenant Form ──────────────────────────────────────────────── */}
       {showAddForm && (
         <form onSubmit={handleAddTenant} className="bg-white shadow rounded-lg p-6 space-y-4">
           <h2 className="text-lg font-semibold">New Tenant</h2>
@@ -248,81 +345,164 @@ export default function SuperAdminPage() {
         </form>
       )}
 
-      {/* ── Tenants List ────────────────────────────────────────────────── */}
+      {/* ── Tenants List ─────────────────────────────────────────────────── */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Tenants ({tenants.length})</h2>
         {tenants.length === 0 && (
           <div className="bg-white rounded-lg shadow p-6 text-center text-gray-400">No tenants yet.</div>
         )}
+
         {tenants.map(tenant => (
-          <div key={tenant.id} className="bg-white shadow rounded-lg p-5 space-y-2">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-semibold text-gray-900">{tenant.name}</h3>
-                  <span className="text-xs text-gray-400 font-mono">{tenant.id}</span>
-                  <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${
-                    tenant.status === 'active' ? 'bg-green-100 text-green-800' :
-                    tenant.status === 'trial' ? 'bg-blue-100 text-blue-800' :
-                    'bg-gray-100 text-gray-600'
-                  }`}>{tenant.status}</span>
-                  <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700">{tenant.plan}</span>
+          <div key={tenant.id} className="bg-white shadow rounded-lg overflow-hidden">
+
+            {/* ── Tenant card header ─────────────────────────────────────── */}
+            <div className="p-5 space-y-2">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold text-gray-900">{tenant.name}</h3>
+                    <span className="text-xs text-gray-400 font-mono">{tenant.id}</span>
+                    <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${
+                      tenant.status === 'active' ? 'bg-green-100 text-green-800' :
+                      tenant.status === 'trial'  ? 'bg-blue-100 text-blue-800' :
+                                                   'bg-gray-100 text-gray-600'
+                    }`}>{tenant.status}</span>
+                    <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700">{tenant.plan}</span>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-0.5">{tenant.domain}</p>
+                  {tenant.emailDomain && <p className="text-xs text-gray-400">Email: @{tenant.emailDomain}</p>}
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Forms: {tenant.formCount}/{tenant.formLimit} · Nominations: {tenant.nominationFormCount}/{tenant.nominationFormLimit}
+                  </p>
                 </div>
-                <p className="text-sm text-gray-500 mt-0.5">{tenant.domain}</p>
-                {tenant.emailDomain && <p className="text-xs text-gray-400">Email: @{tenant.emailDomain}</p>}
-                <p className="text-xs text-gray-400 mt-0.5">
-                  Forms: {tenant.formCount}/{tenant.formLimit} · Nominations: {tenant.nominationFormCount}/{tenant.nominationFormLimit}
-                </p>
-              </div>
 
-              {/* Action icons */}
-              <div className="flex items-center gap-1 shrink-0">
-                {/* View as tenant icon */}
-                <button
-                  onClick={() => handleImpersonate(tenant.id)}
-                  title={`View dashboard as ${tenant.name}`}
-                  className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded-md transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                </button>
-                {/* Edit icon */}
-                <button
-                  onClick={() => openEdit(tenant)}
-                  title="Edit tenant"
-                  className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </button>
+                {/* Action icons */}
+                <div className="flex items-center gap-1 shrink-0">
 
-                {/* Toggle active/inactive icon */}
-                <button
-                  onClick={() => handleToggleStatus(tenant)}
-                  title={tenant.status === 'active' ? 'Deactivate tenant' : 'Activate tenant'}
-                  className={`p-1.5 rounded-md transition-colors ${
-                    tenant.status === 'active'
-                      ? 'text-yellow-600 hover:bg-yellow-50'
-                      : 'text-green-600 hover:bg-green-50'
-                  }`}
-                >
-                  {tenant.status === 'active' ? (
-                    // Pause / deactivate icon
+                  {/* Users toggle */}
+                  <button
+                    onClick={() => handleToggleUsers(tenant.id)}
+                    title="View users"
+                    className={`p-1.5 rounded-md transition-colors ${
+                      expandedTenant === tenant.id
+                        ? 'text-blue-700 bg-blue-50'
+                        : 'text-blue-500 hover:bg-blue-50'
+                    }`}
+                  >
+                    {userLoading === tenant.id ? (
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                    )}
+                  </button>
+
+                  {/* View as tenant */}
+                  <button
+                    onClick={() => handleImpersonate(tenant.id)}
+                    title={`View dashboard as ${tenant.name}`}
+                    className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded-md transition-colors"
+                  >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
-                  ) : (
-                    // Activate / check icon
+                  </button>
+
+                  {/* Edit */}
+                  <button
+                    onClick={() => openEdit(tenant)}
+                    title="Edit tenant"
+                    className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
+                  >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
-                  )}
-                </button>
+                  </button>
+
+                  {/* Toggle active/inactive */}
+                  <button
+                    onClick={() => handleToggleStatus(tenant)}
+                    title={tenant.status === 'active' ? 'Deactivate tenant' : 'Activate tenant'}
+                    className={`p-1.5 rounded-md transition-colors ${
+                      tenant.status === 'active'
+                        ? 'text-yellow-600 hover:bg-yellow-50'
+                        : 'text-green-600 hover:bg-green-50'
+                    }`}
+                  >
+                    {tenant.status === 'active' ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    )}
+                  </button>
+
+                </div>
               </div>
             </div>
+
+            {/* ── Users panel (expandable) ───────────────────────────────── */}
+            {expandedTenant === tenant.id && (
+              <div className="border-t border-gray-100 bg-gray-50 px-5 py-4">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Users
+                </h4>
+
+                {userLoading === tenant.id && (
+                  <p className="text-sm text-gray-400">Loading users…</p>
+                )}
+
+                {!userLoading && tenantUsers[tenant.id]?.length === 0 && (
+                  <p className="text-sm text-gray-400 italic">No users registered under this tenant.</p>
+                )}
+
+                {!userLoading && (tenantUsers[tenant.id]?.length ?? 0) > 0 && (
+                  <div className="space-y-2">
+                    {tenantUsers[tenant.id].map(user => (
+                      <div
+                        key={user.uid}
+                        className="flex items-center justify-between bg-white rounded-md border border-gray-200 px-4 py-2.5 gap-4"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">{user.email}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            Joined {formatDate(user.createdAt)}
+                            {user.welcomeSent && (
+                              <span className="ml-2 inline-flex items-center gap-1 text-green-600">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                                Welcome sent
+                              </span>
+                            )}
+                          </p>
+                        </div>
+
+                        {/* Delete user button */}
+                        <button
+                          onClick={() => setDeleteTarget({ uid: user.uid, email: user.email, tenantId: tenant.id })}
+                          title={`Remove ${user.email}`}
+                          className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors shrink-0"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
         ))}
       </div>
@@ -353,7 +533,6 @@ export default function SuperAdminPage() {
               <Input label="Form Limit" type="number" value={String(editForm.formLimit ?? 5)} onChange={e => setEditForm(p => ({ ...p, formLimit: parseInt(e.target.value) || 5 }))} />
               <Input label="Nomination Form Limit" type="number" value={String(editForm.nominationFormLimit ?? 2)} onChange={e => setEditForm(p => ({ ...p, nominationFormLimit: parseInt(e.target.value) || 2 }))} />
             </div>
-
             <div>
               <p className="text-sm font-medium text-gray-700 mb-2">Features</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -369,7 +548,6 @@ export default function SuperAdminPage() {
                 ))}
               </div>
             </div>
-
             <div className="flex justify-end gap-2 border-t pt-4">
               <Button fullWidth={false} onClick={() => setEditingTenant(null)}>Cancel</Button>
               <Button type="submit" fullWidth={false} disabled={editSaving} isLoading={editSaving} loadingText="Saving…">
@@ -379,6 +557,24 @@ export default function SuperAdminPage() {
           </form>
         )}
       </Modal>
+
+      {/* ── Delete User Confirmation Modal ───────────────────────────────── */}
+      <Modal
+        isOpen={!!deleteTarget}
+        title="Remove User"
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteUser}
+        confirmLabel={deleteLoading ? 'Removing…' : 'Remove User'}
+        variant="danger"
+        size="sm"
+      >
+        <p className="text-sm text-gray-600">
+          This will permanently delete{' '}
+          <span className="font-semibold text-gray-900">{deleteTarget?.email}</span>{' '}
+          and revoke their access to the platform. This cannot be undone.
+        </p>
+      </Modal>
+
     </div>
   );
 }

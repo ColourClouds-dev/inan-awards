@@ -41,18 +41,18 @@ export default function HomePage() {
               />
             </div>
             <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700"
-            >
-              Sign In
-            </Link>
-            <Link
-              href="/register"
-              className="inline-flex items-center px-4 py-2 border border-purple-600 text-sm font-medium rounded-md text-purple-600 bg-white hover:bg-purple-50 transition-colors"
-            >
-              Get Started
-            </Link>
+              <Link
+                href="/login"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+              >
+                Sign In
+              </Link>
+              <button
+                onClick={() => setShowCreateAccount(true)}
+                className="inline-flex items-center px-4 py-2 border border-purple-600 text-sm font-medium rounded-md text-purple-600 bg-white hover:bg-purple-50 transition-colors"
+              >
+                Sign Up
+              </button>
             </div>
           </div>
         </div>
@@ -70,6 +70,47 @@ export default function HomePage() {
               INAN Feedback helps organizations collect, analyze, and act on feedback from customers and employees.
               From service quality surveys to employee polls, we make feedback management simple and effective.
             </p>
+          </div>
+
+          {/* ── Two-path CTA ─────────────────────────────────────────────── */}
+          <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 max-w-2xl mx-auto">
+            {/* Join your team */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col items-center text-center hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-4">
+                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <h3 className="text-base font-semibold text-gray-900 mb-1">Already with us?</h3>
+              <p className="text-sm text-gray-500 mb-5">
+                Your organisation is already on the platform. Create your staff account and get access to the dashboard.
+              </p>
+              <button
+                onClick={() => setShowCreateAccount(true)}
+                className="w-full inline-flex justify-center items-center px-4 py-2 border border-purple-600 text-sm font-medium rounded-md text-purple-600 bg-white hover:bg-purple-50 transition-colors"
+              >
+                Join Your Team
+              </button>
+            </div>
+
+            {/* Set up your organisation */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col items-center text-center hover:shadow-md transition-shadow">
+              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-4">
+                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <h3 className="text-base font-semibold text-gray-900 mb-1">New to the platform?</h3>
+              <p className="text-sm text-gray-500 mb-5">
+                Register your company, set up your profile, and start collecting and managing feedback straight away.
+              </p>
+              <Link
+                href="/register"
+                className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+              >
+                Set Up Your Organisation
+              </Link>
+            </div>
           </div>
 
           {/* Feature Grid */}
