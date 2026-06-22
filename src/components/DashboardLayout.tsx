@@ -1,6 +1,6 @@
 'use client';
 
-import React, { ReactNode, useState, useEffect } from 'react';
+import React, { ReactNode, useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../lib/firebase';
@@ -50,7 +50,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [displayName, setDisplayName] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
   const [role, setRole] = useState('Admin');
-  const { tenant, isImpersonating, isOwner, isStaff } = useTenant();
+  const { tenant, isImpersonating, isOwner, isStaff, isLoading: tenantLoading } = useTenant();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -82,7 +82,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     return () => unsubscribe();
   }, []);
 
-  const allNavItems = [
+  const allNavItems = useMemo(() => [
     { href: '/dashboard',          label: 'Overview',    icon: IconOverview,    show: true },
     {
       href: '/dashboard/feedback',
@@ -95,9 +95,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         { href: '/dashboard/feedback/analytics', label: 'Analytics' },
       ],
     },
-    { href: '/dashboard/settings', label: 'Settings', icon: IconSettings, show: isOwner || isStaff || isSuperAdmin },
+    { href: '/dashboard/settings', label: 'Settings', icon: IconSettings, show: tenantLoading || isOwner || isStaff || isSuperAdmin },
     { href: '/super-admin',        label: 'Super Admin', icon: IconSuperAdmin,  show: isSuperAdmin && !isImpersonating },
-  ];
+  ], [isOwner, isStaff, isSuperAdmin, isImpersonating, tenantLoading]);
 
   const handleSignOut = async () => {
     setIsSigningOut(true);

@@ -75,7 +75,7 @@ export default function SettingsPage() {
 
   // ── Danger zone ────────────────────────────────────────────────────────────
   const [modalOpen, setModalOpen] = useState(false);
-  const [dangerAction, setDangerAction] = useState<'responses' | null>(null);
+  const [dangerAction, setDangerAction] = useState<'all-forms' | null>(null);
   const [dangerLoading, setDangerLoading] = useState(false);
 
   // ── Branding ───────────────────────────────────────────────────────────────
@@ -263,13 +263,29 @@ export default function SettingsPage() {
     setModalOpen(false);
     setDangerLoading(true);
     try {
-      if (dangerAction === 'responses') {
-        const snapshot = await getDocs(collection(db, 'feedback-responses'));
-        await Promise.all(snapshot.docs.map(d => deleteDoc(d.ref)));
-        showToast('All responses have been permanently deleted.', 'success');
+      if (dangerAction === 'all-forms') {
+        // Use the server-side API so we get Admin SDK batching, proper tenant
+        // scoping, and a formCount reset — none of which are safe client-side.
+        const user = auth.currentUser;
+        if (!user) throw new Error('Not authenticated');
+        const token = await user.getIdToken();
+        const res = await fetch('/api/delete-all-forms', {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error ?? 'Server error');
+        }
+        showToast('All forms and responses have been permanently deleted.', 'success');
       }
-    } catch { showToast('Failed to complete the action. Please try again.', 'error'); }
-    finally { setDangerLoading(false); setDangerAction(null); }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      showToast(`Failed to delete: ${msg}`, 'error');
+    } finally {
+      setDangerLoading(false);
+      setDangerAction(null);
+    }
   };
 
   if (pageLoading) {
@@ -437,10 +453,10 @@ export default function SettingsPage() {
         <Section title="Danger Zone" description="Irreversible actions. Proceed with caution.">
           <div className="border border-red-200 rounded-lg p-4 flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-gray-900">Delete All Responses</p>
-              <p className="text-xs text-gray-500 mt-0.5">Permanently removes every feedback response from the database. This cannot be undone.</p>
+              <p className="text-sm font-medium text-gray-900">Delete All Forms &amp; Responses</p>
+              <p className="text-xs text-gray-500 mt-0.5">Permanently removes every feedback form and all associated responses for your organisation. This cannot be undone.</p>
             </div>
-            <button onClick={() => { setDangerAction('responses'); setModalOpen(true); }} disabled={dangerLoading} className="shrink-0 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors">
+            <button onClick={() => { setDangerAction('all-forms'); setModalOpen(true); }} disabled={dangerLoading} className="shrink-0 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors">
               {dangerLoading ? 'Deleting…' : 'Delete All'}
             </button>
           </div>
@@ -452,7 +468,7 @@ export default function SettingsPage() {
         isOpen={modalOpen}
         variant="danger"
         title="Are you absolutely sure?"
-        message="This will permanently delete all feedback responses from the database. This action cannot be undone."
+        message="This will permanently delete ALL feedback forms and every response submitted to them for your organisation. This action cannot be undone."
         confirmLabel="Yes, delete everything"
         cancelLabel="Cancel"
         onConfirm={handleDangerConfirm}

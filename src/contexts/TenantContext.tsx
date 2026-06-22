@@ -74,7 +74,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
           try {
             if (user) {
               setCurrentUid(user.uid);
-              const tokenResult = await user.getIdTokenResult();
+              const tokenResult = await user.getIdTokenResult(true);
               const claimTenantId = tokenResult.claims.tenantId as string | undefined;
               const claimRole = tokenResult.claims.role as TenantRole | undefined;
 
