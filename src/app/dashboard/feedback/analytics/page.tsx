@@ -20,7 +20,7 @@ import type { FeedbackForm, FeedbackResponse } from '../../../../types';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type TagType = 'sentiment' | 'time' | 'completion' | 'custom';
-type Granularity = 'daily' | 'weekly' | 'monthly';
+type Granularity = 'hourly' | 'daily' | 'weekly' | 'monthly';
 
 const TAG_TYPES: { key: TagType; label: string }[] = [
   { key: 'sentiment',  label: 'Sentiment' },
@@ -30,16 +30,36 @@ const TAG_TYPES: { key: TagType; label: string }[] = [
 ];
 
 const GRANULARITIES: { key: Granularity; label: string }[] = [
+  { key: 'hourly',  label: 'Hourly' },
   { key: 'daily',   label: 'Daily' },
   { key: 'weekly',  label: 'Weekly' },
   { key: 'monthly', label: 'Monthly' },
 ];
 
-// A palette of distinct colors for chart lines
+// A palette of distinct colors for chart lines — generic fallback for
+// non-sentiment tags (time, completion, custom)
 const LINE_COLORS = [
   '#7C3AED', '#10B981', '#EF4444', '#3B82F6',
   '#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6',
 ];
+
+// Semantic color map for known sentiment/tag labels so they always render
+// with the correct meaning regardless of sort order:
+//   Positive → green   Neutral → blue   Negative → red   No Rating → gray
+const LABEL_COLOR_MAP: Record<string, string> = {
+  'Positive':           '#10B981', // green
+  'Neutral':            '#3B82F6', // blue
+  'Negative':           '#EF4444', // red
+  'No Rating':          '#9CA3AF', // gray
+  'Complete':           '#10B981', // green
+  'Fast (<1 min)':      '#10B981', // green
+  'Normal (1-5 min)':   '#3B82F6', // blue
+  'Slow (>5 min)':      '#F59E0B', // yellow/amber
+};
+
+function lineColor(label: string, index: number): string {
+  return LABEL_COLOR_MAP[label] ?? LINE_COLORS[index % LINE_COLORS.length];
+}
 
 // ── Bucketing helpers ─────────────────────────────────────────────────────────
 
@@ -47,6 +67,8 @@ function bucketKey(date: Date, granularity: Granularity): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
+  const h = String(date.getHours()).padStart(2, '0');
+  if (granularity === 'hourly')  return `${y}-${m}-${d} ${h}:00`;
   if (granularity === 'daily')   return `${y}-${m}-${d}`;
   if (granularity === 'monthly') return `${y}-${m}`;
   // weekly — ISO week label "YYYY-Www"
@@ -72,6 +94,7 @@ function fillBuckets(
   while (cursor <= end) {
     const key = bucketKey(cursor, granularity);
     if (!buckets.includes(key)) buckets.push(key);
+    if (granularity === 'hourly')  cursor.setHours(cursor.getHours() + 1);
     if (granularity === 'daily')   cursor.setDate(cursor.getDate() + 1);
     if (granularity === 'weekly')  cursor.setDate(cursor.getDate() + 7);
     if (granularity === 'monthly') cursor.setMonth(cursor.getMonth() + 1);
@@ -89,7 +112,7 @@ function fillBuckets(
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
-  const { tenantId, isLoading: tenantLoading } = useTenant();
+  const { tenantId, isLoading: tenantLoading, isStaff, currentUid } = useTenant();
   const [authReady, setAuthReady] = useState(false);
   const withTimeout = useWithTimeout();
   const [forms, setForms] = useState<FeedbackForm[]>([]);
@@ -119,7 +142,13 @@ export default function AnalyticsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [f, r] = await withTimeout(() => Promise.all([getAllForms(tenantId), getAllResponses(tenantId)]));
+      const createdBy = isStaff && currentUid ? currentUid : undefined;
+      const [f, r] = await withTimeout(async () => {
+        const forms = await getAllForms(tenantId, createdBy);
+        const formIds = createdBy ? forms.map(f => f.id) : undefined;
+        const responses = await getAllResponses(tenantId, formIds);
+        return [forms, responses] as const;
+      });
       setForms(f);
       setResponses(r);
     } catch (err) {
@@ -131,7 +160,7 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, tenantLoading, authReady]);
+  }, [tenantId, tenantLoading, authReady, isStaff, currentUid]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -252,6 +281,7 @@ export default function AnalyticsPage() {
         forms={forms}
         formSelectorValue={formId}
         onFormSelectorChange={setFormId}
+        hideSortButton
       />
 
       {/* Chart controls */}
@@ -301,7 +331,7 @@ export default function AnalyticsPage() {
           <div className="flex flex-wrap gap-2">
             {tagLabels.map((label, i) => (
               <div key={label} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 border border-gray-200 text-sm">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: LINE_COLORS[i % LINE_COLORS.length] }} />
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: lineColor(label, i) }} />
                 <span className="text-gray-700 font-medium">{label}</span>
                 <span className="text-gray-400">{summaryCounts[label] ?? 0}</span>
               </div>
@@ -327,7 +357,7 @@ export default function AnalyticsPage() {
               <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E5E7EB', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }} labelStyle={{ fontWeight: 600, color: '#374151', marginBottom: 4 }} />
               <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} iconType="circle" iconSize={8} />
               {tagLabels.map((label, i) => (
-                <Line key={label} type="monotone" dataKey={label} stroke={LINE_COLORS[i % LINE_COLORS.length]} strokeWidth={2} dot={{ r: 3, strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                <Line key={label} type="monotone" dataKey={label} stroke={lineColor(label, i)} strokeWidth={2} dot={{ r: 3, strokeWidth: 0 }} activeDot={{ r: 5 }} />
               ))}
             </LineChart>
           </ResponsiveContainer>

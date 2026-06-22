@@ -6,7 +6,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 const FALLBACK_EMAIL = 'adminaccess@inan.com.ng';
 
-async function getNotificationEmails(tenantId: string): Promise<string[]> {
+async function getOrgNotificationEmails(tenantId: string): Promise<string[]> {
   try {
     const snap = await getAdminDb().doc(`tenant-settings/${tenantId}/config/notifications`).get();
     if (snap.exists) {
@@ -14,16 +14,49 @@ async function getNotificationEmails(tenantId: string): Promise<string[]> {
       if (Array.isArray(emails) && emails.length > 0) return emails;
     }
   } catch (err) {
-    console.error('Failed to fetch notification emails from Firestore:', err);
+    console.error('Failed to fetch org notification emails:', err);
   }
   return [FALLBACK_EMAIL];
+}
+
+/**
+ * Look up the form's createdBy field, then fetch that user's personal
+ * notificationEmails from tenant-admins/{uid}. Used so staff members
+ * receive alerts for negative responses on their own forms.
+ */
+async function getStaffNotificationEmails(formId: string): Promise<string[]> {
+  if (!formId) return [];
+  try {
+    const db = getAdminDb();
+    const formSnap = await db.doc(`feedback-forms/${formId}`).get();
+    if (!formSnap.exists) return [];
+
+    const createdBy = (formSnap.data() as { createdBy?: string }).createdBy;
+    if (!createdBy) return [];
+
+    const staffSnap = await db.doc(`tenant-admins/${createdBy}`).get();
+    if (!staffSnap.exists) return [];
+
+    const personal = (staffSnap.data() as { notificationEmails?: string[] }).notificationEmails;
+    if (Array.isArray(personal) && personal.length > 0) return personal;
+  } catch (err) {
+    console.error('Failed to fetch staff notification emails:', err);
+  }
+  return [];
 }
 
 export async function POST(req: NextRequest) {
   try {
     const tenantId = req.headers.get('x-tenant-id') || 'inan';
-    const { formTitle, location, tags, timeSpent, visitorCountry, submittedAt } = await req.json();
-    const recipients = await getNotificationEmails(tenantId);
+    const { formId, formTitle, location, tags, timeSpent, visitorCountry, submittedAt } = await req.json();
+
+    // Fetch org-wide and staff personal emails in parallel, then deduplicate
+    const [orgEmails, staffEmails] = await Promise.all([
+      getOrgNotificationEmails(tenantId),
+      getStaffNotificationEmails(formId ?? ''),
+    ]);
+    const recipients = Array.from(new Set([...orgEmails, ...staffEmails]));
+
     const tagLabels = (tags as { label: string }[]).map(t => t.label).join(', ');
 
     // Resolve tenant display name for email sender

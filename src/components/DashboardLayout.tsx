@@ -50,7 +50,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [displayName, setDisplayName] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
   const [role, setRole] = useState('Admin');
-  const { tenant, isImpersonating } = useTenant();
+  const { tenant, isImpersonating, isOwner, isStaff } = useTenant();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -59,8 +59,10 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         setPhotoUrl(user.photoURL || '');
         user.getIdTokenResult().then((result) => {
           const isSuper = result.claims.superAdmin === true;
+          const userRole = result.claims.role as string | undefined;
           setIsSuperAdmin(isSuper);
-          setRole(isSuper ? 'Super Admin' : 'Admin');
+          // Display "Admin" for owners, "Staff" for staff — never show the raw "owner" claim
+          setRole(isSuper ? 'Super Admin' : userRole === 'owner' ? 'Admin' : 'Staff');
         });
 
         // Fire welcome email once — the API guards against duplicates server-side
@@ -93,7 +95,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         { href: '/dashboard/feedback/analytics', label: 'Analytics' },
       ],
     },
-    { href: '/dashboard/settings', label: 'Settings',    icon: IconSettings,    show: true },
+    { href: '/dashboard/settings', label: 'Settings', icon: IconSettings, show: isOwner || isStaff || isSuperAdmin },
     { href: '/super-admin',        label: 'Super Admin', icon: IconSuperAdmin,  show: isSuperAdmin && !isImpersonating },
   ];
 

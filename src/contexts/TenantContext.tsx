@@ -4,13 +4,22 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
-import type { Tenant } from '../types';
+import type { Tenant, TenantRole } from '../types';
 
 interface TenantContextValue {
   tenant: Tenant | null;
   tenantId: string;
   isLoading: boolean;
   isImpersonating: boolean;
+  role: TenantRole | null;
+  /** True when role === 'owner'. Kept for backward compat — prefer isAdmin in new code. */
+  isOwner: boolean;
+  /** Alias for isOwner. The "owner" data-layer role is displayed as "Admin" in the UI. */
+  isAdmin: boolean;
+  isStaff: boolean;
+  currentUid: string | null;
+  /** Human-readable label for the current user's role. */
+  roleLabel: string;
 }
 
 const TenantContext = createContext<TenantContextValue>({
@@ -18,6 +27,12 @@ const TenantContext = createContext<TenantContextValue>({
   tenantId: 'inan',
   isLoading: true,
   isImpersonating: false,
+  role: null,
+  isOwner: false,
+  isAdmin: false,
+  isStaff: false,
+  currentUid: null,
+  roleLabel: '—',
 });
 
 export function useTenant(): TenantContextValue {
@@ -33,6 +48,8 @@ export function TenantProvider({ children }: TenantProviderProps) {
   const [tenantId, setTenantId] = useState<string>('inan');
   const [isLoading, setIsLoading] = useState(true);
   const [isImpersonating, setIsImpersonating] = useState(false);
+  const [role, setRole] = useState<TenantRole | null>(null);
+  const [currentUid, setCurrentUid] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -52,17 +69,18 @@ export function TenantProvider({ children }: TenantProviderProps) {
           }
         }
 
-        // Not impersonating — resolve tenant from the logged-in user's auth token claim.
-        // This is the correct source of truth: the custom claim set at registration
-        // tells us exactly which tenant this user belongs to, regardless of domain.
+        // Not impersonating — resolve tenant + role from the logged-in user's auth token claim.
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
           try {
             if (user) {
+              setCurrentUid(user.uid);
               const tokenResult = await user.getIdTokenResult();
               const claimTenantId = tokenResult.claims.tenantId as string | undefined;
+              const claimRole = tokenResult.claims.role as TenantRole | undefined;
+
+              if (claimRole) setRole(claimRole);
 
               if (claimTenantId) {
-                // Load the full tenant document using the claim
                 const tenantSnap = await getDoc(doc(db, 'tenants', claimTenantId));
                 if (tenantSnap.exists()) {
                   setTenant({ id: tenantSnap.id, ...tenantSnap.data() } as Tenant);
@@ -70,8 +88,19 @@ export function TenantProvider({ children }: TenantProviderProps) {
                 } else {
                   setTenantId(claimTenantId);
                 }
+
+                // If role wasn't in the claim, fall back to reading tenant-admins doc
+                if (!claimRole) {
+                  try {
+                    const adminSnap = await getDoc(doc(db, 'tenant-admins', user.uid));
+                    if (adminSnap.exists()) {
+                      const r = adminSnap.data().role as TenantRole | undefined;
+                      if (r) setRole(r);
+                    }
+                  } catch { /* non-fatal */ }
+                }
               } else {
-                // No claim — fall back to domain-based resolution from the API
+                // No claim — fall back to domain-based resolution
                 const fallbackRes = await fetch('/api/tenant/current');
                 if (fallbackRes.ok) {
                   const data = await fallbackRes.json();
@@ -84,6 +113,8 @@ export function TenantProvider({ children }: TenantProviderProps) {
                 }
               }
             } else {
+              setCurrentUid(null);
+              setRole(null);
               // Not logged in — use domain-based resolution (for public pages)
               const fallbackRes = await fetch('/api/tenant/current');
               if (fallbackRes.ok) {
@@ -111,8 +142,17 @@ export function TenantProvider({ children }: TenantProviderProps) {
     load();
   }, []);
 
+  // "owner" in Firestore/claims is the organisation admin — displayed as "Admin" in the UI.
+  const isOwner = role === 'owner';
+  const isAdmin = isOwner;
+  const isStaff = role === 'staff';
+  const roleLabel = isOwner ? 'Admin' : isStaff ? 'Staff' : '—';
+
   return (
-    <TenantContext.Provider value={{ tenant, tenantId, isLoading, isImpersonating }}>
+    <TenantContext.Provider value={{
+      tenant, tenantId, isLoading, isImpersonating,
+      role, isOwner, isAdmin, isStaff, currentUid, roleLabel,
+    }}>
       {children}
     </TenantContext.Provider>
   );

@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { deactivateForm, reactivateForm, deleteForm, updateForm } from '../lib/firestore';
 import FeedbackFormEditor from './FeedbackFormEditor';
 import Modal from './Modal';
 import Toast from './Toast';
 import FilterSortBar from './FilterSortBar';
+import PaginationBar from './PaginationBar';
 import { useToast } from '../hooks/useToast';
+import { usePagination } from '../hooks/usePagination';
 import type { FeedbackForm, FeedbackResponse } from '../types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -424,6 +426,11 @@ export default function FeedbackFormsList({ forms, responses, onFormsChange }: F
     return result;
   }, [forms, responses, search, selectedStatuses, dateFrom, dateTo, activeSort]);
 
+  const { page, pageCount, paginated, goTo, next, prev, reset } = usePagination(sortedForms, 6);
+
+  // Reset to page 1 whenever filters or sort change
+  useEffect(() => { reset(); }, [search, selectedStatuses, dateFrom, dateTo, activeSort, reset]);
+
   return (
     <>
       <Toast toasts={toasts} onDismiss={dismissToast} />
@@ -464,7 +471,7 @@ export default function FeedbackFormsList({ forms, responses, onFormsChange }: F
         </div>
       ) : (
         <div className="space-y-4">
-          {sortedForms.map(form => (
+          {paginated.map(form => (
             <FormCard
               key={form.id}
               form={form}
@@ -475,6 +482,13 @@ export default function FeedbackFormsList({ forms, responses, onFormsChange }: F
               onDelete={() => setDeleteTarget(form)}
             />
           ))}
+          <PaginationBar
+            page={page}
+            pageCount={pageCount}
+            onPrev={prev}
+            onNext={next}
+            onGoTo={goTo}
+          />
         </div>
       )}
 

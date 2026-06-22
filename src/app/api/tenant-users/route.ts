@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '../../../lib/firebaseAdmin';
 import { getAuth } from 'firebase-admin/auth';
-
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase-admin/firestore';
 
 export const dynamic = 'force-dynamic';
@@ -41,8 +40,11 @@ export async function GET(req: NextRequest) {
     const users = snap.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => ({
       uid: doc.id,
       email: doc.data().email ?? '',
+      role: doc.data().role ?? 'staff',
       createdAt: doc.data().createdAt ?? null,
       welcomeSent: doc.data().welcomeSent ?? false,
+      formCount: doc.data().formCount ?? 0,
+      formLimit: doc.data().formLimit ?? null,
     }));
 
     return NextResponse.json({ users });

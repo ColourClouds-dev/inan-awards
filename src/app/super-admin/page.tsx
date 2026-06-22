@@ -18,8 +18,11 @@ import { useToast } from '../../hooks/useToast';
 interface TenantAdminUser {
   uid: string;
   email: string;
+  role?: 'owner' | 'staff';
   createdAt?: { seconds: number } | null;
   welcomeSent?: boolean;
+  formCount?: number;
+  formLimit?: number | null;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -68,6 +71,7 @@ export default function SuperAdminPage() {
   const [userLoading, setUserLoading] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ uid: string; email: string; tenantId: string } | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [roleChanging, setRoleChanging] = useState<string | null>(null); // uid being updated
 
   // ── New tenant form state ──────────────────────────────────────────────────
   const [newTenant, setNewTenant] = useState<Partial<Tenant>>({
@@ -259,7 +263,6 @@ export default function SuperAdminPage() {
         const data = await res.json();
         throw new Error(data.error || 'Failed to delete user');
       }
-      // Remove from local state
       setTenantUsers(prev => ({
         ...prev,
         [deleteTarget.tenantId]: (prev[deleteTarget.tenantId] ?? []).filter(
@@ -272,6 +275,40 @@ export default function SuperAdminPage() {
     } finally {
       setDeleteLoading(false);
       setDeleteTarget(null);
+    }
+  };
+
+  // ── Change user role ──────────────────────────────────────────────────────
+  const handleChangeUserRole = async (
+    uid: string,
+    newRole: 'owner' | 'staff',
+    tenantId: string,
+  ) => {
+    setRoleChanging(uid);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Not authenticated');
+      const token = await user.getIdToken();
+      const res = await fetch('/api/update-user-role', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ uid, role: newRole }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update role');
+      }
+      setTenantUsers(prev => ({
+        ...prev,
+        [tenantId]: (prev[tenantId] ?? []).map(u =>
+          u.uid === uid ? { ...u, role: newRole } : u
+        ),
+      }));
+      showToast('Role updated.', 'success');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to update role.', 'error');
+    } finally {
+      setRoleChanging(null);
     }
   };
 
@@ -465,10 +502,22 @@ export default function SuperAdminPage() {
                         key={user.uid}
                         className="flex items-center justify-between bg-white rounded-md border border-gray-200 px-4 py-2.5 gap-4"
                       >
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-800 truncate">{user.email}</p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-medium text-gray-800 truncate">{user.email}</p>
+                            <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded-full ${
+                              user.role === 'owner'
+                                ? 'bg-purple-100 text-purple-700'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {user.role ?? 'staff'}
+                            </span>
+                          </div>
                           <p className="text-xs text-gray-400 mt-0.5">
                             Joined {formatDate(user.createdAt)}
+                            {user.formCount !== undefined && user.formLimit !== undefined && user.formLimit !== null && (
+                              <span className="ml-2">· Forms: {user.formCount}/{user.formLimit}</span>
+                            )}
                             {user.welcomeSent && (
                               <span className="ml-2 inline-flex items-center gap-1 text-green-600">
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -480,16 +529,33 @@ export default function SuperAdminPage() {
                           </p>
                         </div>
 
-                        {/* Delete user button */}
-                        <button
-                          onClick={() => setDeleteTarget({ uid: user.uid, email: user.email, tenantId: tenant.id })}
-                          title={`Remove ${user.email}`}
-                          className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors shrink-0"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {/* Role selector */}
+                          <select
+                            value={user.role ?? 'staff'}
+                            disabled={roleChanging === user.uid}
+                            onChange={e => handleChangeUserRole(
+                              user.uid,
+                              e.target.value as 'owner' | 'staff',
+                              tenant.id
+                            )}
+                            className="text-xs border border-gray-200 rounded-md px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 disabled:opacity-50"
+                          >
+                            <option value="owner">Owner</option>
+                            <option value="staff">Staff</option>
+                          </select>
+
+                          {/* Delete user button */}
+                          <button
+                            onClick={() => setDeleteTarget({ uid: user.uid, email: user.email, tenantId: tenant.id })}
+                            title={`Remove ${user.email}`}
+                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>

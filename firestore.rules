@@ -18,13 +18,12 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // True if the authenticated user's token claim matches the given tenantId.
-    // Used for both document-level and query-level checks.
+    // True if the caller's token tenantId claim matches the given tenantId.
     function ownsTenantClaim(tenantId) {
       return isAuthenticated() && request.auth.token.tenantId == tenantId;
     }
 
-    // True if the document's tenantId field matches the user's claim.
+    // True if the document's tenantId field matches the caller's claim.
     // Falls back to legacy isAdmin() for backward compatibility.
     function ownsTenant(docTenantId) {
       return isAuthenticated() && (
@@ -32,30 +31,77 @@ service cloud.firestore {
       );
     }
 
+    // True if the caller is an 'owner' (displayed as "Admin") of the given tenant.
+    // 'owner' is the raw value stored in Firestore/claims.
+    function isOwnerOf(tenantId) {
+      return isAuthenticated() &&
+        request.auth.token.role == 'owner' &&
+        request.auth.token.tenantId == tenantId;
+    }
+
+    // True if the caller is any member (owner or staff) of the given tenant.
+    function isMemberOf(tenantId) {
+      return isAuthenticated() && request.auth.token.tenantId == tenantId;
+    }
+
     // ── Tenants ─────────────────────────────────────────────────────────────
     match /tenants/{tenantId} {
       allow read: if isSuperAdmin() || ownsTenantClaim(tenantId);
-      // Super admins can write anything; tenant admins can update their own doc
-      // (e.g. branding, settings) but cannot create or delete tenants.
       allow create, delete: if isSuperAdmin();
-      allow update: if isSuperAdmin() || ownsTenantClaim(tenantId);
+      // Owners can update their own tenant (branding, settings).
+      // Staff cannot write to the tenant doc at all.
+      allow update: if isSuperAdmin() || isOwnerOf(tenantId);
     }
 
     // ── Tenant admins mapping ───────────────────────────────────────────────
     match /tenant-admins/{uid} {
-      allow read: if isSuperAdmin() || request.auth.uid == uid;
-      allow write: if isSuperAdmin() || request.auth.uid == uid;
+      // Super admins can read any doc.
+      // Owners can read all docs for their tenant — uses token claim for query compatibility.
+      // Any user can read their own doc.
+      allow read: if isSuperAdmin()
+                  || request.auth.uid == uid
+                  || (request.auth.token.role == 'owner' && request.auth.token.tenantId != null);
+
+      // Super admins can write anything.
+      allow create: if isSuperAdmin() || request.auth.uid == uid;
+      allow delete: if isSuperAdmin();
+
+      // Updates:
+      // - Super admins: unrestricted.
+      // - Owners: can update their own doc without restriction.
+      // - Staff: can only update their own doc, and only the notificationEmails field.
+      allow update: if isSuperAdmin()
+                    || (
+                      request.auth.uid == uid &&
+                      request.auth.token.role == 'owner'
+                    )
+                    || (
+                      request.auth.uid == uid &&
+                      request.auth.token.role == 'staff' &&
+                      request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['notificationEmails'])
+                    );
     }
 
     // ── Per-tenant settings ─────────────────────────────────────────────────
+    // All tenant members can read settings (staff need locations for the forms UI).
+    // Only owners and super admins can write settings.
     match /tenant-settings/{tenantId}/config/{key} {
-      allow read: if isSuperAdmin() || ownsTenantClaim(tenantId);
-      allow write: if isSuperAdmin() || ownsTenantClaim(tenantId);
+      allow read: if isSuperAdmin() || isMemberOf(tenantId);
+      allow write: if isSuperAdmin() || isOwnerOf(tenantId);
+    }
+
+    // ── Tenant invitations ──────────────────────────────────────────────────
+    // Readable by any authenticated user (register page validates token without auth).
+    // Only the server (admin SDK) writes these — no client write needed.
+    match /tenant-invitations/{token} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
     }
 
     // ── Feedback forms ──────────────────────────────────────────────────────
     // Public can read active forms.
-    // Tenant admin can read ALL their forms (including inactive) via query.
+    // Any tenant member can read all forms in their tenant (including inactive).
     match /feedback-forms/{formId} {
       allow read: if resource.data.isActive == true
                   || isSuperAdmin()
@@ -66,9 +112,7 @@ service cloud.firestore {
 
     // ── Feedback responses ──────────────────────────────────────────────────
     // Anyone can create (public form submission).
-    // Tenant admin can read/update/delete their own responses.
-    // The query-level rule allows listing even when the collection is empty
-    // by checking the user's token claim directly.
+    // Tenant members can read/update/delete responses for their tenant.
     match /feedback-responses/{responseId} {
       allow create: if true;
       allow read: if isSuperAdmin()

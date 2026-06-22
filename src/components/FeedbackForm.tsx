@@ -357,6 +357,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            formId: form.id,
             formTitle: form.title,
             location: form.location,
             tags,

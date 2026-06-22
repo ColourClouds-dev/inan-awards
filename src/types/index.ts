@@ -6,6 +6,34 @@ export interface TenantFeatures {
   hidePoweredBy: boolean;
 }
 
+// Role within a tenant — 'owner' is the person who registered the organisation
+export type TenantRole = 'owner' | 'staff';
+
+export interface TenantAdmin {
+  uid: string;
+  tenantId: string;
+  email: string;
+  role: TenantRole;
+  createdAt: Date | Timestamp;
+  welcomeSent?: boolean;
+  photoUrl?: string;
+  formCount?: number;  // per-user form count
+  formLimit?: number;  // per-user form limit (defaults to tenant formLimit)
+  invitedBy?: string;  // UID of the owner who sent the invitation
+  notificationEmails?: string[];  // personal emails for negative feedback alerts (staff only)
+}
+
+export interface TenantInvitation {
+  id: string;
+  tenantId: string;
+  email: string;
+  role: TenantRole;
+  invitedBy: string;   // owner UID
+  createdAt: Date | Timestamp;
+  expiresAt: Date | Timestamp;
+  used: boolean;
+}
+
 export interface Tenant {
   id: string; // slug e.g. "inan", "acme-corp"
   name: string; // display name e.g. "Inan Hotels"
@@ -37,6 +65,8 @@ export interface FeedbackForm {
   stepByStep?: boolean;
   customTagRules?: CustomTagRule[];
   ogImageUrl?: string;
+  createdBy?: string;  // UID of the user who created this form
+  tenantId?: string;   // denormalised for query scoping
 }
 
 export interface FeedbackQuestion {

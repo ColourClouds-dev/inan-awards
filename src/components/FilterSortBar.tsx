@@ -53,6 +53,8 @@ export interface FilterSortBarProps {
   forms?: { id: string; title: string }[];
   formSelectorValue?: string;
   onFormSelectorChange?: (formId: string) => void;
+  /** When true, the Sort button is not rendered (e.g. analytics page) */
+  hideSortButton?: boolean;
 }
 
 // ── Shared icons ──────────────────────────────────────────────────────────────
@@ -121,22 +123,19 @@ export default function FilterSortBar({
   forms,
   formSelectorValue,
   onFormSelectorChange,
+  hideSortButton = false,
 }: FilterSortBarProps) {
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
 
-  // Staged filter state — only committed on Apply
+  // Staged filter state — only pills are staged; dates apply live
   const [stagedStatuses, setStagedStatuses] = useState<string[]>(selectedStatuses);
-  const [stagedFrom, setStagedFrom] = useState(dateFrom);
-  const [stagedTo, setStagedTo] = useState(dateTo);
   const [pillSearch, setPillSearch] = useState('');
   const [formSearch, setFormSearch] = useState('');
 
   // Sync staged state when panel opens
   const handleFilterOpen = () => {
     setStagedStatuses(selectedStatuses);
-    setStagedFrom(dateFrom);
-    setStagedTo(dateTo);
     setPillSearch('');
     setFormSearch('');
     setFilterOpen(true);
@@ -144,22 +143,18 @@ export default function FilterSortBar({
   };
 
   const handleApply = () => {
-    // Commit staged values to parent
+    // Commit staged pill selections to parent
     stagedStatuses.forEach(s => {
       if (!selectedStatuses.includes(s)) onStatusToggle(s);
     });
     selectedStatuses.forEach(s => {
       if (!stagedStatuses.includes(s)) onStatusToggle(s);
     });
-    onDateFromChange(stagedFrom);
-    onDateToChange(stagedTo);
     setFilterOpen(false);
   };
 
   const handleClear = () => {
     setStagedStatuses([]);
-    setStagedFrom('');
-    setStagedTo('');
     onClearFilters();
     setFilterOpen(false);
   };
@@ -170,8 +165,11 @@ export default function FilterSortBar({
   useOutsideClick(filterRef, useCallback(() => setFilterOpen(false), []));
   useOutsideClick(sortRef, useCallback(() => setSortOpen(false), []));
 
-  // Active filter count for badge
+  // Active filter count — dates read directly from props since they apply live
   const activeFilterCount = selectedStatuses.length + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0) + (formSelectorValue ? 1 : 0);
+
+  // Date validation — warn if from is after to
+  const dateRangeInvalid = !!(dateFrom && dateTo && dateFrom > dateTo);
 
   // Active sort label
   const activeSortLabel = sortOptions.find(o => o.key === activeSort)?.label ?? 'Sort';
@@ -327,7 +325,7 @@ export default function FilterSortBar({
 
             <div className="border-t border-gray-100" />
 
-            {/* Date range */}
+            {/* Date range — applies live on change */}
             <div>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">{dateLabel}</p>
               <div className="flex gap-2">
@@ -335,9 +333,11 @@ export default function FilterSortBar({
                   <label className="text-xs text-gray-500 mb-1 block">From</label>
                   <input
                     type="date"
-                    value={stagedFrom}
-                    onChange={e => setStagedFrom(e.target.value)}
-                    className="w-full h-8 rounded-md border border-gray-200 px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:border-transparent"
+                    value={dateFrom}
+                    onChange={e => onDateFromChange(e.target.value)}
+                    className={`w-full h-8 rounded-md border px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:border-transparent ${
+                      dateRangeInvalid ? 'border-red-400' : 'border-gray-200'
+                    }`}
                     style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
                   />
                 </div>
@@ -345,13 +345,18 @@ export default function FilterSortBar({
                   <label className="text-xs text-gray-500 mb-1 block">To</label>
                   <input
                     type="date"
-                    value={stagedTo}
-                    onChange={e => setStagedTo(e.target.value)}
-                    className="w-full h-8 rounded-md border border-gray-200 px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:border-transparent"
+                    value={dateTo}
+                    onChange={e => onDateToChange(e.target.value)}
+                    className={`w-full h-8 rounded-md border px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:border-transparent ${
+                      dateRangeInvalid ? 'border-red-400' : 'border-gray-200'
+                    }`}
                     style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
                   />
                 </div>
               </div>
+              {dateRangeInvalid && (
+                <p className="text-xs text-red-500 mt-1.5">Start date must be before end date.</p>
+              )}
             </div>
 
             <div className="border-t border-gray-100" />
@@ -363,7 +368,8 @@ export default function FilterSortBar({
               </button>
               <button
                 onClick={handleApply}
-                className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors"
+                disabled={dateRangeInvalid}
+                className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ backgroundColor: 'var(--brand)' }}
               >
                 Apply
@@ -374,6 +380,7 @@ export default function FilterSortBar({
       </div>
 
       {/* ── Sort dropdown ───────────────────────────────────────────────────── */}
+      {!hideSortButton && (
       <div ref={sortRef} className="relative shrink-0">
         <button
           onClick={() => { setSortOpen(o => !o); setFilterOpen(false); }}
@@ -405,6 +412,7 @@ export default function FilterSortBar({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '../../../lib/firebaseAdmin';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import type { TenantRole } from '../../../types';
 
 function getAdminAuth() {
   if (!getApps().length) {
@@ -18,42 +19,81 @@ function getAdminAuth() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { uid, email } = await req.json();
+    const { uid, email, inviteToken } = await req.json();
 
     if (!uid || !email) {
       return NextResponse.json({ error: 'uid and email are required.' }, { status: 400 });
     }
 
-    // Resolve the tenant from the middleware-injected header.
-    // This is the same header that every other request uses, so it correctly
-    // resolves to whichever tenant is hosting this subdomain.
     const tenantId = req.headers.get('x-tenant-id');
-
     if (!tenantId) {
       return NextResponse.json({ error: 'Could not resolve tenant.' }, { status: 400 });
     }
 
     const db = getAdminDb();
 
-    // Confirm the tenant actually exists before assigning the user to it.
+    // Confirm the tenant exists
     const tenantSnap = await db.doc(`tenants/${tenantId}`).get();
     if (!tenantSnap.exists) {
       return NextResponse.json({ error: 'Tenant not found.' }, { status: 404 });
     }
+    const tenantData = tenantSnap.data() as { formLimit?: number };
+    const tenantFormLimit = tenantData.formLimit ?? 5;
 
-    // Write the tenant-admins mapping so Firestore rules and any
-    // server-side lookups can resolve this user → tenant relationship.
+    // Resolve role — check invitation token first, default to 'staff'
+    let role: TenantRole = 'staff';
+    let inviteDocRef: FirebaseFirestore.DocumentReference | null = null;
+
+    if (inviteToken) {
+      const inviteSnap = await db.doc(`tenant-invitations/${inviteToken}`).get();
+      if (inviteSnap.exists) {
+        const invite = inviteSnap.data() as {
+          tenantId: string;
+          email: string;
+          role: TenantRole;
+          used: boolean;
+          expiresAt: { toDate: () => Date } | Date;
+        };
+
+        // Validate: same tenant, same email, not used, not expired
+        const expiresAt = typeof invite.expiresAt === 'object' && 'toDate' in invite.expiresAt
+          ? invite.expiresAt.toDate()
+          : new Date(invite.expiresAt as unknown as string);
+
+        if (
+          invite.tenantId === tenantId &&
+          invite.email.toLowerCase() === email.toLowerCase() &&
+          !invite.used &&
+          expiresAt > new Date()
+        ) {
+          role = invite.role;
+          inviteDocRef = db.doc(`tenant-invitations/${inviteToken}`);
+        }
+      }
+    }
+
+    // Write tenant-admins doc
     await db.doc(`tenant-admins/${uid}`).set(
-      { tenantId, email, createdAt: new Date() },
+      {
+        tenantId,
+        email,
+        role,
+        createdAt: new Date(),
+        formCount: 0,
+        formLimit: tenantFormLimit,
+      },
       { merge: true }
     );
 
-    // Stamp the tenantId as a custom claim on the Firebase Auth token.
-    // This is what TenantContext reads via getIdTokenResult() and what
-    // Firestore security rules check via request.auth.token.tenantId.
-    await getAdminAuth().setCustomUserClaims(uid, { tenantId });
+    // Stamp tenantId + role as custom claims
+    await getAdminAuth().setCustomUserClaims(uid, { tenantId, role });
 
-    return NextResponse.json({ success: true, tenantId });
+    // Mark invite as used (fire-and-forget)
+    if (inviteDocRef) {
+      inviteDocRef.update({ used: true }).catch(() => {});
+    }
+
+    return NextResponse.json({ success: true, tenantId, role });
   } catch (err) {
     console.error('add-tenant-user error:', err);
     return NextResponse.json({ error: 'Failed to add user to tenant.' }, { status: 500 });

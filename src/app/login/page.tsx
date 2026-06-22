@@ -9,22 +9,15 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
-import CreateAccountModal from '../../components/CreateAccountModal';
 
 function getErrorMessage(error: { code?: string } | null | undefined): string {
   switch (error?.code) {
-    case 'auth/invalid-email':
-      return 'Invalid email address format.';
-    case 'auth/user-disabled':
-      return 'This account has been disabled.';
-    case 'auth/user-not-found':
-      return 'No account found with this email.';
-    case 'auth/wrong-password':
-      return 'Incorrect password.';
-    case 'auth/too-many-requests':
-      return 'Too many failed attempts. Please try again later.';
-    default:
-      return 'Failed to sign in. Please check your credentials.';
+    case 'auth/invalid-email': return 'Invalid email address format.';
+    case 'auth/user-disabled': return 'This account has been disabled.';
+    case 'auth/user-not-found': return 'No account found with this email.';
+    case 'auth/wrong-password': return 'Incorrect password.';
+    case 'auth/too-many-requests': return 'Too many failed attempts. Please try again later.';
+    default: return 'Failed to sign in. Please check your credentials.';
   }
 }
 
@@ -34,12 +27,9 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [showCreateAccount, setShowCreateAccount] = useState(false);
   const [tenantName, setTenantName] = useState('');
   const [tenantLogo, setTenantLogo] = useState('');
-  const [tenantColor, setTenantColor] = useState('#7C3AED');
 
-  // Forgot password state
   const [mode, setMode] = useState<'login' | 'forgot'>('login');
   const [resetEmail, setResetEmail] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
@@ -47,7 +37,6 @@ export default function LoginPage() {
   const { toasts, showToast, dismissToast } = useToast();
   const router = useRouter();
 
-  // Fetch tenant name for dynamic branding
   useEffect(() => {
     fetch('/api/tenant/current')
       .then(r => r.ok ? r.json() : null)
@@ -55,7 +44,6 @@ export default function LoginPage() {
         if (data?.tenant?.name) setTenantName(data.tenant.name);
         if (data?.tenant?.branding?.logoUrl) setTenantLogo(data.tenant.branding.logoUrl);
         if (data?.tenant?.branding?.primaryColor) {
-          setTenantColor(data.tenant.branding.primaryColor);
           document.documentElement.style.setProperty('--brand', data.tenant.branding.primaryColor);
         }
       })
@@ -64,8 +52,12 @@ export default function LoginPage() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
+      if (user && user.emailVerified) {
         router.push('/dashboard');
+      } else if (user && !user.emailVerified) {
+        // Unverified user — came from registration. Send to verify page.
+        auth.signOut();
+        router.push(`/verify-email?email=${encodeURIComponent(user.email ?? '')}`);
       } else {
         setIsCheckingAuth(false);
       }
@@ -81,8 +73,8 @@ export default function LoginPage() {
       await signInWithEmailAndPassword(auth, email, password);
       showToast('Signed in successfully!', 'success');
       setTimeout(() => router.push('/dashboard'), 1000);
-    } catch (err: any) {
-      const msg = getErrorMessage(err);
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err as { code?: string });
       setError(msg);
       showToast(msg, 'error');
     } finally {
@@ -92,27 +84,17 @@ export default function LoginPage() {
 
   const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resetEmail.trim()) {
-      showToast('Please enter your email address.', 'error');
-      return;
-    }
+    if (!resetEmail.trim()) { showToast('Please enter your email address.', 'error'); return; }
     setResetLoading(true);
     try {
       await sendPasswordResetEmail(auth, resetEmail.trim());
       showToast('Password reset email sent! Check your inbox.', 'success');
-      // Switch back to login after a short delay so the user sees the toast
-      setTimeout(() => {
-        setMode('login');
-        setResetEmail('');
-      }, 2500);
-    } catch (err: any) {
-      if (err?.code === 'auth/user-not-found') {
-        showToast('No account found with that email address.', 'error');
-      } else if (err?.code === 'auth/invalid-email') {
-        showToast('Please enter a valid email address.', 'error');
-      } else {
-        showToast('Failed to send reset email. Please try again.', 'error');
-      }
+      setTimeout(() => { setMode('login'); setResetEmail(''); }, 2500);
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code;
+      if (code === 'auth/user-not-found') showToast('No account found with that email address.', 'error');
+      else if (code === 'auth/invalid-email') showToast('Please enter a valid email address.', 'error');
+      else showToast('Failed to send reset email. Please try again.', 'error');
     } finally {
       setResetLoading(false);
     }
@@ -129,10 +111,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <Toast toasts={toasts} onDismiss={dismissToast} />
-      <CreateAccountModal
-        isOpen={showCreateAccount}
-        onClose={() => setShowCreateAccount(false)}
-      />
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="text-center">
@@ -142,11 +120,11 @@ export default function LoginPage() {
             </svg>
             Back to Home
           </Link>
-          {tenantLogo ? (
+          {tenantLogo && (
             <div className="flex justify-center mb-4">
               <img src={tenantLogo} alt={tenantName} className="h-12 w-auto max-w-[200px] object-contain" />
             </div>
-          ) : null}
+          )}
           <h1 className="mt-2 text-center text-xl font-bold text-gray-900">
             {tenantName ? `${tenantName} — Admin` : 'Feedback Management System'}
           </h1>
@@ -159,19 +137,16 @@ export default function LoginPage() {
           {/* ── Login form ─────────────────────────────────────────────── */}
           {mode === 'login' && (
             <form className="space-y-6" onSubmit={handleSubmit}>
-              <div>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  label="Email address"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                label="Email address"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+              />
               <div>
                 <Input
                   id="password"
@@ -181,7 +156,7 @@ export default function LoginPage() {
                   autoComplete="current-password"
                   required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={e => setPassword(e.target.value)}
                 />
                 <div className="flex justify-end mt-1">
                   <button
@@ -195,17 +170,11 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <div className="rounded-md bg-red-50 p-4">
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="ml-3">
-                      <h3 className="text-sm font-medium text-red-800">{error}</h3>
-                    </div>
-                  </div>
+                <div className="rounded-md bg-red-50 p-4 flex gap-3">
+                  <svg className="h-5 w-5 text-red-400 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                  <p className="text-sm text-red-800">{error}</p>
                 </div>
               )}
 
@@ -220,11 +189,8 @@ export default function LoginPage() {
             <form className="space-y-6" onSubmit={handlePasswordReset}>
               <div className="text-center space-y-1">
                 <h2 className="text-xl font-semibold text-gray-900">Reset your password</h2>
-                <p className="text-sm text-gray-500">
-                  Enter your email and we&apos;ll send you a link to reset your password.
-                </p>
+                <p className="text-sm text-gray-500">Enter your email and we&apos;ll send you a reset link.</p>
               </div>
-
               <Input
                 id="reset-email"
                 name="reset-email"
@@ -233,19 +199,12 @@ export default function LoginPage() {
                 autoComplete="email"
                 required
                 value={resetEmail}
-                onChange={(e) => setResetEmail(e.target.value)}
+                onChange={e => setResetEmail(e.target.value)}
                 placeholder="Enter your account email"
               />
-
-              <Button
-                type="submit"
-                disabled={resetLoading}
-                isLoading={resetLoading}
-                loadingText="Sending…"
-              >
+              <Button type="submit" disabled={resetLoading} isLoading={resetLoading} loadingText="Sending…">
                 Send Reset Link
               </Button>
-
               <div className="text-center">
                 <button
                   type="button"
@@ -263,16 +222,17 @@ export default function LoginPage() {
         </div>
       </div>
 
+      {/* ── Create account link ─────────────────────────────────────────── */}
       {mode === 'login' && (
         <div className="mt-4 sm:mx-auto sm:w-full sm:max-w-md text-center">
           <p className="text-sm text-gray-600">
             Don&apos;t have an account?{' '}
-            <button
-              onClick={() => setShowCreateAccount(true)}
+            <Link
+              href="/create-account"
               className="font-medium text-purple-600 hover:text-purple-800 transition-colors"
             >
               Create one
-            </button>
+            </Link>
           </p>
         </div>
       )}

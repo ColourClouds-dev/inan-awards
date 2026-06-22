@@ -1,20 +1,18 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../lib/firebase';
-import CreateAccountModal from '../components/CreateAccountModal';
 
 export default function HomePage() {
-  const [showCreateAccount, setShowCreateAccount] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
+      if (user && user.emailVerified) {
         router.replace('/dashboard');
       }
     });
@@ -23,22 +21,12 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white">
-      <CreateAccountModal
-        isOpen={showCreateAccount}
-        onClose={() => setShowCreateAccount(false)}
-      />
       {/* Header */}
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center">
-              <Image
-                src="/inan.svg"
-                alt="INAN Logo"
-                width={100}
-                height={100}
-                className="mr-3"
-              />
+              <Image src="/inan.svg" alt="INAN Logo" width={100} height={100} className="mr-3" />
             </div>
             <div className="flex items-center gap-3">
               <Link
@@ -47,12 +35,12 @@ export default function HomePage() {
               >
                 Sign In
               </Link>
-              <button
-                onClick={() => setShowCreateAccount(true)}
+              <Link
+                href="/create-account"
                 className="inline-flex items-center px-4 py-2 border border-purple-600 text-sm font-medium rounded-md text-purple-600 bg-white hover:bg-purple-50 transition-colors"
               >
                 Sign Up
-              </button>
+              </Link>
             </div>
           </div>
         </div>
@@ -85,12 +73,12 @@ export default function HomePage() {
               <p className="text-sm text-gray-500 mb-5">
                 Your organisation is already on the platform. Create your staff account and get access to the dashboard.
               </p>
-              <button
-                onClick={() => setShowCreateAccount(true)}
+              <Link
+                href="/create-account"
                 className="w-full inline-flex justify-center items-center px-4 py-2 border border-purple-600 text-sm font-medium rounded-md text-purple-600 bg-white hover:bg-purple-50 transition-colors"
               >
                 Join Your Team
-              </button>
+              </Link>
             </div>
 
             {/* Set up your organisation */}
@@ -116,7 +104,6 @@ export default function HomePage() {
           {/* Feature Grid */}
           <div className="mt-20">
             <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {/* Feature 1 */}
               <div className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
                 <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
                   <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -124,12 +111,9 @@ export default function HomePage() {
                   </svg>
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Service Feedback</h3>
-                <p className="text-gray-600">
-                  Collect and analyze customer feedback across multiple locations to improve service quality.
-                </p>
+                <p className="text-gray-600">Collect and analyze customer feedback across multiple locations to improve service quality.</p>
               </div>
 
-              {/* Feature 2 */}
               <div className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
                 <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
                   <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -138,12 +122,9 @@ export default function HomePage() {
                   </svg>
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Analytics & Insights</h3>
-                <p className="text-gray-600">
-                  Turn feedback into actionable insights with powerful analytics and reporting tools.
-                </p>
+                <p className="text-gray-600">Turn feedback into actionable insights with powerful analytics and reporting tools.</p>
               </div>
 
-              {/* Feature 3 */}
               <div className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
                 <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
                   <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -151,9 +132,7 @@ export default function HomePage() {
                   </svg>
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Employee Polls</h3>
-                <p className="text-gray-600">
-                  Create and manage internal polls to gather employee feedback and recognize achievements.
-                </p>
+                <p className="text-gray-600">Create and manage internal polls to gather employee feedback and recognize achievements.</p>
               </div>
             </div>
           </div>
@@ -166,34 +145,18 @@ export default function HomePage() {
             </p>
             <div className="flex justify-center items-center space-x-8">
               <div className="flex-1 max-w-xs">
-                <Image
-                  src="/qr-demo.png"
-                  alt="QR Code Demo"
-                  width={200}
-                  height={200}
-                  className="mx-auto"
-                />
+                <Image src="/qr-demo.png" alt="QR Code Demo" width={200} height={200} className="mx-auto" />
               </div>
               <div className="flex-1 max-w-xs text-left">
                 <ul className="space-y-4">
-                  <li className="flex items-center">
-                    <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Quick and easy setup
-                  </li>
-                  <li className="flex items-center">
-                    <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Mobile-friendly forms
-                  </li>
-                  <li className="flex items-center">
-                    <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Real-time responses
-                  </li>
+                  {['Quick and easy setup', 'Mobile-friendly forms', 'Real-time responses'].map(item => (
+                    <li key={item} className="flex items-center">
+                      <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      {item}
+                    </li>
+                  ))}
                 </ul>
               </div>
             </div>

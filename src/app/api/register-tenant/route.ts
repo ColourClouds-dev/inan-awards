@@ -65,12 +65,15 @@ export async function POST(req: NextRequest) {
     batch.set(db.doc(`tenant-admins/${uid}`), {
       tenantId,
       email,
+      role: 'owner',          // person who registers an org is always the owner
       createdAt: new Date(),
+      formCount: 0,
+      formLimit: 5,           // matches the tenant default
     });
     await batch.commit();
 
-    // Set tenantId as a custom claim on the Firebase Auth user.
-    await getAdminAuth().setCustomUserClaims(uid, { tenantId });
+    // Set tenantId + role as custom claims on the Firebase Auth user.
+    await getAdminAuth().setCustomUserClaims(uid, { tenantId, role: 'owner' });
 
     // Send confirmation email (fire-and-forget — don't block registration on email failure)
     resend.emails.send({

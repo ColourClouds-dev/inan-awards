@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
 import Toast from '../../components/Toast';
@@ -13,8 +15,16 @@ function slugify(name: string): string {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
-export default function RegisterPage() {
+function RegisterPageInner() {
+  const router = useRouter();
   const { toasts, showToast, dismissToast } = useToast();
+  const searchParams = useSearchParams();
+  const inviteToken = searchParams?.get('invite') ?? '';
+
+  const [inviteValid, setInviteValid] = useState<boolean | null>(inviteToken ? null : false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteTenantName, setInviteTenantName] = useState('');
+  const [inviteError, setInviteError] = useState('');
 
   const [tenantName, setTenantName] = useState('');
   const [tenantLogo, setTenantLogo] = useState('');
@@ -27,11 +37,27 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const [step, setStep] = useState<'details' | 'verify'>('details');
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const [resending, setResending] = useState(false);
+  // Validate invite token on load
+  useEffect(() => {
+    if (!inviteToken) return;
+    fetch(`/api/invite-staff/validate?token=${encodeURIComponent(inviteToken)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.valid) {
+          setInviteValid(true);
+          setInviteEmail(data.email);
+          setInviteTenantName(data.tenantName);
+          setWorkEmail(data.email);
+        } else {
+          setInviteValid(false);
+          setInviteError(data.error ?? 'Invalid invitation.');
+        }
+      })
+      .catch(() => { setInviteValid(false); setInviteError('Could not validate invitation.'); });
+  }, [inviteToken]);
 
   useEffect(() => {
+    if (inviteToken) return;
     fetch('/api/tenant/current')
       .then(r => r.ok ? r.json() : null)
       .then(data => {
@@ -42,73 +68,69 @@ export default function RegisterPage() {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [inviteToken]);
 
-  // Countdown timer for resend cooldown
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const t = setTimeout(() => setResendCooldown(c => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [resendCooldown]);
+  const isInviteMode = !!inviteToken;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!companyName.trim()) { showToast('Company name is required.', 'error'); return; }
+    if (!isInviteMode && !companyName.trim()) { showToast('Company name is required.', 'error'); return; }
     if (password !== confirmPassword) { showToast('Passwords do not match.', 'error'); return; }
     if (password.length < 6) { showToast('Password must be at least 6 characters.', 'error'); return; }
 
     setLoading(true);
     try {
-      const credential = await createUserWithEmailAndPassword(auth, workEmail.trim(), password);
+      const emailToUse = isInviteMode ? inviteEmail : workEmail.trim();
+      const credential = await createUserWithEmailAndPassword(auth, emailToUse, password);
       const { user } = credential;
       await updateProfile(user, { displayName: yourName.trim() });
 
-      const tenantId = slugify(companyName);
-
-      const res = await fetch('/api/register-tenant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uid: user.uid, tenantId,
-          companyName: companyName.trim(),
-          domain: domain.trim() || `${tenantId}.inanfeedback.com`,
-          email: workEmail.trim(),
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to set up your account.');
+      if (isInviteMode) {
+        const res = await fetch('/api/add-tenant-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: user.uid, email: emailToUse, inviteToken }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || 'Failed to set up your account.');
+        }
+      } else {
+        const tenantId = slugify(companyName);
+        const res = await fetch('/api/register-tenant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uid: user.uid, tenantId,
+            companyName: companyName.trim(),
+            domain: domain.trim() || `${tenantId}.inanfeedback.com`,
+            email: emailToUse,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || 'Failed to set up your account.');
+        }
       }
 
-      // Send Firebase email verification
       await sendEmailVerification(user);
 
-      setStep('verify');
-      setResendCooldown(60);
-    } catch (err: any) {
-      if (err?.code === 'auth/email-already-in-use') showToast('An account with this email already exists.', 'error');
-      else if (err?.code === 'auth/invalid-email') showToast('Please enter a valid email address.', 'error');
-      else showToast(err?.message || 'Registration failed. Please try again.', 'error');
+      // Store credentials in sessionStorage so /verify-email can handle resend.
+      // Cleared immediately after resend is used or verification is confirmed.
+      sessionStorage.setItem('verify_email', emailToUse);
+      sessionStorage.setItem('verify_password', password);
+
+      // Sign out immediately — must verify before accessing the dashboard.
+      await auth.signOut();
+
+      router.push(`/verify-email?email=${encodeURIComponent(emailToUse)}`);
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code;
+      if (code === 'auth/email-already-in-use') showToast('An account with this email already exists.', 'error');
+      else if (code === 'auth/invalid-email') showToast('Please enter a valid email address.', 'error');
+      else showToast((err as Error).message || 'Registration failed. Please try again.', 'error');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleResend = async () => {
-    if (resendCooldown > 0 || resending) return;
-    setResending(true);
-    try {
-      const user = auth.currentUser;
-      if (user) {
-        await sendEmailVerification(user);
-        showToast('Verification email resent.', 'success');
-        setResendCooldown(60);
-      }
-    } catch {
-      showToast('Failed to resend. Please try again.', 'error');
-    } finally {
-      setResending(false);
     }
   };
 
@@ -121,131 +143,105 @@ export default function RegisterPage() {
     </div>
   );
 
+  if (isInviteMode && inviteValid === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-purple-100">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+      </div>
+    );
+  }
+
+  if (isInviteMode && inviteValid === false) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-purple-50 via-white to-purple-100">
+        <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-8 text-center space-y-4">
+          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+            <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+          <h1 className="text-lg font-bold text-gray-900">Invitation Invalid</h1>
+          <p className="text-sm text-gray-500">{inviteError}</p>
+          <Link href="/login" className="inline-block text-sm text-purple-600 hover:underline">← Back to Sign In</Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-purple-50 via-white to-purple-100">
       <Toast toasts={toasts} onDismiss={dismissToast} />
       <div className="w-full max-w-md space-y-6">
-
-        {/* ── Step 1: Account details ─────────────────────────────────────── */}
-        {step === 'details' && (
-          <>
-            <div className="text-center">
-              <Link href="/" className="inline-flex items-center text-sm text-purple-600 hover:text-purple-800 mb-4">
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                Back to Home
-              </Link>
-              {tenantLogo && (
-                <div className="flex justify-center mb-3">
-                  <img src={tenantLogo} alt={tenantName} className="h-10 w-auto max-w-[180px] object-contain" />
-                </div>
-              )}
-              <h1 className="text-xl font-bold text-gray-900">Set Up Your Organisation</h1>
-              <p className="text-gray-500 text-sm mt-2">
-                Create your company profile and get started — build forms, collect feedback, and manage your team all in one place.
-              </p>
+        <div className="text-center">
+          <Link href="/" className="inline-flex items-center text-sm text-purple-600 hover:text-purple-800 mb-4">
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Home
+          </Link>
+          {tenantLogo && !isInviteMode && (
+            <div className="flex justify-center mb-3">
+              <img src={tenantLogo} alt={tenantName} className="h-10 w-auto max-w-[180px] object-contain" />
             </div>
+          )}
+          <h1 className="text-xl font-bold text-gray-900">
+            {isInviteMode ? `Join ${inviteTenantName}` : 'Set Up Your Organisation'}
+          </h1>
+          <p className="text-gray-500 text-sm mt-2">
+            {isInviteMode
+              ? `You've been invited to join ${inviteTenantName}. Create your account to get started.`
+              : 'Create your company profile and get started — build forms, collect feedback, and manage your team all in one place.'}
+          </p>
+        </div>
 
-            <div className="bg-white rounded-xl shadow-lg p-8 space-y-4">
-              <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="bg-white rounded-xl shadow-lg p-8 space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {!isInviteMode && (
+              <>
                 <Input label="Company Name" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="e.g. Acme Corp" required />
-                <Input label="Your Name" value={yourName} onChange={e => setYourName(e.target.value)} placeholder="e.g. Jane Doe" required />
-                <Input label="Work Email" type="email" value={workEmail} onChange={e => setWorkEmail(e.target.value)} placeholder="jane@acme.com" required />
                 <Input label="Dashboard Domain (optional)" value={domain} onChange={e => setDomain(e.target.value)} placeholder="e.g. feedback.acme.com" />
-                <Input label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="At least 6 characters" required />
-                <Input label="Confirm Password" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repeat your password" required />
-                <Button type="submit" disabled={loading} isLoading={loading} loadingText="Creating account…">
-                  Create Account
-                </Button>
-              </form>
-              <p className="text-center text-sm text-gray-500">
-                Already have an account?{' '}
-                <a href="/login" className="text-purple-600 hover:underline font-medium">Sign in here</a>
-              </p>
-            </div>
-
-            {poweredBy}
-          </>
-        )}
-
-        {/* ── Step 2: Check your email ────────────────────────────────────── */}
-        {step === 'verify' && (
-          <>
-            <div className="text-center">
-              {/* Animated envelope */}
-              <div className="flex justify-center mb-4">
-                <div
-                  className="w-20 h-20 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: 'color-mix(in srgb, var(--brand) 12%, white)' }}
-                >
-                  <svg
-                    className="w-10 h-10"
-                    style={{ color: 'var(--brand)' }}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                      style={{
-                        strokeDasharray: 80,
-                        strokeDashoffset: 80,
-                        animation: 'envelopeDraw 0.7s ease-out 0.1s forwards',
-                      }}
-                    />
-                  </svg>
-                </div>
+              </>
+            )}
+            <Input label="Your Name" value={yourName} onChange={e => setYourName(e.target.value)} placeholder="e.g. Jane Doe" required />
+            {isInviteMode ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
+                />
+                <p className="text-xs text-gray-400 mt-1">This email was set by your invitation.</p>
               </div>
-
-              <style>{`
-                @keyframes envelopeDraw { to { stroke-dashoffset: 0; } }
-              `}</style>
-
-              <h1 className="text-xl font-bold text-gray-900 mb-2">Check your email</h1>
-              <p className="text-gray-500 text-sm">
-                We sent a verification link to
-              </p>
-              <p className="font-semibold text-gray-800 text-sm mt-1 mb-4">{workEmail}</p>
-              <p className="text-gray-500 text-sm max-w-xs mx-auto">
-                Click the link in the email to verify your account. Once verified, you can sign in.
-              </p>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-lg p-6 space-y-4">
-              {/* Resend */}
-              <div className="text-center">
-                <p className="text-sm text-gray-500 mb-3">Didn't receive it? Check your spam folder or resend.</p>
-                <Button
-                  onClick={handleResend}
-                  disabled={resendCooldown > 0 || resending}
-                  isLoading={resending}
-                  loadingText="Sending…"
-                  fullWidth={false}
-                >
-                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Email'}
-                </Button>
-              </div>
-
-              <div className="border-t border-gray-100 pt-4 text-center">
-                <a
-                  href="/login"
-                  className="text-sm font-medium hover:underline"
-                  style={{ color: 'var(--brand)' }}
-                >
-                  ← Back to Sign In
-                </a>
-              </div>
-            </div>
-
-            {poweredBy}
-          </>
-        )}
-
+            ) : (
+              <Input label="Work Email" type="email" value={workEmail} onChange={e => setWorkEmail(e.target.value)} placeholder="jane@acme.com" required />
+            )}
+            <Input label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="At least 6 characters" required />
+            <Input label="Confirm Password" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repeat your password" required />
+            <Button type="submit" disabled={loading} isLoading={loading} loadingText="Creating account…">
+              {isInviteMode ? 'Create Staff Account' : 'Create Account'}
+            </Button>
+          </form>
+          <p className="text-center text-sm text-gray-500">
+            Already have an account?{' '}
+            <a href="/login" className="text-purple-600 hover:underline font-medium">Sign in here</a>
+          </p>
+        </div>
+        {poweredBy}
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-purple-100">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+      </div>
+    }>
+      <RegisterPageInner />
+    </Suspense>
   );
 }

@@ -10,8 +10,10 @@ import { exportToExcel } from '../../../../lib/exportToExcel';
 import { useTenant } from '../../../../contexts/TenantContext';
 import { toDate } from '../../../../hooks/useFeedbackFilters';
 import FilterSortBar from '../../../../components/FilterSortBar';
+import PaginationBar from '../../../../components/PaginationBar';
 import { FilterBarSkeleton, TableRowSkeleton } from '../../../../components/Skeleton';
 import { useWithTimeout } from '../../../../hooks/useWithTimeout';
+import { usePagination } from '../../../../hooks/usePagination';
 import type { FeedbackForm, FeedbackResponse, ResponseTag } from '../../../../types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -119,7 +121,7 @@ function ResponseRow({ response, form }: { response: FeedbackResponse; form: Fee
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ResponsesPage() {
-  const { tenantId, isLoading: tenantLoading } = useTenant();
+  const { tenantId, isLoading: tenantLoading, isStaff, currentUid } = useTenant();
   const [authReady, setAuthReady] = useState(false);
   const withTimeout = useWithTimeout();
   const [forms, setForms] = useState<FeedbackForm[]>([]);
@@ -149,7 +151,14 @@ export default function ResponsesPage() {
     setLoading(true);
     setError(null);
     try {
-      const [f, r] = await withTimeout(() => Promise.all([getAllForms(tenantId), getAllResponses(tenantId)]));
+      const [f, r] = await withTimeout(async () => {
+        // Staff fetch only their own forms, then scope responses to those form IDs
+        const createdBy = isStaff && currentUid ? currentUid : undefined;
+        const forms = await getAllForms(tenantId, createdBy);
+        const formIds = createdBy ? forms.map(f => f.id) : undefined;
+        const responses = await getAllResponses(tenantId, formIds);
+        return [forms, responses] as const;
+      });
       setForms(f);
       setResponses(r);
     } catch (err) {
@@ -161,7 +170,7 @@ export default function ResponsesPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, tenantLoading, authReady]);
+  }, [tenantId, tenantLoading, authReady, isStaff, currentUid]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -225,6 +234,14 @@ export default function ResponsesPage() {
     return result;
   }, [responses, formMap, search, selectedTagTypes, dateFrom, dateTo, activeSort]);
 
+  const { page, pageCount, paginated: paginatedResponses, goTo, next, prev, reset } =
+    usePagination(filteredAndSorted, 20);
+
+  // Reset to page 1 whenever any filter or sort changes
+  useEffect(() => {
+    reset();
+  }, [search, selectedTagTypes, dateFrom, dateTo, activeSort, formId, reset]);
+
   if (loading || tenantLoading || !authReady) {
     return (
       <div className="p-6 space-y-6">
@@ -284,8 +301,7 @@ export default function ResponsesPage() {
           <p className="text-sm text-gray-500 mt-0.5">
             Showing <span className="font-medium text-gray-700">{filteredAndSorted.length}</span> of{' '}
             <span className="font-medium text-gray-700">{responses.length}</span> total responses
-          </p>
-        </div>
+          </p>        </div>
         <button
           onClick={() => exportToExcel(filteredAndSorted, forms)}
           disabled={filteredAndSorted.length === 0}
@@ -345,7 +361,7 @@ export default function ResponsesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
-                {filteredAndSorted.map(r => (
+                {paginatedResponses.map(r => (
                   <ResponseRow key={r.id} response={r} form={formMap.get(r.formId)} />
                 ))}
               </tbody>
@@ -353,6 +369,14 @@ export default function ResponsesPage() {
           </div>
         )}
       </div>
+
+      <PaginationBar
+        page={page}
+        pageCount={pageCount}
+        onPrev={prev}
+        onNext={next}
+        onGoTo={goTo}
+      />
     </div>
   );
 }

@@ -22,13 +22,23 @@ export async function submitFeedback(response: FeedbackResponse & { tenantId?: s
   await addDoc(collection(db, 'feedback-responses'), response);
 }
 
-export async function getAllResponses(tenantId: string = DEFAULT_TENANT): Promise<FeedbackResponse[]> {
-  const q = query(
+export async function getAllResponses(
+  tenantId: string = DEFAULT_TENANT,
+  formIds?: string[],
+): Promise<FeedbackResponse[]> {
+  let q = query(
     collection(db, 'feedback-responses'),
     where('tenantId', '==', tenantId)
   );
   const snapshot = await getDocs(q);
-  const responses = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeedbackResponse));
+  let responses = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeedbackResponse));
+
+  // If formIds is provided, filter to only responses for those forms (staff scope)
+  if (formIds && formIds.length > 0) {
+    const formIdSet = new Set(formIds);
+    responses = responses.filter(r => formIdSet.has(r.formId));
+  }
+
   return responses.sort((a, b) => {
     const aTime = a.submittedAt instanceof Date ? a.submittedAt.getTime() : (a.submittedAt as any)?.seconds ?? 0;
     const bTime = b.submittedAt instanceof Date ? b.submittedAt.getTime() : (b.submittedAt as any)?.seconds ?? 0;
@@ -36,11 +46,22 @@ export async function getAllResponses(tenantId: string = DEFAULT_TENANT): Promis
   });
 }
 
-export async function getAllForms(tenantId: string = DEFAULT_TENANT): Promise<FeedbackForm[]> {
-  const q = query(
+export async function getAllForms(
+  tenantId: string = DEFAULT_TENANT,
+  createdBy?: string,
+): Promise<FeedbackForm[]> {
+  let q = query(
     collection(db, 'feedback-forms'),
     where('tenantId', '==', tenantId)
   );
+  // Staff can only see their own forms
+  if (createdBy) {
+    q = query(
+      collection(db, 'feedback-forms'),
+      where('tenantId', '==', tenantId),
+      where('createdBy', '==', createdBy)
+    );
+  }
   const snapshot = await getDocs(q);
   const forms = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeedbackForm));
   return forms.sort((a, b) => {
@@ -67,9 +88,17 @@ export async function reactivateForm(formId: string): Promise<void> {
   await updateDoc(docRef, { isActive: true });
 }
 
-export async function saveForm(form: FeedbackForm, tenantId: string = DEFAULT_TENANT): Promise<void> {
+export async function saveForm(
+  form: FeedbackForm,
+  tenantId: string = DEFAULT_TENANT,
+  createdBy?: string,
+): Promise<void> {
   const docRef = doc(db, 'feedback-forms', form.id);
-  const clean = JSON.parse(JSON.stringify({ ...form, tenantId }));
+  const clean = JSON.parse(JSON.stringify({
+    ...form,
+    tenantId,
+    ...(createdBy ? { createdBy } : {}),
+  }));
   await setDoc(docRef, clean);
   // Increment the tenant's form count
   try {

@@ -356,7 +356,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
   const [ogImageUrl, setOgImageUrl] = useState('');
   const [stepByStep, setStepByStep] = useState(false);
   const { toasts, showToast, dismissToast } = useToast();
-  const { tenant, tenantId } = useTenant();
+  const { tenant, tenantId, currentUid } = useTenant();
 
   const isOverFormLimit = tenant != null && tenant.formCount >= tenant.formLimit;
 
@@ -459,6 +459,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
       createdAt: new Date(), isActive: true, stepByStep,
       ...(customTagRules.length > 0 ? { customTagRules } : {}),
       ...(ogImageUrl ? { ogImageUrl } : {}),
+      ...(currentUid ? { createdBy: currentUid } : {}),
     };
 
     try {
@@ -783,30 +784,29 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
                     <div className="space-y-2">
                       {conditions.map((cond, ci) => (
                         <div key={ci} className="flex items-end gap-2 flex-wrap">
-                          <span className={`text-xs font-semibold w-8 pb-2.5 ${ci === 0 ? 'text-gray-500' : 'text-purple-600'}`}>{ci === 0 ? 'IF' : 'AND'}</span>
-                          <div className="flex-1 min-w-[120px]">
-                            {ci === 0 && <label className="text-xs text-gray-500 mb-1 block">Question</label>}
-                            <select value={cond.questionId} onChange={e => updateConditionAt(rule.id, ci, { questionId: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2">
-                              {questions.map(q => <option key={q.id} value={q.id}>{q.question || `Question (${q.type})`}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            {ci === 0 && <label className="text-xs text-gray-500 mb-1 block">Operator</label>}
-                            <select value={cond.operator} onChange={e => updateConditionAt(rule.id, ci, { operator: e.target.value as CustomTagRule['condition']['operator'] })} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2">
-                              {operatorOptions.map(op => <option key={op} value={op}>{operatorLabels[op]}</option>)}
-                            </select>
-                          </div>
-                          <div className="flex-1 min-w-[80px]">
-                            {ci === 0 && <label className="text-xs text-gray-500 mb-1 block">Value</label>}
-                            <input type="text" value={cond.value} onChange={e => updateConditionAt(rule.id, ci, { value: e.target.value })} placeholder="e.g. dirty" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2" />
-                          </div>
-                          {conditions.length > 1 && (
+                            <div className="flex-1 min-w-[120px]">
+                              {ci === 0 && <label className="text-xs text-gray-500 mb-1 block">Question</label>}
+                              <select value={cond.questionId} onChange={e => updateConditionAt(rule.id, ci, { questionId: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2">
+                                {questions.map(q => <option key={q.id} value={q.id}>{q.question || `Question (${q.type})`}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              {ci === 0 && <label className="text-xs text-gray-500 mb-1 block">Operator</label>}
+                              <select value={cond.operator} onChange={e => updateConditionAt(rule.id, ci, { operator: e.target.value as CustomTagRule['condition']['operator'] })} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2">
+                                {operatorOptions.map(op => <option key={op} value={op}>{operatorLabels[op]}</option>)}
+                              </select>
+                            </div>
+                            <div className="flex-1 min-w-[80px]">
+                              {ci === 0 && <label className="text-xs text-gray-500 mb-1 block">Value</label>}
+                              <input type="text" value={cond.value} onChange={e => updateConditionAt(rule.id, ci, { value: e.target.value })} placeholder="e.g. dirty" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2" />
+                            </div>
+                            {conditions.length > 1 && (
                             <button onClick={() => removeCondition(rule.id, ci)} className="text-red-400 hover:text-red-600 text-xs pb-2.5 transition-colors">✕</button>
-                          )}
+                            )}
                         </div>
                       ))}
                     </div>
-                    <button onClick={() => addCondition(rule.id)} className="text-xs text-purple-600 hover:text-purple-800 font-medium transition-colors">+ Add AND condition</button>
+                    <button onClick={() => addCondition(rule.id)} className="text-xs text-purple-600 hover:text-purple-800 font-medium transition-colors">+ Add</button>
                   </div>
                 );
               })}
