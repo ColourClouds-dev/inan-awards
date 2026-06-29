@@ -30,7 +30,7 @@ Built for **Inan Management Ltd** and deployed as a SaaS platform. Each organisa
 | Styling | Tailwind CSS |
 | Auth & Database | Firebase Authentication + Cloud Firestore |
 | Image Storage | Cloudinary |
-| Email | Resend |
+| Email | Brevo (SMTP REST API for custom domains) + Firebase native (for standard domains) |
 | Bot Protection | Google reCAPTCHA v3 |
 | Charts | Recharts |
 | Table | TanStack Table v8 |
@@ -63,7 +63,8 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=
 NEXT_PUBLIC_RECAPTCHA_SITE_KEY=
 FIREBASE_ADMIN_PRIVATE_KEY=
 CLOUDINARY_API_SECRET=
-RESEND_API_KEY=
+BREVO_API_KEY=
+BREVO_FROM_EMAIL=
 RECAPTCHA_SECRET_KEY=
 ```
 
@@ -96,6 +97,15 @@ Platform-level administrators access `/super-admin` to manage all organisations 
 
 ### Multi-tenancy
 Each organisation is a tenant identified by a slug (e.g. `inan`). The Next.js middleware resolves the tenant from the incoming domain and injects it as a request header. All Firestore queries and security rules are scoped to `tenantId`.
+
+### Email Verification Flow
+Registration routing splits automatically based on the user's email address domain:
+- **Standard Consumer Domains** (e.g. Gmail, Yahoo, Hotmail): The system uses native client-side Firebase email verification (`sendEmailVerification`).
+- **Custom Corporate Domains**: The system bypasses Firebase client verification and triggers a secure custom flow:
+  1. Calls `/api/auth/send-verification` to generate a single-use token valid for 12 hours with a 60-second request rate-limit.
+  2. Stores the token in a subcollection under the user document: `users/{userId}/verification_tokens/{tokenId}`.
+  3. Sends a styled verification email via Brevo SMTP REST API.
+  4. Once verified on `/verify-email?token=...&uid=...`, `/api/auth/verify` validates the token and updates the user record (`emailVerified: true`) using the Firebase Admin SDK.
 
 ---
 

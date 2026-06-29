@@ -15,6 +15,27 @@ function slugify(name: string): string {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+const STANDARD_DOMAINS = new Set([
+  'gmail.com',
+  'yahoo.com',
+  'hotmail.com',
+  'outlook.com',
+  'icloud.com',
+  'aol.com',
+  'proton.me',
+  'protonmail.com',
+  'zoho.com',
+  'yandex.com',
+  'mail.com',
+  'gmx.com'
+]);
+
+function isCustomDomainEmail(email: string): boolean {
+  if (!email || !email.includes('@')) return true;
+  const domain = email.split('@').pop()?.trim().toLowerCase() ?? '';
+  return !STANDARD_DOMAINS.has(domain);
+}
+
 function RegisterPageInner() {
   const router = useRouter();
   const { toasts, showToast, dismissToast } = useToast();
@@ -113,17 +134,39 @@ function RegisterPageInner() {
         }
       }
 
-      await sendEmailVerification(user);
+      const isCustom = isCustomDomainEmail(emailToUse);
 
-      // Store credentials in sessionStorage so /verify-email can handle resend.
-      // Cleared immediately after resend is used or verification is confirmed.
-      sessionStorage.setItem('verify_email', emailToUse);
-      sessionStorage.setItem('verify_password', password);
+      if (isCustom) {
+        // Call custom verification endpoint instead of client-side Firebase sendEmailVerification
+        const sendRes = await fetch('/api/auth/send-verification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: user.uid, email: emailToUse }),
+        });
+        if (!sendRes.ok) {
+          const data = await sendRes.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to send verification email.');
+        }
+
+        // Store email and uid in sessionStorage so /verify-email can handle resend.
+        sessionStorage.setItem('verify_email', emailToUse);
+        sessionStorage.setItem('verify_uid', user.uid);
+      } else {
+        // Native Firebase verification
+        await sendEmailVerification(user);
+
+        // Store credentials in sessionStorage so /verify-email can handle polling and resend
+        sessionStorage.setItem('verify_email', emailToUse);
+        sessionStorage.setItem('verify_password', password);
+      }
 
       // Sign out immediately — must verify before accessing the dashboard.
       await auth.signOut();
 
-      router.push(`/verify-email?email=${encodeURIComponent(emailToUse)}`);
+      const redirectUrl = isCustom
+        ? `/verify-email?email=${encodeURIComponent(emailToUse)}&uid=${user.uid}`
+        : `/verify-email?email=${encodeURIComponent(emailToUse)}`;
+      router.push(redirectUrl);
     } catch (err: unknown) {
       const code = (err as { code?: string }).code;
       if (code === 'auth/email-already-in-use') showToast('An account with this email already exists.', 'error');

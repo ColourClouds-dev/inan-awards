@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { sendEmailVerification, signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
-import { useRouter, useSearchParams } from 'next/navigation';
 import Button from '../../components/Button';
 import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
@@ -15,10 +15,13 @@ function VerifyEmailInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const emailFromUrl = searchParams?.get('email') ?? '';
+  const tokenFromUrl = searchParams?.get('token') ?? '';
+  const uidFromUrl = searchParams?.get('uid') ?? '';
 
   const { toasts, showToast, dismissToast } = useToast();
   const [resendCooldown, setResendCooldown] = useState(60);
   const [resending, setResending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   // Cooldown countdown
   useEffect(() => {
@@ -27,9 +30,42 @@ function VerifyEmailInner() {
     return () => clearTimeout(t);
   }, [resendCooldown]);
 
-  // If the user clicks the verification link and comes back to this tab,
-  // onAuthStateChanged fires. Force-reload to get the latest emailVerified flag.
+  // Handle custom verification token from URL automatically on load
   useEffect(() => {
+    if (!tokenFromUrl || !uidFromUrl) return;
+
+    const verifyToken = async () => {
+      setVerifying(true);
+      try {
+        const res = await fetch('/api/auth/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: tokenFromUrl, uid: uidFromUrl }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          sessionStorage.removeItem(SESSION_KEY_EMAIL);
+          sessionStorage.removeItem('verify_uid');
+          showToast('Email verified successfully! Redirecting to sign in...', 'success');
+          setTimeout(() => router.push('/login'), 2000);
+        } else {
+          showToast(data.error || 'Verification failed. The link may have expired.', 'error');
+        }
+      } catch (err) {
+        showToast('An error occurred during verification. Please try again.', 'error');
+      } finally {
+        setVerifying(false);
+      }
+    };
+
+    verifyToken();
+  }, [tokenFromUrl, uidFromUrl, router, showToast]);
+
+  // Firebase auth state change listener (only for standard providers using Firebase Auth)
+  useEffect(() => {
+    const hasPassword = !!sessionStorage.getItem(SESSION_KEY_PASSWORD);
+    if (!hasPassword) return;
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) return;
       await user.reload();
@@ -40,70 +76,122 @@ function VerifyEmailInner() {
         showToast('Email verified! You can now sign in.', 'success');
         setTimeout(() => router.push('/login'), 1500);
       } else {
-        // Signed in but not yet verified — sign out so they stay on this page
         await auth.signOut();
       }
     });
     return () => unsubscribe();
   }, [router, showToast]);
 
-  // Poll every 5 seconds in case the user verified in another tab/window
+  // Unified Polling logic: checks verify_uid (custom domain via API) or verify_password (standard domain via Firebase)
   useEffect(() => {
     const interval = setInterval(async () => {
-      if (auth.currentUser) return; // onAuthStateChanged will handle it
-      const storedEmail = sessionStorage.getItem(SESSION_KEY_EMAIL);
+      const storedUid = sessionStorage.getItem('verify_uid') || uidFromUrl;
+      const storedEmail = sessionStorage.getItem(SESSION_KEY_EMAIL) || emailFromUrl;
       const storedPassword = sessionStorage.getItem(SESSION_KEY_PASSWORD);
-      if (!storedEmail || !storedPassword) return;
-      try {
-        const cred = await signInWithEmailAndPassword(auth, storedEmail, storedPassword);
-        await cred.user.reload();
-        if (cred.user.emailVerified) {
-          sessionStorage.removeItem(SESSION_KEY_EMAIL);
-          sessionStorage.removeItem(SESSION_KEY_PASSWORD);
-          await auth.signOut();
-          showToast('Email verified! You can now sign in.', 'success');
-          setTimeout(() => router.push('/login'), 1500);
-        } else {
-          await auth.signOut();
+
+      if (storedUid) {
+        // Custom domain (Brevo) flow: poll backend status check API
+        try {
+          const res = await fetch(`/api/auth/verify?uid=${encodeURIComponent(storedUid)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.emailVerified) {
+              sessionStorage.removeItem(SESSION_KEY_EMAIL);
+              sessionStorage.removeItem('verify_uid');
+              showToast('Email verified! You can now sign in.', 'success');
+              setTimeout(() => router.push('/login'), 1500);
+            }
+          }
+        } catch {
+          // Stop polling silently on error
         }
-      } catch {
-        // Credentials expired or wrong — stop polling silently
+      } else if (storedEmail && storedPassword) {
+        // Standard provider (Firebase) flow: sign in and reload user state
+        if (auth.currentUser) return;
+        try {
+          const cred = await signInWithEmailAndPassword(auth, storedEmail, storedPassword);
+          await cred.user.reload();
+          if (cred.user.emailVerified) {
+            sessionStorage.removeItem(SESSION_KEY_EMAIL);
+            sessionStorage.removeItem(SESSION_KEY_PASSWORD);
+            await auth.signOut();
+            showToast('Email verified! You can now sign in.', 'success');
+            setTimeout(() => router.push('/login'), 1500);
+          } else {
+            await auth.signOut();
+          }
+        } catch {
+          // Stop polling silently on error
+        }
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [router, showToast]);
+  }, [uidFromUrl, emailFromUrl, router, showToast]);
 
   const handleResend = async () => {
     if (resendCooldown > 0 || resending) return;
     setResending(true);
 
-    const storedEmail = sessionStorage.getItem(SESSION_KEY_EMAIL);
+    const storedEmail = sessionStorage.getItem(SESSION_KEY_EMAIL) || emailFromUrl;
+    const storedUid = sessionStorage.getItem('verify_uid') || uidFromUrl;
     const storedPassword = sessionStorage.getItem(SESSION_KEY_PASSWORD);
 
-    if (!storedEmail || !storedPassword) {
-      showToast('Session expired. Please create your account again.', 'error');
+    if (!storedEmail) {
+      showToast('Session expired. Please register your account again.', 'error');
       setResending(false);
       return;
     }
 
-    try {
-      // Sign in temporarily just to resend, then sign out immediately
-      const cred = await signInWithEmailAndPassword(auth, storedEmail, storedPassword);
-      await sendEmailVerification(cred.user);
-      await auth.signOut();
-
-      // Clear credentials after use
-      sessionStorage.removeItem(SESSION_KEY_EMAIL);
-      sessionStorage.removeItem(SESSION_KEY_PASSWORD);
-
-      showToast('Verification email resent.', 'success');
-      setResendCooldown(60);
-    } catch {
-      showToast('Failed to resend. Please try again or create your account again.', 'error');
-    } finally {
+    if (storedUid) {
+      // Custom Domain (Brevo) resend flow
+      try {
+        const res = await fetch('/api/auth/send-verification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: storedUid, email: storedEmail }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast('Verification email resent via Brevo.', 'success');
+          setResendCooldown(60);
+        } else {
+          showToast(data.error || 'Failed to resend. Please try again.', 'error');
+        }
+      } catch {
+        showToast('Failed to resend. Please try again.', 'error');
+      } finally {
+        setResending(false);
+      }
+    } else if (storedPassword) {
+      // Standard Provider (Firebase native) resend flow
+      try {
+        const cred = await signInWithEmailAndPassword(auth, storedEmail, storedPassword);
+        await sendEmailVerification(cred.user);
+        await auth.signOut();
+        showToast('Verification email resent.', 'success');
+        setResendCooldown(60);
+      } catch {
+        showToast('Failed to resend. Please try again.', 'error');
+      } finally {
+        setResending(false);
+      }
+    } else {
+      showToast('Session expired. Please register your account again.', 'error');
       setResending(false);
     }
   };
+
+  if (verifying) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-purple-50 via-white to-purple-100">
+        <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-8 text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto" />
+          <h1 className="text-xl font-bold text-gray-900">Verifying your email</h1>
+          <p className="text-gray-500 text-sm">Please wait while we validate your token.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-purple-50 via-white to-purple-100">
