@@ -7,6 +7,7 @@ import { db, auth } from '../../lib/firebase';
 import { useTenant } from '../../contexts/TenantContext';
 import { StatCardSkeleton } from '../../components/Skeleton';
 import { useWithTimeout } from '../../hooks/useWithTimeout';
+import { getAllForms } from '../../lib/firestore';
 
 interface Stats {
   totalFeedback: number;
@@ -16,7 +17,7 @@ interface Stats {
 }
 
 export default function DashboardPage() {
-  const { tenantId, isLoading: tenantLoading } = useTenant();
+  const { tenantId, isLoading: tenantLoading, isStaff, currentUid, role } = useTenant();
   const [authReady, setAuthReady] = useState(false);
   const withTimeout = useWithTimeout();
   const [stats, setStats] = useState<Stats>({
@@ -36,19 +37,51 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (tenantLoading || !authReady) return;
+    if (tenantLoading || !authReady || !tenantId || !role) return;
 
     const fetchStats = async () => {
       try {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        const [formsSnap, responsesSnap] = await withTimeout(() => Promise.all([
-          getDocs(query(collection(db, 'feedback-forms'), where('tenantId', '==', tenantId))),
-          getDocs(query(collection(db, 'feedback-responses'), where('tenantId', '==', tenantId))),
+        // Use role-based scoping for queries
+        const formsQuery = isStaff && currentUid
+          ? query(
+              collection(db, 'feedback-forms'), 
+              where('tenantId', '==', tenantId),
+              where('createdBy', '==', currentUid)
+            )
+          : query(collection(db, 'feedback-forms'), where('tenantId', '==', tenantId));
+
+        const [formsSnap] = await withTimeout(() => Promise.all([
+          getDocs(formsQuery)
         ]));
 
         const activeFeedbackForms = formsSnap.docs.filter(d => d.data().isActive).length;
+
+        // For staff, only get responses to their own forms
+        let responsesSnap;
+        if (isStaff && currentUid) {
+          const formIds = formsSnap.docs.map(doc => doc.id);
+          if (formIds.length > 0) {
+            const responsesQuery = query(
+              collection(db, 'feedback-responses'),
+              where('tenantId', '==', tenantId),
+              where('formId', 'in', formIds)
+            );
+            responsesSnap = await getDocs(responsesQuery);
+          } else {
+            // No forms means no responses
+            responsesSnap = { docs: [] };
+          }
+        } else {
+          // Owner sees all responses in tenant
+          const responsesQuery = query(
+            collection(db, 'feedback-responses'),
+            where('tenantId', '==', tenantId)
+          );
+          responsesSnap = await getDocs(responsesQuery);
+        }
 
         const recentResponses = responsesSnap.docs.filter(d => {
           const submitted = d.data().submittedAt;
@@ -87,7 +120,7 @@ export default function DashboardPage() {
     };
 
     fetchStats();
-  }, [tenantId, tenantLoading, authReady]);
+  }, [tenantId, tenantLoading, authReady, isStaff, currentUid, role]);
 
   if (loading || tenantLoading || !authReady) {
     return (

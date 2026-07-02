@@ -1,6 +1,7 @@
 {
   "projects": {
-    "staging": "inan-feedback"
+    "staging": "inan-feedback",
+    "dev": "inan-feedback-dev"
   },
   "targets": {},
   "etags": {}

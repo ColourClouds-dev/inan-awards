@@ -49,8 +49,15 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
-  const [role, setRole] = useState('Admin');
-  const { tenant, isImpersonating, isOwner, isStaff, isLoading: tenantLoading } = useTenant();
+
+  // Read role state from TenantContext — it already resolves claims and is the
+  // single source of truth. Using it here eliminates the race condition where
+  // DashboardLayout's own auth listener would resolve before TenantContext had
+  // finished, causing nav items to flash in/out.
+  const { tenant, isImpersonating, isOwner, isStaff, isLoading: tenantLoading, roleLabel } = useTenant();
+
+  // Derive the display role label from the same context so it stays in sync.
+  const role = isSuperAdmin ? 'Super Admin' : roleLabel;
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -58,11 +65,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         setDisplayName(user.displayName || user.email || '');
         setPhotoUrl(user.photoURL || '');
         user.getIdTokenResult().then((result) => {
-          const isSuper = result.claims.superAdmin === true;
-          const userRole = result.claims.role as string | undefined;
-          setIsSuperAdmin(isSuper);
-          // Display "Admin" for owners, "Staff" for staff — never show the raw "owner" claim
-          setRole(isSuper ? 'Super Admin' : userRole === 'owner' ? 'Admin' : 'Staff');
+          setIsSuperAdmin(result.claims.superAdmin === true);
         });
 
         // Fire welcome email once — the API guards against duplicates server-side
@@ -95,6 +98,8 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         { href: '/dashboard/feedback/analytics', label: 'Analytics' },
       ],
     },
+    // Keep Settings visible while loading so it doesn't flash away, then
+    // permanently show it once the role is confirmed (all roles have access).
     { href: '/dashboard/settings', label: 'Settings', icon: IconSettings, show: tenantLoading || isOwner || isStaff || isSuperAdmin },
     { href: '/super-admin',        label: 'Super Admin', icon: IconSuperAdmin,  show: isSuperAdmin && !isImpersonating },
   ], [isOwner, isStaff, isSuperAdmin, isImpersonating, tenantLoading]);

@@ -162,6 +162,68 @@ export default function FilterSortBar({
   const filterRef = useRef<HTMLDivElement>(null!);
   const sortRef = useRef<HTMLDivElement>(null!);
 
+  const [filterStyle, setFilterStyle] = useState<React.CSSProperties>({ width: 288, right: 0 });
+  const [sortStyle, setSortStyle] = useState<React.CSSProperties>({ width: 208, right: 0 });
+
+  const updateFilterPosition = useCallback(() => {
+    if (!filterOpen || !filterRef.current) return;
+    const rect = filterRef.current.getBoundingClientRect();
+    const desiredWidth = 288;
+    const margin = 16;
+    let left: number | string = 'auto';
+    let right: number | string = 0;
+    
+    if (rect.right - desiredWidth < margin) {
+      left = -rect.left + margin;
+      right = 'auto';
+    }
+    
+    setFilterStyle({
+      left,
+      right,
+      width: desiredWidth,
+      maxWidth: `calc(100vw - ${margin * 2}px)`,
+      maxHeight: 'calc(100dvh - 8rem)'
+    });
+  }, [filterOpen]);
+
+  const updateSortPosition = useCallback(() => {
+    if (!sortOpen || !sortRef.current) return;
+    const rect = sortRef.current.getBoundingClientRect();
+    const desiredWidth = 208;
+    const margin = 16;
+    let left: number | string = 'auto';
+    let right: number | string = 0;
+    
+    if (rect.right - desiredWidth < margin) {
+      left = -rect.left + margin;
+      right = 'auto';
+    }
+    
+    setSortStyle({
+      left,
+      right,
+      width: desiredWidth,
+      maxWidth: `calc(100vw - ${margin * 2}px)`,
+    });
+  }, [sortOpen]);
+
+  useEffect(() => {
+    updateFilterPosition();
+    if (filterOpen) {
+      window.addEventListener('resize', updateFilterPosition);
+      return () => window.removeEventListener('resize', updateFilterPosition);
+    }
+  }, [filterOpen, updateFilterPosition]);
+
+  useEffect(() => {
+    updateSortPosition();
+    if (sortOpen) {
+      window.addEventListener('resize', updateSortPosition);
+      return () => window.removeEventListener('resize', updateSortPosition);
+    }
+  }, [sortOpen, updateSortPosition]);
+
   useOutsideClick(filterRef, useCallback(() => setFilterOpen(false), []));
   useOutsideClick(sortRef, useCallback(() => setSortOpen(false), []));
 
@@ -223,7 +285,10 @@ export default function FilterSortBar({
         </button>
 
         {filterOpen && (
-          <div className="absolute left-0 sm:left-0 right-0 sm:right-auto top-full mt-2 w-screen sm:w-72 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl shadow-lg border border-gray-200 z-50 p-4 space-y-4">
+          <div
+            className="absolute top-full mt-2 bg-white rounded-xl shadow-lg border border-gray-200 z-50 p-4 space-y-4 overflow-y-auto"
+            style={filterStyle}
+          >
 
           {/* External form selector — searchable list */}
             {forms && forms.length > 0 && onFormSelectorChange && (
@@ -392,7 +457,10 @@ export default function FilterSortBar({
         </button>
 
         {sortOpen && (
-          <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-lg border border-gray-200 z-50 py-1 overflow-hidden">
+          <div
+            className="absolute top-full mt-2 bg-white rounded-xl shadow-lg border border-gray-200 z-50 py-1 overflow-hidden"
+            style={sortStyle}
+          >
             {sortOptions.map(opt => {
               const isActive = opt.key === activeSort;
               return (

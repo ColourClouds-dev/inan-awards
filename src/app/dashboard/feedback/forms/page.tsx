@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../../../../lib/firebase';
 import { getAllForms, getAllResponses } from '../../../../lib/firestore';
@@ -12,6 +13,7 @@ import { useToast } from '../../../../hooks/useToast';
 import Toast from '../../../../components/Toast';
 import type { FeedbackForm, FeedbackResponse } from '../../../../types';
 export default function FormsPage() {
+  const router = useRouter();
   const { tenantId, isLoading: tenantLoading, isStaff, currentUid } = useTenant();
   const [authReady, setAuthReady] = useState(false);
   const withTimeout = useWithTimeout();
@@ -32,12 +34,15 @@ export default function FormsPage() {
     setLoading(true);
     setError(null);
     try {
-      // Staff see only their own forms; owners see all
+      // Staff see only their own forms and only responses for those forms.
+      // Owners see everything in the tenant.
       const createdBy = isStaff && currentUid ? currentUid : undefined;
-      const [f, r] = await withTimeout(() => Promise.all([
-        getAllForms(tenantId, createdBy),
-        getAllResponses(tenantId),
-      ]));
+      const [f, r] = await withTimeout(async () => {
+        const forms = await getAllForms(tenantId, createdBy);
+        const formIds = createdBy ? forms.map(form => form.id) : undefined;
+        const responses = await getAllResponses(tenantId, formIds);
+        return [forms, responses] as const;
+      });
       setForms(f);
       setResponses(r);
     } catch (err) {
@@ -57,11 +62,14 @@ export default function FormsPage() {
     setRefreshing(true);
     setError(null);
     try {
+      // Same staff scoping as fetchData — keep them in sync.
       const createdBy = isStaff && currentUid ? currentUid : undefined;
-      const [f, r] = await withTimeout(() => Promise.all([
-        getAllForms(tenantId, createdBy),
-        getAllResponses(tenantId),
-      ]));
+      const [f, r] = await withTimeout(async () => {
+        const forms = await getAllForms(tenantId, createdBy);
+        const formIds = createdBy ? forms.map(form => form.id) : undefined;
+        const responses = await getAllResponses(tenantId, formIds);
+        return [forms, responses] as const;
+      });
       setForms(f);
       setResponses(r);
       showToast(
@@ -113,33 +121,44 @@ export default function FormsPage() {
     <div className="p-6">
       <Toast toasts={toasts} onDismiss={dismissToast} />
 
-      {/* Page header with refresh button */}
+      {/* Page header with buttons */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-gray-900">
           Forms
           <span className="ml-2 text-sm font-normal text-gray-400">({forms.length})</span>
         </h1>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          title="Refresh list"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          <svg
-            className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => router.push('/dashboard/feedback')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-transparent bg-purple-600 text-white hover:bg-purple-700 transition-colors"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-          {refreshing ? 'Refreshing…' : 'Refresh'}
-        </button>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Create Form
+          </button>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            title="Refresh list"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <svg
+              className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       <FeedbackFormsList

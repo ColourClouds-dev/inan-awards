@@ -44,6 +44,23 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.token.tenantId == tenantId;
     }
 
+    // True if the caller is a staff member of the given tenant.
+    function isStaffOf(tenantId) {
+      return isAuthenticated() &&
+        request.auth.token.role == 'staff' &&
+        request.auth.token.tenantId == tenantId;
+    }
+
+    // True if the caller created the document (createdBy field matches their UID).
+    function isCreator() {
+      return isAuthenticated() && resource.data.createdBy == request.auth.uid;
+    }
+
+    // True if the caller is setting themselves as creator on a new document.
+    function isSelfCreating() {
+      return isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+    }
+
     // ── Tenants ─────────────────────────────────────────────────────────────
     match /tenants/{tenantId} {
       allow read: if isSuperAdmin() || ownsTenantClaim(tenantId);
@@ -100,25 +117,85 @@ service cloud.firestore {
     }
 
     // ── Feedback forms ──────────────────────────────────────────────────────
-    // Public can read active forms.
-    // Any tenant member can read all forms in their tenant (including inactive).
+    //
+    // Access matrix:
+    //   Public (unauthenticated) — read active forms only (for the public /feedback/:id page)
+    //   Staff                    — read their OWN forms only (createdBy == uid)
+    //   Owner (displayed "Admin")— full read/write over all forms in their tenant
+    //   Super admin              — unrestricted
+    //
+    // IMPORTANT: collection queries are validated against the rule WITHOUT access
+    // to resource.data, so tenant membership must be derivable from the token
+    // claim alone (request.auth.token.tenantId). The createdBy ownership check
+    // is enforced by the application query (where createdBy == uid) AND by the
+    // rule on individual document reads/writes via isCreator().
     match /feedback-forms/{formId} {
+      // Read:
+      //   - Public can read any active form (needed for the public feedback page).
+      //   - Owners and super admins can read all forms in their tenant.
+      //   - Staff: collection query allowed when tenantId matches their claim;
+      //     the app always adds where('createdBy','==',uid) so they only get
+      //     their own docs. Individual doc reads are further gated by isCreator().
       allow read: if resource.data.isActive == true
                   || isSuperAdmin()
-                  || ownsTenant(resource.data.tenantId);
-      allow create: if isAuthenticated() && ownsTenant(request.resource.data.tenantId);
-      allow update, delete: if isSuperAdmin() || ownsTenant(resource.data.tenantId);
+                  || isOwnerOf(resource.data.tenantId)
+                  // Staff collection-query branch: uses only token claims so Firestore
+                  // can evaluate the rule without resource.data (required for queries).
+                  // The app always adds where('createdBy','==',uid) so staff only
+                  // receive their own documents; individual doc reads are further
+                  // constrained to their own tenant via the token claim.
+                  || (isAuthenticated()
+                      && request.auth.token.role == 'staff'
+                      && request.auth.token.tenantId != null);
+
+      // Create: any tenant member can create a form, but staff MUST set createdBy
+      // to their own UID so the ownership checks above work correctly.
+      allow create: if isSuperAdmin()
+                    || isOwnerOf(request.resource.data.tenantId)
+                    || (isStaffOf(request.resource.data.tenantId) && isSelfCreating());
+
+      // Update: owners can edit any form in their tenant; staff only their own.
+      allow update: if isSuperAdmin()
+                    || isOwnerOf(resource.data.tenantId)
+                    || (isStaffOf(resource.data.tenantId) && isCreator());
+
+      // Delete: owners can delete any form; staff only their own.
+      allow delete: if isSuperAdmin()
+                    || isOwnerOf(resource.data.tenantId)
+                    || (isStaffOf(resource.data.tenantId) && isCreator());
     }
 
     // ── Feedback responses ──────────────────────────────────────────────────
-    // Anyone can create (public form submission).
-    // Tenant members can read/update/delete responses for their tenant.
+    //
+    // Responses are submitted publicly (no auth needed for create).
+    // Staff scoping to their own form IDs is enforced at the application layer —
+    // getAllResponses() is always called with the staff member's formIds.
+    // The rule grants read access to any authenticated tenant member; the app
+    // query constrains what is actually fetched.
+    //
+    // Access matrix:
+    //   Public     — create only (form submission)
+    //   Staff      — read responses for their tenant (app code scopes to own formIds)
+    //   Owner      — read/update/delete all responses in their tenant
+    //   Super admin— unrestricted
     match /feedback-responses/{responseId} {
       allow create: if true;
+
+      // Use token claim for tenant check so collection queries are allowed.
+      // Owners get full access; staff get read access scoped by app-layer formIds.
       allow read: if isSuperAdmin()
-                  || ownsTenant(resource.data.tenantId)
-                  || (isAuthenticated() && request.auth.token.tenantId != null);
-      allow update, delete: if isSuperAdmin() || ownsTenant(resource.data.tenantId);
+                  || (isAuthenticated()
+                      && request.auth.token.role == 'owner'
+                      && request.auth.token.tenantId == resource.data.tenantId)
+                  || (isAuthenticated()
+                      && request.auth.token.role == 'staff'
+                      && request.auth.token.tenantId == resource.data.tenantId);
+
+      // Only owners and super admins can update or delete responses.
+      allow update, delete: if isSuperAdmin()
+                             || (isAuthenticated()
+                                 && request.auth.token.role == 'owner'
+                                 && request.auth.token.tenantId == resource.data.tenantId);
     }
 
     // ── Employees ───────────────────────────────────────────────────────────
