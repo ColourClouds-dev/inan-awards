@@ -17,6 +17,7 @@ import { computeAllTags, isNegativeResponse, hasCustomTags } from '../lib/tagEng
 import type { FeedbackForm, FeedbackQuestion, Tenant } from '../types';
 import type { VisitorInfo } from '../lib/visitorInfo';
 import ShareResponseButton from './ShareResponseButton';
+import { getTenantById } from '../lib/tenantFirestore';
 
 
 interface FeedbackFormProps {
@@ -233,6 +234,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
   const [submitted, setSubmitted] = useState(false);
   const [submittedResponseId, setSubmittedResponseId] = useState<string | null>(null);
   const [submittedAnswers, setSubmittedAnswers] = useState<any>(null);
+  const [formTenant, setFormTenant] = useState<Tenant | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [visitorInfo, setVisitorInfo] = useState<VisitorInfo | null>(null);
@@ -251,6 +253,16 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
   const { tenant, tenantId } = useTenant();
   const { isOnline } = useNetworkStatus();
 
+
+  useEffect(() => {
+    if (form.tenantId) {
+      getTenantById(form.tenantId)
+        .then(t => {
+          if (t) setFormTenant(t);
+        })
+        .catch(console.error);
+    }
+  }, [form.tenantId]);
 
   useEffect(() => {
     // If the user already submitted this form (stored locally), block immediately
@@ -467,7 +479,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
 
           <h2 className="text-xl font-bold text-green-600 mb-4">Thank You!</h2>
           <p className="text-gray-600 mb-6">Your feedback has been submitted successfully.</p>
-          {tenant?.features?.allowResponseSharing && submittedResponseId && submittedAnswers && (
+          {(formTenant?.features?.allowResponseSharing ?? tenant?.features?.allowResponseSharing) && submittedResponseId && submittedAnswers && (
             <div className="mt-6 flex justify-center">
               <ShareResponseButton
                 responseId={submittedResponseId}
