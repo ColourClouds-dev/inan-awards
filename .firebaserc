@@ -1,5 +1,6 @@
 {
   "projects": {
+    "default": "inan-feedback-dev",
     "staging": "inan-feedback",
     "dev": "inan-feedback-dev"
   },

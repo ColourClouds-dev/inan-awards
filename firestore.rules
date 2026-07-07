@@ -181,9 +181,11 @@ service cloud.firestore {
     match /feedback-responses/{responseId} {
       allow create: if true;
 
-      // Use token claim for tenant check so collection queries are allowed.
-      // Owners get full access; staff get read access scoped by app-layer formIds.
-      allow read: if isSuperAdmin()
+      // Allow public get requests (needed for shareable links to retrieve unguessable UUID docs)
+      allow get: if true;
+
+      // Restrict collection-level queries/listings to authenticated tenant members
+      allow list: if isSuperAdmin()
                   || (isAuthenticated()
                       && request.auth.token.role == 'owner'
                       && request.auth.token.tenantId == resource.data.tenantId)

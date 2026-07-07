@@ -16,6 +16,8 @@ import { getVisitorInfo } from '../lib/visitorInfo';
 import { computeAllTags, isNegativeResponse, hasCustomTags } from '../lib/tagEngine';
 import type { FeedbackForm, FeedbackQuestion, Tenant } from '../types';
 import type { VisitorInfo } from '../lib/visitorInfo';
+import ShareResponseButton from './ShareResponseButton';
+
 
 interface FeedbackFormProps {
   form: FeedbackForm;
@@ -229,6 +231,8 @@ function QuestionBlock({
 
 const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBranding }) => {
   const [submitted, setSubmitted] = useState(false);
+  const [submittedResponseId, setSubmittedResponseId] = useState<string | null>(null);
+  const [submittedAnswers, setSubmittedAnswers] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [visitorInfo, setVisitorInfo] = useState<VisitorInfo | null>(null);
@@ -246,6 +250,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
   const { executeRecaptcha } = useGoogleReCaptcha();
   const { tenant, tenantId } = useTenant();
   const { isOnline } = useNetworkStatus();
+
 
   useEffect(() => {
     // If the user already submitted this form (stored locally), block immediately
@@ -333,7 +338,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
       const responses = data as { [key: string]: string | number };
       const tags = computeAllTags(responses, form, timeSpentSeconds);
 
-      await submitFeedback({
+      const docId = await submitFeedback({
         id: crypto.randomUUID(),
         formId: form.id,
         location: form.location,
@@ -371,7 +376,10 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
       showToast('Your feedback has been submitted successfully!', 'success');
       // Persist submission flag so the form is blocked immediately on any future visit/refresh
       localStorage.setItem(`submitted_${form.id}`, '1');
+      setSubmittedResponseId(docId);
+      setSubmittedAnswers(responses);
       setSubmitted(true);
+
     } catch (err) {
       console.error('Error submitting feedback:', err);
       showToast('Failed to submit feedback. Please try again.', 'error');
@@ -458,11 +466,22 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
           `}</style>
 
           <h2 className="text-xl font-bold text-green-600 mb-4">Thank You!</h2>
-          <p className="text-gray-600">Your feedback has been submitted successfully.</p>
+          <p className="text-gray-600 mb-6">Your feedback has been submitted successfully.</p>
+          {tenant?.features?.allowResponseSharing && submittedResponseId && submittedAnswers && (
+            <div className="mt-6 flex justify-center">
+              <ShareResponseButton
+                responseId={submittedResponseId}
+                form={form}
+                responses={submittedAnswers}
+                submittedAt={new Date()}
+              />
+            </div>
+          )}
         </div>
       </div>
     );
   }
+
 
   // ── Shared header (logo + form title) ─────────────────────────────────────
 

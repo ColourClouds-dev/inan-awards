@@ -31,12 +31,14 @@ const DEFAULT_FEATURES: TenantFeatures = {
   feedbackForms: true,
   seoSettings: false,
   hidePoweredBy: false,
+  allowResponseSharing: false,
 };
 
 const FEATURE_LABELS: Record<keyof TenantFeatures, string> = {
   feedbackForms: 'Feedback Forms',
   seoSettings: 'SEO Settings',
   hidePoweredBy: 'Hide "Powered by" badge',
+  allowResponseSharing: 'Allow Response Sharing',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

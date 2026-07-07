@@ -18,8 +18,16 @@ import { incrementFormCount } from './tenantFirestore';
 
 const DEFAULT_TENANT = 'inan';
 
-export async function submitFeedback(response: FeedbackResponse & { tenantId?: string }): Promise<void> {
-  await addDoc(collection(db, 'feedback-responses'), response);
+export async function submitFeedback(response: FeedbackResponse & { tenantId?: string }): Promise<string> {
+  const docRef = await addDoc(collection(db, 'feedback-responses'), response);
+  return docRef.id;
+}
+
+export async function getResponseById(responseId: string): Promise<(FeedbackResponse & { tenantId?: string }) | null> {
+  const docRef = doc(db, 'feedback-responses', responseId);
+  const snapshot = await getDoc(docRef);
+  if (!snapshot.exists()) return null;
+  return { id: snapshot.id, ...snapshot.data() } as FeedbackResponse & { tenantId?: string };
 }
 
 export async function getAllResponses(

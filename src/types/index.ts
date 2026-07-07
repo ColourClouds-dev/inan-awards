@@ -4,6 +4,7 @@ export interface TenantFeatures {
   feedbackForms: boolean;
   seoSettings: boolean;
   hidePoweredBy: boolean;
+  allowResponseSharing?: boolean;
 }
 
 // Role within a tenant — 'owner' is the person who registered the organisation

@@ -5,7 +5,7 @@ import { doc, setDoc, getDoc, updateDoc, collection, getDocs, deleteDoc } from '
 import { onAuthStateChanged, updateProfile, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { db, auth } from '../../../lib/firebase';
-import type { LocationSettings, NotificationSettings, SeoSettings } from '../../../types';
+import type { LocationSettings, NotificationSettings, SeoSettings, Tenant } from '../../../types';
 import { updateTenant } from '../../../lib/tenantFirestore';
 import Button from '../../../components/Button';
 import Input from '../../../components/Input';
@@ -84,6 +84,11 @@ export default function SettingsPage() {
   const [brandEmailName, setBrandEmailName] = useState('');
   const [brandSaving, setBrandSaving] = useState(false);
 
+  // ── Response Sharing ───────────────────────────────────────────────────────
+  const [allowResponseSharing, setAllowResponseSharing] = useState(false);
+  const [sharingSaving, setSharingSaving] = useState(false);
+
+
   // ── Auth guard + load ──────────────────────────────────────────────────────
   useEffect(() => {
     if (tenantLoading) return;
@@ -113,7 +118,9 @@ export default function SettingsPage() {
           try {
             const tSnap = await getDoc(doc(db, 'tenants', tenantId));
             if (tSnap.exists()) {
-              const b = (tSnap.data() as { branding?: { logoUrl?: string; primaryColor?: string; emailDisplayName?: string } }).branding;
+              const tData = tSnap.data() as Tenant;
+              setAllowResponseSharing(tData.features?.allowResponseSharing ?? false);
+              const b = tData.branding;
               if (b?.logoUrl) setBrandLogoUrl(b.logoUrl);
               if (b?.primaryColor) setBrandColor(b.primaryColor);
               if (b?.emailDisplayName) setBrandEmailName(b.emailDisplayName);
@@ -219,6 +226,27 @@ export default function SettingsPage() {
     saveStaffNotifEmails([...staffNotifEmails, trimmed]);
   };
   const removeStaffNotifEmail = (em: string) => saveStaffNotifEmails(staffNotifEmails.filter(e => e !== em));
+
+  // ── Response Sharing ───────────────────────────────────────────────────────
+  const handleToggleResponseSharing = async () => {
+    if (!tenant) return;
+    const newValue = !allowResponseSharing;
+    setSharingSaving(true);
+    try {
+      await updateTenant(tenantId, {
+        features: {
+          ...tenant.features,
+          allowResponseSharing: newValue,
+        },
+      });
+      setAllowResponseSharing(newValue);
+      showToast(`Response sharing ${newValue ? 'enabled' : 'disabled'}.`, 'success');
+    } catch {
+      showToast('Failed to update response sharing setting.', 'error');
+    } finally {
+      setSharingSaving(false);
+    }
+  };
 
   // ── Branding ───────────────────────────────────────────────────────────────
   const handleBrandingSave = async (e: React.FormEvent) => {
@@ -348,6 +376,36 @@ export default function SettingsPage() {
               <Button type="submit" fullWidth={false} disabled={brandSaving} isLoading={brandSaving} loadingText="Saving…">Save Branding</Button>
             </div>
           </form>
+        </Section>
+      )}
+
+      {/* ── Response Sharing (owner only) ─────────────────────────────────── */}
+      {isOwner && (
+        <Section title="Response Sharing" description="Allow respondents to share their form responses via text, PDF, CSV, or WhatsApp.">
+          <div className="flex items-center justify-between py-2">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Enable Response Sharing</p>
+              <p className="text-xs text-gray-500 mt-0.5">Adds a "Share Response" button to the form completion screen, letting users download their response or share it directly.</p>
+            </div>
+            <button
+              onClick={handleToggleResponseSharing}
+              disabled={sharingSaving}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 ${
+                allowResponseSharing ? '' : 'bg-gray-200'
+              }`}
+              style={{
+                backgroundColor: allowResponseSharing
+                  ? (brandColor && /^#[0-9A-Fa-f]{6}$/.test(brandColor) ? brandColor : '#7C3AED')
+                  : undefined
+              }}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  allowResponseSharing ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
         </Section>
       )}
       {/* ── Locations — owner: full controls ─────────────────────────────── */}
