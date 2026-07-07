@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { getResponseById, getFormById } from '../../../lib/firestore';
-import { getTenantById } from '../../../lib/tenantFirestore';
 import type { FeedbackResponse, FeedbackForm, Tenant } from '../../../types';
 
 export default function PublicResponsePage() {
@@ -21,8 +20,39 @@ export default function PublicResponsePage() {
     if (!responseId) return;
 
     const loadData = async () => {
+      // ── Step 1: Fetch tenant via the API route (uses Admin SDK — no auth needed) ──
+      // This is the same pattern used by FeedbackPageClient. It bypasses Firestore
+      // client-side rules entirely, so unauthenticated visitors can read tenant data.
       try {
-        // 1. Fetch Response
+        const tenantRes = await fetch('/api/tenant/current');
+        if (tenantRes.ok) {
+          const data = await tenantRes.json();
+          if (data?.tenant) {
+            setTenant(data.tenant as Tenant);
+            // Apply brand color to CSS variable for consistent theming
+            if (data.tenant.branding?.primaryColor) {
+              document.documentElement.style.setProperty('--brand', data.tenant.branding.primaryColor);
+            }
+            // Gate: if the tenant has sharing disabled, stop here
+            if (!data.tenant.features?.allowResponseSharing) {
+              setSharingDisabled(true);
+              setLoading(false);
+              return;
+            }
+          } else {
+            // Tenant could not be resolved — block sharing by default
+            setSharingDisabled(true);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Non-fatal — continue without branding, but still try to show response
+      }
+
+      // ── Step 2: Fetch the response document ──
+      // feedback-responses has `allow get: if true` so this works unauthenticated.
+      try {
         const fetchedResponse = await getResponseById(responseId);
         if (!fetchedResponse) {
           setNotFound(true);
@@ -31,29 +61,8 @@ export default function PublicResponsePage() {
         }
         setResponse(fetchedResponse);
 
-        // 2. Fetch Tenant settings
-        const tenantId = fetchedResponse.tenantId || 'inan';
-        const fetchedTenant = await getTenantById(tenantId);
-        if (fetchedTenant) {
-          setTenant(fetchedTenant);
-          // Apply branding color dynamically
-          if (fetchedTenant.branding?.primaryColor) {
-            document.documentElement.style.setProperty('--brand', fetchedTenant.branding.primaryColor);
-          }
-          // Validate response sharing flag
-          if (!fetchedTenant.features?.allowResponseSharing) {
-            setSharingDisabled(true);
-            setLoading(false);
-            return;
-          }
-        } else {
-          // If tenant doesn't exist, block sharing by default for safety
-          setSharingDisabled(true);
-          setLoading(false);
-          return;
-        }
-
-        // 3. Fetch Form
+        // ── Step 3: Fetch the associated form ──
+        // feedback-forms allows public read for active forms.
         const fetchedForm = await getFormById(fetchedResponse.formId);
         if (!fetchedForm) {
           setNotFound(true);
@@ -61,9 +70,8 @@ export default function PublicResponsePage() {
           return;
         }
         setForm(fetchedForm);
-
       } catch (err) {
-        console.error('Error loading public response data:', err);
+        console.error('Error loading response or form:', err);
         setNotFound(true);
       } finally {
         setLoading(false);
@@ -72,6 +80,7 @@ export default function PublicResponsePage() {
 
     loadData();
   }, [responseId]);
+
 
   // Format date helper
   const getFormattedDate = (dateVal: any): string => {
