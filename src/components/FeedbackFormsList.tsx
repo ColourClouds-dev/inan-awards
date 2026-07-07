@@ -16,6 +16,7 @@ import type { FeedbackForm, FeedbackResponse } from '../types';
 
 function toDate(value: unknown): Date {
   if (value instanceof Date) return value;
+  if (typeof value === 'string') return new Date(value);
   if (value && typeof (value as any).toDate === 'function') return (value as any).toDate();
   if (value && typeof (value as any).seconds === 'number') return new Date((value as any).seconds * 1000);
   return new Date();
@@ -409,8 +410,7 @@ export default function FeedbackFormsList({ forms, responses, onFormsChange }: F
 
     const responseCount = (f: FeedbackForm) => responses.filter(r => r.formId === f.id).length;
     const getTime = (f: FeedbackForm) => {
-      const d = f.createdAt;
-      return d instanceof Date ? d.getTime() : (d as any).seconds * 1000;
+      return toDate(f.createdAt).getTime();
     };
 
     switch (activeSort) {

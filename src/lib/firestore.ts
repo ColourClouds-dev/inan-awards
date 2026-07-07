@@ -18,6 +18,15 @@ import { incrementFormCount } from './tenantFirestore';
 
 const DEFAULT_TENANT = 'inan';
 
+function getTimestampMillis(value: unknown): number {
+  if (!value) return 0;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'string') return new Date(value).getTime();
+  if (value && typeof (value as any).toDate === 'function') return (value as any).toDate().getTime();
+  if (value && typeof (value as any).seconds === 'number') return (value as any).seconds * 1000;
+  return 0;
+}
+
 export async function submitFeedback(response: FeedbackResponse & { tenantId?: string }): Promise<string> {
   const docRef = await addDoc(collection(db, 'feedback-responses'), response);
   return docRef.id;
@@ -47,11 +56,7 @@ export async function getAllResponses(
     responses = responses.filter(r => formIdSet.has(r.formId));
   }
 
-  return responses.sort((a, b) => {
-    const aTime = a.submittedAt instanceof Date ? a.submittedAt.getTime() : (a.submittedAt as any)?.seconds ?? 0;
-    const bTime = b.submittedAt instanceof Date ? b.submittedAt.getTime() : (b.submittedAt as any)?.seconds ?? 0;
-    return bTime - aTime;
-  });
+  return responses.sort((a, b) => getTimestampMillis(b.submittedAt) - getTimestampMillis(a.submittedAt));
 }
 
 export async function getAllForms(
@@ -72,11 +77,7 @@ export async function getAllForms(
   }
   const snapshot = await getDocs(q);
   const forms = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FeedbackForm));
-  return forms.sort((a, b) => {
-    const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : (a.createdAt as any)?.seconds ?? 0;
-    const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : (b.createdAt as any)?.seconds ?? 0;
-    return bTime - aTime;
-  });
+  return forms.sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt));
 }
 
 export async function getFormById(formId: string): Promise<FeedbackForm | null> {
