@@ -68,7 +68,7 @@ BREVO_FROM_EMAIL=
 RECAPTCHA_SECRET_KEY=
 ```
 
-See `env.local.example` for the full list and `docs/05-setup-and-configuration.md` for where to find each value.
+See `env.local.example` for the full list and `Setup and Configuration` for where to find each value.
 
 ### 3. Run the development server
 
