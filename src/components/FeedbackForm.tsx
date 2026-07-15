@@ -63,13 +63,13 @@ function QuestionBlock({
                 control={control}
                 render={({ field }) => (
                   <div>
-                    <div className="flex gap-3 flex-wrap" data-testid={`rating-group-${question.id}`}>
+                    <div className="flex justify-between w-full" data-testid={`rating-group-${question.id}`}>
                       {[1, 2, 3, 4, 5].map(rating => (
                         <button
                           key={rating}
                           type="button"
                           onClick={() => field.onChange(rating)}
-                          className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-medium transition-all transform hover:scale-110 ${
+                          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-base sm:text-lg font-medium transition-all transform hover:scale-110 ${
                             field.value === rating
                               ? 'text-white shadow-lg'
                               : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -80,10 +80,7 @@ function QuestionBlock({
                         </button>
                       ))}
                     </div>
-                    <div
-                      className="flex justify-between text-sm text-gray-500 mt-2"
-                      style={{ width: 'calc(5 * 3rem + 4 * 0.75rem)' }}
-                    >
+                    <div className="flex justify-between w-full text-sm text-gray-500 mt-2">
                       <span>Poor</span>
                       <span>Excellent</span>
                     </div>
