@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '../../../lib/firebaseAdmin';
 import { getAuth } from 'firebase-admin/auth';
-import { Resend } from 'resend';
 import { v4 as uuidv4 } from 'uuid';
 
 export const dynamic = 'force-dynamic';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = 'INAN Feedback <noreply@inan.com.ng>';
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const BREVO_FROM_EMAIL = process.env.BREVO_FROM_EMAIL || 'noreply@inan.com.ng';
+const BREVO_FROM_NAME = process.env.BREVO_FROM_NAME || 'INAN Feedback';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://inan.com.ng';
 
 async function verifyOwner(req: NextRequest): Promise<{ uid: string; tenantId: string } | null> {
@@ -90,11 +90,22 @@ export async function POST(req: NextRequest) {
   const registerUrl = `${SITE_URL}/register?invite=${token}`;
 
   // Send invitation email (fire-and-forget)
-  resend.emails.send({
-    from: FROM,
-    to: email,
-    subject: `You've been invited to join ${tenantName} on INAN Feedback`,
-    html: `
+  if (BREVO_API_KEY) {
+    fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': BREVO_API_KEY,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: {
+          name: BREVO_FROM_NAME,
+          email: BREVO_FROM_EMAIL,
+        },
+        to: [{ email: email }],
+        subject: `You've been invited to join ${tenantName} on INAN Feedback`,
+        htmlContent: `
       <!DOCTYPE html>
       <html>
       <head><meta charset="utf-8" /></head>
@@ -148,7 +159,15 @@ export async function POST(req: NextRequest) {
       </body>
       </html>
     `,
-  }).catch(err => console.error('Invite email error:', err));
+      }),
+    })
+      .then(res => {
+        if (!res.ok) res.text().then(text => console.error('Brevo API invite error response:', text));
+      })
+      .catch(err => console.error('Invite email error:', err));
+  } else {
+    console.error('BREVO_API_KEY is not configured in .env.local');
+  }
 
   return NextResponse.json({ success: true, token });
 }

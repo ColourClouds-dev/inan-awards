@@ -235,11 +235,25 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [visitorInfo, setVisitorInfo] = useState<VisitorInfo | null>(null);
-  const [duplicateIp, setDuplicateIp] = useState(false);
-  // Start as true only if localStorage already has a submission flag — avoids any flash
-  const [checkingIp, setCheckingIp] = useState(
-    () => typeof window === 'undefined' || !localStorage.getItem(`submitted_${form.id}`)
-  );
+  const [duplicateIp, setDuplicateIp] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const stored = localStorage.getItem(`submitted_${form.id}`);
+    if (!stored) return false;
+    const timestamp = parseInt(stored, 10);
+    if (isNaN(timestamp)) return false;
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+    return Date.now() - timestamp < twentyFourHours;
+  });
+  // Start as true only if localStorage does not already block it, so we can check IP
+  const [checkingIp, setCheckingIp] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = localStorage.getItem(`submitted_${form.id}`);
+    if (!stored) return true;
+    const timestamp = parseInt(stored, 10);
+    if (isNaN(timestamp)) return true;
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+    return Date.now() - timestamp >= twentyFourHours;
+  });
 
   // Step-by-step state
   const [currentStep, setCurrentStep] = useState(0);
@@ -262,11 +276,18 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
   }, [form.tenantId]);
 
   useEffect(() => {
-    // If the user already submitted this form (stored locally), block immediately
-    if (localStorage.getItem(`submitted_${form.id}`)) {
-      setDuplicateIp(true);
-      setCheckingIp(false);
-      return;
+    // If the user already submitted this form (stored locally) within 24 hours, block immediately
+    const stored = localStorage.getItem(`submitted_${form.id}`);
+    if (stored) {
+      const timestamp = parseInt(stored, 10);
+      if (!isNaN(timestamp)) {
+        const twentyFourHours = 24 * 60 * 60 * 1000;
+        if (Date.now() - timestamp < twentyFourHours) {
+          setDuplicateIp(true);
+          setCheckingIp(false);
+          return;
+        }
+      }
     }
 
     const init = async () => {
@@ -384,7 +405,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
 
       showToast('Your feedback has been submitted successfully!', 'success');
       // Persist submission flag so the form is blocked immediately on any future visit/refresh
-      localStorage.setItem(`submitted_${form.id}`, '1');
+      localStorage.setItem(`submitted_${form.id}`, Date.now().toString());
       setSubmittedResponseId(docId);
       setSubmittedAnswers(responses);
       setSubmitted(true);

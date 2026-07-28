@@ -15,7 +15,8 @@ import type { FeedbackForm, FeedbackResponse } from '../types';
 interface ResponsesTableProps {
   responses: FeedbackResponse[];
   forms: FeedbackForm[];
-  onExport: () => void;
+  onExportCSV: () => void;
+  onExportExcel: () => void;
 }
 
 type RowData = {
@@ -32,9 +33,10 @@ type RowData = {
 
 const columnHelper = createColumnHelper<RowData>();
 
-export default function ResponsesTable({ responses, forms, onExport }: ResponsesTableProps) {
+export default function ResponsesTable({ responses, forms, onExportCSV, onExportExcel }: ResponsesTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
+  const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
 
   const formsMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -173,12 +175,50 @@ export default function ResponsesTable({ responses, forms, onExport }: Responses
           className="w-full sm:w-72 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           aria-label="Search responses"
         />
-        <button
-          onClick={onExport}
-          className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 whitespace-nowrap"
-        >
-          Export to Excel
-        </button>
+        <div className="relative inline-flex align-middle shadow-sm rounded-md">
+          <button
+            onClick={onExportCSV}
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-l-md focus:outline-none focus:ring-2 focus:ring-green-500 whitespace-nowrap"
+          >
+            Export to CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsExportDropdownOpen(prev => !prev)}
+            className="px-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-r-md border-l border-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 whitespace-nowrap"
+            aria-haspopup="true"
+            aria-expanded={isExportDropdownOpen}
+          >
+            <svg className={`w-4 h-4 transition-transform duration-200 ${isExportDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {isExportDropdownOpen && (
+            <>
+              {/* Overlay transparent background to close dropdown on click outside */}
+              <div 
+                className="fixed inset-0 z-10" 
+                onClick={() => setIsExportDropdownOpen(false)}
+              />
+              <div className="absolute right-0 mt-10 w-44 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 focus:outline-none z-20 origin-top-right">
+                <div className="py-1">
+                  <button
+                    onClick={() => {
+                      onExportExcel();
+                      setIsExportDropdownOpen(false);
+                    }}
+                    className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                  >
+                    <svg className="w-4 h-4 mr-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Export to Excel
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Table */}

@@ -137,5 +137,30 @@ export async function hasIpSubmittedForm(formId: string, ip: string, tenantId: s
     where('tenantId', '==', tenantId)
   );
   const snapshot = await getDocs(q);
-  return !snapshot.empty;
+  if (snapshot.empty) return false;
+
+  const now = Date.now();
+  const twentyFourHours = 24 * 60 * 60 * 1000;
+
+  for (const doc of snapshot.docs) {
+    const data = doc.data();
+    if (!data.submittedAt) continue;
+
+    let submittedDate: Date;
+    if (data.submittedAt.toDate && typeof data.submittedAt.toDate === 'function') {
+      submittedDate = data.submittedAt.toDate();
+    } else if (data.submittedAt instanceof Date) {
+      submittedDate = data.submittedAt;
+    } else if (data.submittedAt.seconds) {
+      submittedDate = new Date(data.submittedAt.seconds * 1000);
+    } else {
+      submittedDate = new Date(data.submittedAt);
+    }
+
+    if (now - submittedDate.getTime() < twentyFourHours) {
+      return true;
+    }
+  }
+
+  return false;
 }

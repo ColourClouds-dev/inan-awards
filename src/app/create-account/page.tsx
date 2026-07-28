@@ -9,6 +9,7 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
+import { isCustomDomainEmail } from '../../lib/emailUtils';
 
 // ── Password strength ─────────────────────────────────────────────────────────
 
@@ -18,27 +19,6 @@ const RULES = [
   { label: 'At least one number', test: (p: string) => /[0-9]/.test(p) },
   { label: 'At least one symbol (e.g. !@#$)', test: (p: string) => /[^A-Za-z0-9]/.test(p) },
 ];
-
-const STANDARD_DOMAINS = new Set([
-  'gmail.com',
-  'yahoo.com',
-  'hotmail.com',
-  'outlook.com',
-  'icloud.com',
-  'aol.com',
-  'proton.me',
-  'protonmail.com',
-  'zoho.com',
-  'yandex.com',
-  'mail.com',
-  'gmx.com'
-]);
-
-function isCustomDomainEmail(email: string): boolean {
-  if (!email || !email.includes('@')) return true;
-  const domain = email.split('@').pop()?.trim().toLowerCase() ?? '';
-  return !STANDARD_DOMAINS.has(domain);
-}
 
 function PasswordStrength({ password }: { password: string }) {
   if (!password) return null;

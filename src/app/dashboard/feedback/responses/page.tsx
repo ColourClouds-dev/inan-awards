@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { auth } from '../../../../lib/firebase';
 import { getAllForms, getAllResponses } from '../../../../lib/firestore';
 import { exportToExcel } from '../../../../lib/exportToExcel';
+import { exportFeedbackToCSV } from '../../../../lib/exportToCSV';
 import { useTenant } from '../../../../contexts/TenantContext';
 import { toDate } from '../../../../hooks/useFeedbackFilters';
 import FilterSortBar from '../../../../components/FilterSortBar';
@@ -140,6 +141,7 @@ export default function ResponsesPage() {
   const [dateTo, setDateTo] = useState('');
   const [activeSort, setActiveSort] = useState<SortKey>('submitted_desc');
   const [formId, setFormId] = useState(initialFormId);
+  const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, user => { if (user) setAuthReady(true); });
@@ -302,17 +304,57 @@ export default function ResponsesPage() {
             Showing <span className="font-medium text-gray-700">{filteredAndSorted.length}</span> of{' '}
             <span className="font-medium text-gray-700">{responses.length}</span> total responses
           </p>        </div>
-        <button
-          onClick={() => exportToExcel(filteredAndSorted, forms)}
-          disabled={filteredAndSorted.length === 0}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-40"
-          style={{ backgroundColor: 'var(--brand)' }}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-          Export Excel
-        </button>
+        <div className="relative inline-flex align-middle shadow-sm rounded-lg">
+          <button
+            onClick={() => exportFeedbackToCSV(filteredAndSorted, forms)}
+            disabled={filteredAndSorted.length === 0}
+            className="flex items-center gap-2 px-4 py-2 rounded-l-lg text-sm font-medium text-white transition-colors disabled:opacity-40"
+            style={{ backgroundColor: 'var(--brand)' }}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsExportDropdownOpen(prev => !prev)}
+            disabled={filteredAndSorted.length === 0}
+            className="flex items-center justify-center px-2 rounded-r-lg border-l text-white transition-colors disabled:opacity-40"
+            style={{ backgroundColor: 'var(--brand)', borderColor: 'rgba(255,255,255,0.2)' }}
+            aria-haspopup="true"
+            aria-expanded={isExportDropdownOpen}
+          >
+            <svg className={`w-4 h-4 transition-transform duration-200 ${isExportDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {isExportDropdownOpen && filteredAndSorted.length > 0 && (
+            <>
+              {/* Overlay transparent background to close dropdown on click outside */}
+              <div 
+                className="fixed inset-0 z-10" 
+                onClick={() => setIsExportDropdownOpen(false)}
+              />
+              <div className="absolute right-0 mt-10 w-44 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 focus:outline-none z-20 origin-top-right">
+                <div className="py-1">
+                  <button
+                    onClick={() => {
+                      exportToExcel(filteredAndSorted, forms);
+                      setIsExportDropdownOpen(false);
+                    }}
+                    className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                  >
+                    <svg className="w-4 h-4 mr-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Export to Excel
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Filter/sort bar */}

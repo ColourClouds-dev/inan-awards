@@ -1,6 +1,7 @@
 import { getAdminDb } from './firebaseAdmin';
 import { getAuth } from 'firebase-admin/auth';
 import { v4 as uuidv4 } from 'uuid';
+import { STANDARD_DOMAINS, isCustomDomainEmail } from './emailUtils';
 
 export interface VerificationToken {
   token: string;
@@ -94,23 +95,4 @@ export async function validateVerificationToken(userId: string, token: string): 
   return { success: true };
 }
 
-const STANDARD_DOMAINS = new Set([
-  'gmail.com',
-  'yahoo.com',
-  'hotmail.com',
-  'outlook.com',
-  'icloud.com',
-  'aol.com',
-  'proton.me',
-  'protonmail.com',
-  'zoho.com',
-  'yandex.com',
-  'mail.com',
-  'gmx.com'
-]);
 
-export function isCustomDomainEmail(email: string): boolean {
-  if (!email || !email.includes('@')) return true;
-  const domain = email.split('@').pop()?.trim().toLowerCase() ?? '';
-  return !STANDARD_DOMAINS.has(domain);
-}

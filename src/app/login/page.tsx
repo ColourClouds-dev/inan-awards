@@ -9,6 +9,7 @@ import Button from '../../components/Button';
 import Input from '../../components/Input';
 import Toast from '../../components/Toast';
 import { useToast } from '../../hooks/useToast';
+import { isCustomDomainEmail } from '../../lib/emailUtils';
 
 function getErrorMessage(error: { code?: string } | null | undefined): string {
   switch (error?.code) {
@@ -87,14 +88,28 @@ export default function LoginPage() {
     if (!resetEmail.trim()) { showToast('Please enter your email address.', 'error'); return; }
     setResetLoading(true);
     try {
-      await sendPasswordResetEmail(auth, resetEmail.trim());
+      if (isCustomDomainEmail(resetEmail.trim())) {
+        // Custom domain → our API → Brevo
+        const res = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: resetEmail.trim() }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to send reset email.');
+        }
+      } else {
+        // Standard domain → Firebase native
+        await sendPasswordResetEmail(auth, resetEmail.trim());
+      }
       showToast('Password reset email sent! Check your inbox.', 'success');
       setTimeout(() => { setMode('login'); setResetEmail(''); }, 2500);
     } catch (err: unknown) {
       const code = (err as { code?: string }).code;
       if (code === 'auth/user-not-found') showToast('No account found with that email address.', 'error');
       else if (code === 'auth/invalid-email') showToast('Please enter a valid email address.', 'error');
-      else showToast('Failed to send reset email. Please try again.', 'error');
+      else showToast(err instanceof Error ? err.message : 'Failed to send reset email. Please try again.', 'error');
     } finally {
       setResetLoading(false);
     }

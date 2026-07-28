@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Resend } from 'resend';
 import { getAdminDb } from '../../../lib/firebaseAdmin';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import type { Tenant, TenantFeatures } from '../../../types';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = 'INAN Feedback <noreply@inan.com.ng>';
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const BREVO_FROM_EMAIL = process.env.BREVO_FROM_EMAIL || 'noreply@inan.com.ng';
+const BREVO_FROM_NAME = process.env.BREVO_FROM_NAME || 'INAN Feedback';
 const LOGIN_URL = `${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://inan.com.ng'}/login`;
 
 const DEFAULT_FEATURES: TenantFeatures = {
@@ -76,11 +76,22 @@ export async function POST(req: NextRequest) {
     await getAdminAuth().setCustomUserClaims(uid, { tenantId, role: 'owner' });
 
     // Send confirmation email (fire-and-forget — don't block registration on email failure)
-    resend.emails.send({
-      from: FROM,
-      to: email,
-      subject: `Confirm your email — ${companyName}`,
-      html: `
+    if (BREVO_API_KEY) {
+      fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'api-key': BREVO_API_KEY,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: {
+            name: BREVO_FROM_NAME,
+            email: BREVO_FROM_EMAIL,
+          },
+          to: [{ email: email }],
+          subject: `Confirm your email — ${companyName}`,
+          htmlContent: `
         <!DOCTYPE html>
         <html>
         <head><meta charset="utf-8" /></head>
@@ -141,7 +152,15 @@ export async function POST(req: NextRequest) {
         </body>
         </html>
       `,
-    }).catch(err => console.error('Confirmation email error:', err));
+        }),
+      })
+        .then(res => {
+          if (!res.ok) res.text().then(text => console.error('Brevo API confirmation email error response:', text));
+        })
+        .catch(err => console.error('Confirmation email error:', err));
+    } else {
+      console.error('BREVO_API_KEY is not configured in .env.local');
+    }
 
     return NextResponse.json({ success: true, tenantId });
   } catch (err) {

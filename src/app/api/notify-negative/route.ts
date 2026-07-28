@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Resend } from 'resend';
 import { getAdminDb } from '../../../lib/firebaseAdmin';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
 
 const FALLBACK_EMAIL = 'adminaccess@inan.com.ng';
 
@@ -69,11 +68,26 @@ export async function POST(req: NextRequest) {
       }
     } catch { /* use fallback */ }
 
-    await resend.emails.send({
-      from: `${emailDisplayName} <notifications@inan.com.ng>`,
-      to: recipients,
-      subject: `⚠️ Negative Feedback Alert — ${formTitle}`,
-      html: `
+    if (!BREVO_API_KEY) {
+      console.error('BREVO_API_KEY is not configured');
+      return NextResponse.json({ success: false, error: 'Mail configuration missing' }, { status: 500 });
+    }
+
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': BREVO_API_KEY,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: {
+          name: emailDisplayName,
+          email: process.env.BREVO_FROM_EMAIL || 'notifications@inan.com.ng',
+        },
+        to: recipients.map(email => ({ email })),
+        subject: `⚠️ Negative Feedback Alert — ${formTitle}`,
+        htmlContent: `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #dc2626;">Negative Feedback Alert</h2>
           <p>A response flagged as <strong>Negative</strong> was submitted on your feedback form.</p>
@@ -108,7 +122,14 @@ export async function POST(req: NextRequest) {
           </p>
         </div>
       `,
+      }),
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Brevo API Error (notify-negative):', errorText);
+      return NextResponse.json({ success: false }, { status: 500 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {

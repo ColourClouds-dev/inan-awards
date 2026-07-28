@@ -11,7 +11,7 @@
 3. [Environment Variables](#3-environment-variables)
 4. [Firebase Project Setup](#4-firebase-project-setup)
 5. [Cloudinary Setup](#5-cloudinary-setup)
-6. [Resend Setup](#6-resend-setup)
+6. [Brevo Setup](#6-brevo-setup)
 7. [Deploying to Vercel](#7-deploying-to-vercel)
 8. [Tenant Onboarding](#8-tenant-onboarding)
 9. [Admin Scripts Reference](#9-admin-scripts-reference)
@@ -29,7 +29,7 @@ Before setting up the project, make sure the following are installed on your mac
 You will also need accounts on:
 - [Firebase](https://console.firebase.google.com) (Google account required)
 - [Cloudinary](https://cloudinary.com)
-- [Resend](https://resend.com)
+- [Brevo](https://brevo.com)
 - [Google reCAPTCHA](https://www.google.com/recaptcha/admin) (for bot protection)
 - [Vercel](https://vercel.com) (for deployment)
 
@@ -99,7 +99,9 @@ These are never sent to the browser. Keep them out of version control.
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name | Cloudinary Dashboard → Settings |
 | `CLOUDINARY_API_KEY` | Cloudinary API key | Cloudinary Dashboard → Settings → Access Keys |
 | `CLOUDINARY_API_SECRET` | Cloudinary API secret | Cloudinary Dashboard → Settings → Access Keys |
-| `RESEND_API_KEY` | Resend API key | Resend Dashboard → API Keys |
+| `BREVO_API_KEY` | Brevo SMTP API key | Brevo Dashboard → SMTP & API |
+| `BREVO_FROM_EMAIL` | Verified sender email address | Brevo Dashboard → Senders |
+| `BREVO_FROM_NAME` | Sender display name | Custom name (e.g. "INAN Feedback") |
 | `RECAPTCHA_SECRET_KEY` | Google reCAPTCHA v3 secret key | Google reCAPTCHA Admin Console |
 
 > **Important:** The `FIREBASE_ADMIN_PRIVATE_KEY` value must be wrapped in double quotes in `.env.local` because it contains newline characters. Example:
@@ -180,16 +182,14 @@ firebase deploy --only firestore:rules
 
 ---
 
-## 6. Resend Setup
+## 6. Brevo Setup
 
-1. Log in to [Resend](https://resend.com) and go to **API Keys**
-2. Create an API key and add it to `.env.local` as `RESEND_API_KEY`
-3. Verify your sending domain (`inan.com.ng`) in **Resend → Domains** by adding the DNS records Resend provides
+1. Log in to [Brevo](https://brevo.com) and go to **SMTP & API**
+2. Create a SMTP/API key and add it to `.env.local` as `BREVO_API_KEY`
+3. Configure your verified sending email and display name in `.env.local` as `BREVO_FROM_EMAIL` and `BREVO_FROM_NAME`
+4. Authenticate your sending domain (`inan.com.ng`) in **Brevo → Senders & IP → Domains** by adding the recommended DNS records (SPF, DKIM)
 
-All emails are sent from `noreply@inan.com.ng`. If you change the sending address, update the `from` field in the API route handlers:
-- `src/app/api/register-tenant/route.ts`
-- `src/app/api/welcome-email/route.ts`
-- `src/app/api/notify-negative/route.ts`
+All emails are sent via Brevo HTTP API.
 
 ---
 

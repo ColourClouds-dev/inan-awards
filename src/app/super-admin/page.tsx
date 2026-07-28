@@ -74,6 +74,13 @@ export default function SuperAdminPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ uid: string; email: string; tenantId: string } | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [roleChanging, setRoleChanging] = useState<string | null>(null); // uid being updated
+  const [emailChangeTarget, setEmailChangeTarget] = useState<{
+    uid: string;
+    currentEmail: string;
+    tenantId: string;
+  } | null>(null);
+  const [newEmail, setNewEmail] = useState('');
+  const [emailChanging, setEmailChanging] = useState(false);
 
   // ── New tenant form state ──────────────────────────────────────────────────
   const [newTenant, setNewTenant] = useState<Partial<Tenant>>({
@@ -314,6 +321,44 @@ export default function SuperAdminPage() {
     }
   };
 
+  // ── Change user email ─────────────────────────────────────────────────────
+  const handleChangeEmail = async () => {
+    if (!emailChangeTarget) return;
+    if (!newEmail.trim()) {
+      showToast('Please enter a valid email address.', 'error');
+      return;
+    }
+    setEmailChanging(true);
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('Not authenticated');
+      const token = await currentUser.getIdToken();
+      const res = await fetch('/api/change-user-email', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ uid: emailChangeTarget.uid, newEmail: newEmail.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update email.');
+
+      // Update state
+      setTenantUsers(prev => ({
+        ...prev,
+        [emailChangeTarget.tenantId]: (prev[emailChangeTarget.tenantId] ?? []).map(u =>
+          u.uid === emailChangeTarget.uid ? { ...u, email: newEmail.trim().toLowerCase() } : u
+        ),
+      }));
+
+      showToast(`Email updated. A verification link has been sent to ${newEmail.trim()}.`, 'success');
+      setEmailChangeTarget(null);
+      setNewEmail('');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to change email.', 'error');
+    } finally {
+      setEmailChanging(false);
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -547,6 +592,20 @@ export default function SuperAdminPage() {
                             <option value="staff">Staff</option>
                           </select>
 
+                          {/* Change email button */}
+                          <button
+                            onClick={() => {
+                              setEmailChangeTarget({ uid: user.uid, currentEmail: user.email, tenantId: tenant.id });
+                              setNewEmail('');
+                            }}
+                            title={`Change email for ${user.email}`}
+                            className="p-1.5 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
+
                           {/* Delete user button */}
                           <button
                             onClick={() => setDeleteTarget({ uid: user.uid, email: user.email, tenantId: tenant.id })}
@@ -634,6 +693,74 @@ export default function SuperAdminPage() {
           <span className="font-semibold text-gray-900">{deleteTarget?.email}</span>{' '}
           and revoke their access to the platform. This cannot be undone.
         </p>
+      </Modal>
+
+      {/* ── Change User Email Modal ─────────────────────────────────────── */}
+      <Modal
+        isOpen={!!emailChangeTarget}
+        title="Change Email Address"
+        onCancel={() => {
+          setEmailChangeTarget(null);
+          setNewEmail('');
+        }}
+        hideFooter={true}
+        size="sm"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleChangeEmail();
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+              Current Email
+            </label>
+            <input
+              type="text"
+              readOnly
+              value={emailChangeTarget?.currentEmail ?? ''}
+              className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 bg-gray-50 text-gray-400 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+              New Email Address
+            </label>
+            <input
+              type="email"
+              required
+              placeholder="e.g. user@domain.com"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 text-gray-800 focus:outline-none focus:ring-1 focus:ring-purple-500"
+            />
+            <p className="text-[11px] text-gray-400 mt-1">
+              A verification link will be sent to the new address.
+            </p>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setEmailChangeTarget(null);
+                setNewEmail('');
+              }}
+              disabled={emailChanging}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <Button
+              type="submit"
+              isLoading={emailChanging}
+              className="px-4 py-2 text-sm font-medium rounded-md transition-colors"
+            >
+              Update Email
+            </Button>
+          </div>
+        </form>
       </Modal>
 
     </div>

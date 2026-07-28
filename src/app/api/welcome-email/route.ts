@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Resend } from 'resend';
 import { getAdminDb } from '../../../lib/firebaseAdmin';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = 'INAN Feedback <noreply@inan.com.ng>';
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const BREVO_FROM_EMAIL = process.env.BREVO_FROM_EMAIL || 'noreply@inan.com.ng';
+const BREVO_FROM_NAME = process.env.BREVO_FROM_NAME || 'INAN Feedback';
 const DASHBOARD_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://inan.com.ng';
 
 export async function POST(req: NextRequest) {
@@ -25,11 +25,26 @@ export async function POST(req: NextRequest) {
 
     const name = companyName || 'there';
 
-    await resend.emails.send({
-      from: FROM,
-      to: email,
-      subject: `Welcome to INAN Feedback, ${name}! 🎉`,
-      html: `
+    if (!BREVO_API_KEY) {
+      console.error('BREVO_API_KEY is not configured in .env.local');
+      return NextResponse.json({ error: 'Mail server configuration error.' }, { status: 500 });
+    }
+
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': BREVO_API_KEY,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: {
+          name: BREVO_FROM_NAME,
+          email: BREVO_FROM_EMAIL,
+        },
+        to: [{ email: email }],
+        subject: `Welcome to INAN Feedback, ${name}! 🎉`,
+        htmlContent: `
         <!DOCTYPE html>
         <html>
         <head><meta charset="utf-8" /></head>
@@ -90,7 +105,14 @@ export async function POST(req: NextRequest) {
         </body>
         </html>
       `,
+      }),
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Brevo API Error (welcome-email):', errorText);
+      return NextResponse.json({ error: 'Brevo email delivery failed for welcome email.' }, { status: 500 });
+    }
 
     // Mark welcome email as sent so it never fires again
     await adminRef.set({ welcomeSent: true }, { merge: true });

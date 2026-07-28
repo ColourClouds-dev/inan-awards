@@ -111,7 +111,7 @@ Super admin access is granted via a server-side script and is not self-serviceab
 | Database | Cloud Firestore | 10.x | Primary NoSQL database for all application data |
 | Admin SDK | Firebase Admin | 13.x | Server-side auth token validation and custom claims management |
 | Image Storage | Cloudinary | 2.x | All uploaded images (logos, banners, profile photos) |
-| Email | Resend | 6.x | All transactional emails sent from `noreply@inan.com.ng` |
+| Email | Brevo | — | All transactional emails sent from Brevo using API |
 | Bot Protection | Google reCAPTCHA v3 | — | Invisible bot detection on form submissions and password changes |
 | QR Codes | qrcode.react | 4.x | QR code generation and download |
 | Excel Export | xlsx (SheetJS) | 0.18.x | `.xlsx` export of response data |
@@ -146,15 +146,16 @@ Cloudinary folders per organisation:
 - `inan/forms/og-images` — form banner images
 - `inan/seo` — default Open Graph image
 
-### 5.3 Resend
+### 5.3 Brevo
 
-**What it does:** Sends all transactional emails from `noreply@inan.com.ng`.
+**What it does:** Sends all transactional emails via HTTP API.
 
-Four email types are sent:
+Brevo handles all transactional email delivery for:
 1. Registration confirmation — after a new organisation signs up
-2. Email verification prompt — triggered by Firebase Authentication directly
-3. Welcome email — sent once on a user's first verified dashboard login
-4. Negative feedback alert — sent to configured recipients when a negative or flagged response arrives
+2. Custom domain email verification and password reset links (to bypass corporate DMARC restrictions)
+3. Staff invitations — sent to corporate email addresses
+4. Welcome email — sent once on a user's first verified dashboard login
+5. Negative feedback alert — sent to configured recipients when a negative or flagged response arrives
 
 ### 5.4 Google reCAPTCHA v3
 
