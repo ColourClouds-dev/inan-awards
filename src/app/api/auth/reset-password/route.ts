@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
-import { getAdminDb } from '../../../../lib/firebaseAdmin';
+import { getAdminApp } from '../../../../lib/firebaseAdmin';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Mail server configuration error.' }, { status: 500 });
     }
 
-    const auth = getAuth();
+    const auth = getAuth(getAdminApp());
     let resetLink: string;
 
     try {
