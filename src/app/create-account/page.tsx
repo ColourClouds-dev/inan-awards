@@ -178,7 +178,7 @@ function CreateAccountInner() {
           )}
           <h1 className="text-xl font-bold text-gray-900">Create Your Account</h1>
           <p className="text-gray-500 text-sm mt-2">
-            {tenantName ? `Join ${tenantName} on INAN Feedback.` : 'Create your account to get started.'}
+            Set up your account to start managing feedback for your organisation.
             {' '}You&apos;ll verify your email before signing in.
           </p>
         </div>
