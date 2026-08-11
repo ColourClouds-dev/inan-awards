@@ -141,7 +141,7 @@ export default function LoginPage() {
             </div>
           )}
           <h1 className="mt-2 text-center text-xl font-bold text-gray-900">
-            {tenantName ? `${tenantName} — Admin` : 'Feedback Management System'}
+            {tenantName ? `${tenantName}` : 'Feedback Management System'}
           </h1>
         </div>
       </div>
