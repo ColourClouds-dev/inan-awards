@@ -66,22 +66,37 @@ createUserWithEmailAndPassword(auth, email, password)
       → Creates tenants/{tenantId} document with default plan and limits
       → Creates tenant-admins/{uid} document
       → Sets tenantId custom claim via Firebase Admin
-      → Sends registration confirmation email via Resend (fire-and-forget)
+      → Sends registration confirmation email via Brevo (fire-and-forget)
   → sendEmailVerification(user) — Firebase sends the verification email
   → Shows "Check your email" screen with 60-second resend cooldown
 ```
 
-**Adding a user to an existing tenant (CreateAccountModal):**
+**Adding a user to an existing tenant (`/create-account`):**
 ```
 createUserWithEmailAndPassword(auth, email, password)
   → POST /api/add-tenant-user
       → Server reads x-tenant-id from middleware-injected header
       → Verifies tenant exists in Firestore
       → Creates tenant-admins/{uid} document
-      → Sets tenantId custom claim via Firebase Admin
-  → sendEmailVerification(user)
+      → Sets tenantId + role custom claims via Firebase Admin
+  → If isCustomDomainEmail(email):
+      → POST /api/auth/send-verification (Brevo delivers verification link)
+      → redirect to /verify-email?email=...&uid=...
+  → Else (standard domain):
+      → sendEmailVerification(user) — Firebase delivers verification email
+      → redirect to /verify-email?email=...
   → auth.signOut() — user must verify before accessing dashboard
   → If /api/add-tenant-user fails → user.delete() to avoid orphaned Auth account
+```
+
+**Password reset (`/login` → Forgot password):**
+```
+User enters email and clicks Send Reset Link
+  → isCustomDomainEmail(email)?
+      YES → POST /api/auth/reset-password
+              → Firebase Admin generatePasswordResetLink(email)
+              → Send link via Brevo
+      NO  → sendPasswordResetEmail(auth, email) — Firebase native
 ```
 
 **AuthGuard** — every page under `/dashboard` is wrapped in `AuthGuard`, which:
@@ -89,6 +104,16 @@ createUserWithEmailAndPassword(auth, email, password)
 - Redirects to `/login` if no user is present
 - If the user exists but `emailVerified === false`: signs them out and shows the `EmailVerification` component (a screen explaining they need to verify first)
 - If verified: renders the dashboard
+
+**Email domain routing utility — `src/lib/emailUtils.ts`:**
+
+A shared utility that determines whether an email address belongs to a custom/work domain or a standard consumer domain. Used by registration, login (password reset), and the change-user-email API route.
+
+```ts
+isCustomDomainEmail(email: string): boolean
+// Returns true for work/custom domains → routes to Brevo
+// Returns false for Gmail, Yahoo, Outlook etc. → routes to Firebase native
+```
 
 ---
 
@@ -435,7 +460,7 @@ Go to Dashboard → Profile (click your name or avatar in the top navigation).
 
 - Profile photo: uploaded to Cloudinary (`{tenantId}/profiles`), then saved to both `Firebase Auth photoURL` and `tenant-admins/{uid}.photoUrl`
 - Display name: `updateProfile(auth.currentUser, { displayName })` — max 50 chars, sanitized
-- Password change: `reauthenticateWithCredential(user, EmailAuthProvider.credential(email, currentPassword))` → reCAPTCHA verification → `updatePassword(user, newPassword)`
+- Password change: `reauthenticateWithCredential(user, EmailAuthProvider.credential(email, currentPassword))` → reCAPTCHA verification → `updatePassword(user, newPassword)` → fire-and-forget `POST /api/auth/password-changed` to send a security notification email to the user
 
 ---
 
@@ -462,8 +487,12 @@ Navigate to `/super-admin` while logged in as a super admin user.
 - Update name, domain, email domain, plan, limits, or feature flags
 - Click "Save Changes"
 
-**Activating / deactivating:**
-- Click the toggle icon to switch between `active` and `inactive` status
+**Viewing and managing users per organisation:**
+- Click the users icon on any tenant card to expand the user list
+- Each user shows their email, role badge, join date, and form count
+- **Change role** — use the role dropdown to toggle between Owner and Staff
+- **Change email address** — click the pencil icon next to a user to open the email change modal. Enter the new email address and confirm. The system updates Firebase Auth, marks the email as unverified, and routes a verification email to the new address (Brevo for custom domains, Firebase for standard domains).
+- **Delete a user** — click the delete icon. A confirmation modal appears before removal. Deletes the Firebase Auth account and the `tenant-admins` document.
 
 **Impersonating an organisation:**
 - Click the eye icon to enter that organisation's dashboard as if you were their admin

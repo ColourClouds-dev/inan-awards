@@ -22,16 +22,25 @@ All routes are under `src/app/api/`. Routes that require no authentication rely 
 | Route | Method | Auth required | Description |
 |---|---|---|---|
 | `/api/tenant/current` | GET | None | Resolves the current tenant from the incoming domain or impersonation cookie. Returns the full tenant document if found. |
-| `/api/add-tenant-user` | POST | None (trusts middleware header) | Creates a `tenant-admins` document and sets the `tenantId` custom claim for a newly registered user on an existing tenant. |
-| `/api/register-tenant` | POST | None | Creates a new `tenants` document, a `tenant-admins` document, sets the `tenantId` claim, and sends a registration confirmation email. |
+| `/api/add-tenant-user` | POST | None (trusts middleware header) | Creates a `tenant-admins` document and sets the `tenantId` + `role` custom claims for a newly registered user on an existing tenant. |
+| `/api/register-tenant` | POST | None | Creates a new `tenants` document, a `tenant-admins` document, sets the `tenantId` claim, and sends a registration confirmation email via Brevo. |
 | `/api/verify-recaptcha` | POST | None | Accepts a reCAPTCHA v3 token, verifies it with Google's API, and returns success/failure. Used before feedback submissions and password changes. |
 | `/api/cloudinary/sign` | POST | None | Returns a signed upload payload (`signature`, `timestamp`, `cloudName`, `apiKey`, `folder`) for direct browser-to-Cloudinary uploads. The `CLOUDINARY_API_SECRET` is never sent to the client. |
 | `/api/cloudinary/delete` | POST | None | Accepts a Cloudinary image URL, extracts the `public_id`, and calls `cloudinary.uploader.destroy()` to delete the image. |
-| `/api/welcome-email` | POST | None | Sends the one-time welcome email via Resend. Checks `tenant-admins/{uid}.welcomeSent` before sending — fires exactly once per user lifetime. Sets `welcomeSent: true` after sending. |
-| `/api/notify-negative` | POST | None | Sends a negative feedback alert email to all addresses in `tenant-settings/{tenantId}/config/notifications`. Triggered when a response has a negative sentiment tag or any custom tag. |
+| `/api/welcome-email` | POST | None | Sends the one-time welcome email via Brevo. Checks `tenant-admins/{uid}.welcomeSent` before sending — fires exactly once per user lifetime. Sets `welcomeSent: true` after sending. |
+| `/api/notify-negative` | POST | None | Sends a negative feedback alert email via Brevo to all addresses in `tenant-settings/{tenantId}/config/notifications`. Triggered when a response has a negative sentiment tag or any custom tag. |
+| `/api/auth/send-verification` | POST | None | Generates a custom email verification token and sends a verification email via Brevo. Used for custom domain users during registration. |
+| `/api/auth/verify` | POST | None | Validates a custom email verification token and marks the Firebase Auth user as email-verified. |
+| `/api/auth/reset-password` | POST | None | Generates a Firebase password reset link via Admin SDK and delivers it via Brevo. Used for custom domain users on the Forgot Password flow. |
+| `/api/auth/password-changed` | POST | Firebase Bearer token | Sends a security notification email via Brevo informing the user their password was changed. Requires a valid authenticated token to prevent abuse. Called fire-and-forget after every successful `updatePassword` call. |
+| `/api/change-user-email` | PATCH | Super admin Bearer token | Updates a user's email address in Firebase Auth, marks it unverified, and routes a verification email via Brevo (custom domain) or Firebase (standard domain). Super admin only. |
+| `/api/invite-staff` | POST | None (trusts middleware header) | Sends a staff invitation email via Brevo and writes an invitation token to `tenant-invitations`. |
+| `/api/invite-staff/validate` | GET | None | Validates an invitation token from the URL query string. Returns the invitation details if valid and unused. |
 | `/api/impersonate` | POST | Super admin Bearer token | Sets the `sa-impersonate` HttpOnly cookie to the requested `tenantId`. Validates the `superAdmin` claim before setting. |
 | `/api/impersonate` | DELETE | Super admin Bearer token | Clears the `sa-impersonate` cookie, ending the impersonation session. |
 | `/api/import-employees` | POST | Firebase ID token | Accepts bulk employee data and writes it to the `employees` collection scoped to the authenticated user's tenant. |
+| `/api/delete-user` | DELETE | Super admin Bearer token | Deletes a Firebase Auth user account and their `tenant-admins` document. |
+| `/api/update-user-role` | PATCH | Super admin Bearer token | Updates the `role` field on `tenant-admins/{uid}` and refreshes the user's custom claims. |
 
 ---
 
@@ -88,7 +97,8 @@ All utilities are in `src/lib/`.
 | File | Description |
 |---|---|
 | `firebase.ts` | Initialises the Firebase client SDK (`auth`, `db`). Called once at startup; subsequent imports use the cached instance. |
-| `firebaseAdmin.ts` | Initialises the Firebase Admin SDK using `FIREBASE_ADMIN_*` environment variables. Exports `getAdminDb()` and `getAdminAuth()`. Only runs server-side. |
+| `firebaseAdmin.ts` | Initialises the Firebase Admin SDK using `FIREBASE_ADMIN_*` environment variables. Exports `getAdminDb()`, `getAdminApp()`, and `getTenantSettings()`. Only runs server-side. `getAdminApp()` is exported so API routes can pass the initialised app instance directly to `getAuth()`, avoiding uninitialized-app errors at runtime. |
+| `emailUtils.ts` | Shared email routing utility. Exports `isCustomDomainEmail(email)` — returns `true` for custom/work domains (routes to Brevo) and `false` for standard consumer domains like Gmail and Yahoo (routes to Firebase native). Also exports `STANDARD_DOMAINS` set. Used by registration, password reset, and the change-user-email API route. |
 | `firestore.ts` | Core Firestore CRUD helpers: `saveForm`, `updateForm`, `deleteForm`, `getAllForms`, `getAllResponses`, `submitFeedback`, `getFormById`, `hasIpSubmittedForm`, `incrementFormCount`. All queries include `tenantId` filtering. |
 | `tenantFirestore.ts` | Tenant-specific operations: `getAllTenants`, `saveTenant`, `updateTenant`, `getTenantByDomain`. Used by `TenantContext`, the super-admin page, and API routes. |
 | `employeesFirestore.ts` | Employee CRUD: `getAllEmployees`, `addEmployee`, `updateEmployee`, `deleteEmployee`, `getEmployeeById`. All operations scoped to `tenantId`. |
@@ -106,7 +116,7 @@ All shared types are in `src/types/index.ts`.
 | Type / Interface | Description |
 |---|---|
 | `Tenant` | Full organisation document shape, including `branding`, `features`, `plan`, `status`, and the `nominationFormLimit`/`nominationFormCount` fields (reserved for future use) |
-| `TenantFeatures` | Feature flag object: `feedbackForms`, `employeeRecords`, `seoSettings`, `hidePoweredBy` |
+| `TenantFeatures` | Feature flag object: `feedbackForms`, `employeeRecords`, `seoSettings`, `hidePoweredBy`, `allowResponseSharing` |
 | `FeedbackForm` | Feedback form document shape |
 | `FeedbackQuestion` | Individual question shape within a form |
 | `FeedbackResponse` | Response submission document shape, including visitor metadata and tags |
@@ -143,3 +153,5 @@ All shared types are in `src/types/index.ts`.
 | One response per device per form | Enforced via localStorage flag + Firestore IP check | No |
 | Firebase ID token expiry | 1 hour (auto-refreshed by client SDK) | Firebase platform setting |
 | Custom claims propagation delay after script change | Up to 1 hour, or sign out and back in | Firebase platform behaviour |
+| First-login claims propagation delay | Up to ~2 seconds after `/api/add-tenant-user` writes claims. `TenantContext` handles this with a single 1500ms retry before falling back to domain-based resolution | Firebase platform behaviour — handled automatically |
+| API routes without `export const dynamic = 'force-dynamic'` | Will crash at Vercel build time if they import `firebaseAdmin` — env vars are not available during static analysis | All Admin SDK routes must include this directive |

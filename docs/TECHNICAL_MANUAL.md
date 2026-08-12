@@ -1,7 +1,7 @@
 # INAN Feedback — Technical Manual
 
-**Version:** 2.0
-**Date:** June 2026
+**Version:** 2.1
+**Date:** July 2026
 **Audience:** Internal Developers & Business Stakeholders
 **Status:** Living Document
 

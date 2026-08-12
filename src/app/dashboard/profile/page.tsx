@@ -145,6 +145,19 @@ export default function ProfilePage() {
       const credential = EmailAuthProvider.credential(user.email, currentPassword);
       await reauthenticateWithCredential(user, credential);
       await updatePassword(user, newPassword);
+
+      // Fire-and-forget security notification — must not block or affect UX
+      user.getIdToken().then(token => {
+        fetch('/api/auth/password-changed', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ email: user.email }),
+        }).catch(() => { /* non-fatal — notification failure never blocks the user */ });
+      }).catch(() => {});
+
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');

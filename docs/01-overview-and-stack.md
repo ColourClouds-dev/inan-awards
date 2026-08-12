@@ -150,12 +150,20 @@ Cloudinary folders per organisation:
 
 **What it does:** Sends all transactional emails via HTTP API.
 
-Brevo handles all transactional email delivery for:
-1. Registration confirmation — after a new organisation signs up
-2. Custom domain email verification and password reset links (to bypass corporate DMARC restrictions)
-3. Staff invitations — sent to corporate email addresses
+Brevo handles all transactional email delivery. The routing rule is:
+
+> **Custom domains** (e.g. `@inan.com.ng`, any non-standard work domain) → **Brevo**
+> **Standard domains** (Gmail, Yahoo, Outlook, etc.) → **Firebase** built-in email
+
+Brevo is used for:
+1. Email address verification — for custom domain users during registration
+2. Password reset links — for custom domain users (Firebase generates the link; Brevo delivers it)
+3. Staff invitations — always via Brevo regardless of domain
 4. Welcome email — sent once on a user's first verified dashboard login
 5. Negative feedback alert — sent to configured recipients when a negative or flagged response arrives
+6. Password change security notification — sent to all users after a successful password change
+
+**Domain authentication:** The sending domain (`inan.com.ng`) must be authenticated in Brevo with SPF and DKIM DNS records. Without these, emails to `@inan.com.ng` recipients will be rejected by the receiving mail server with a DMARC error (`550 5.7.1`). See [Setup and Configuration § Brevo Setup](./05-setup-and-configuration.md#6-brevo-setup) for details.
 
 ### 5.4 Google reCAPTCHA v3
 

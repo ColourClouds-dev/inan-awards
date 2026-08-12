@@ -74,9 +74,21 @@ export function TenantProvider({ children }: TenantProviderProps) {
           try {
             if (user) {
               setCurrentUid(user.uid);
-              const tokenResult = await user.getIdTokenResult(true);
-              const claimTenantId = tokenResult.claims.tenantId as string | undefined;
-              const claimRole = tokenResult.claims.role as TenantRole | undefined;
+              let tokenResult = await user.getIdTokenResult(true);
+              let claimTenantId = tokenResult.claims.tenantId as string | undefined;
+              let claimRole = tokenResult.claims.role as TenantRole | undefined;
+
+              // ── Stale claims retry ───────────────────────────────────────
+              // On first login, custom claims written server-side by
+              // /api/add-tenant-user may not have propagated to the client
+              // token yet. Wait 1500ms and retry once before falling back.
+              if (!claimTenantId) {
+                await new Promise(r => setTimeout(r, 1500));
+                tokenResult = await user.getIdTokenResult(true);
+                claimTenantId = tokenResult.claims.tenantId as string | undefined;
+                claimRole = tokenResult.claims.role as TenantRole | undefined;
+              }
+              // ─────────────────────────────────────────────────────────────
 
               if (claimRole) setRole(claimRole);
 

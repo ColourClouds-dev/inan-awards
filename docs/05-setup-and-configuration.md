@@ -56,6 +56,8 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+> **Dev database requirement.** The app's fallback tenant ID is `"inan"`. On localhost, this means a document with ID `inan` must exist in the `tenants` Firestore collection of your dev project. If it doesn't exist, account creation will return a `"Tenant not found."` error. Create the document manually in the Firebase Console (Firestore → tenants → Add document, ID: `inan`) with at minimum: `name`, `domain`, `plan`, `status`, `formLimit`, and `formCount` fields. This is a dev-only requirement — production resolves tenants by domain.
+
 **Other available commands:**
 
 ```bash
@@ -187,9 +189,21 @@ firebase deploy --only firestore:rules
 1. Log in to [Brevo](https://brevo.com) and go to **SMTP & API**
 2. Create a SMTP/API key and add it to `.env.local` as `BREVO_API_KEY`
 3. Configure your verified sending email and display name in `.env.local` as `BREVO_FROM_EMAIL` and `BREVO_FROM_NAME`
-4. Authenticate your sending domain (`inan.com.ng`) in **Brevo → Senders & IP → Domains** by adding the recommended DNS records (SPF, DKIM)
+4. Authenticate your sending domain in **Brevo → Settings → Senders & IP → Domains**:
+   - Add `inan.com.ng` as the sending domain
+   - Brevo will generate two DNS records — an SPF record and a DKIM record
+   - Pass both to whoever manages the `inan.com.ng` DNS (they need to merge the SPF into any existing SPF record and add the DKIM as a new TXT record)
+   - Once DNS propagates, click **Verify** in Brevo — both SPF and DKIM should show green
+5. Set `BREVO_FROM_EMAIL` to `noreply@inan.com.ng` (not a Gmail or personal address — Brevo cannot send on behalf of Gmail addresses)
 
-All emails are sent via Brevo HTTP API.
+> **Important — two SPF records is invalid.** If `inan.com.ng` already has SPF records (e.g. for one.com and Zoho), do not add a second one. All includes must be merged into a single TXT record:
+> ```
+> v=spf1 include:_custspf.one.com include:sender.zohobooks.com include:spf.brevo.com ~all
+> ```
+
+> **DMARC note.** Until SPF and DKIM are verified, emails to `@inan.com.ng` recipients will be rejected with `550 5.7.1 DMARC policy violation`. Emails to Gmail, Yahoo, and other standard domains are unaffected — those use Firebase's built-in email delivery.
+
+All transactional emails are sent via Brevo HTTP API (`POST https://api.brevo.com/v3/smtp/email`). No SMTP credentials or nodemailer are used.
 
 ---
 

@@ -51,7 +51,7 @@ Each organisation on the platform is called a "tenant". Every piece of data — 
 │  Middleware (tenant resolution, header injection)             │
 │  API Routes  ←→  Firebase Admin SDK                          │
 │              ←→  Cloudinary Server SDK                        │
-│              ←→  Resend Email API                             │
+│              ←→  Brevo Email API                             │
 └────────────────────────────┬─────────────────────────────────┘
                              │
 ┌────────────────────────────▼─────────────────────────────────┐
@@ -102,9 +102,14 @@ TenantContext (client component, mounted in root layout)
   → If impersonating → use impersonated tenant, mark isImpersonating = true
   → If not impersonating:
       → Wait for onAuthStateChanged to fire
-      → Call user.getIdTokenResult() to read token claims
+      → Call user.getIdTokenResult(true) to read token claims
+      → If claimTenantId is missing (first login — claims may not have
+        propagated yet from Firebase Admin write):
+          → Wait 1500ms
+          → Retry user.getIdTokenResult(true) once
       → If claims.tenantId exists → load tenants/{tenantId} from Firestore
-      → If no claim → fall back to GET /api/tenant/current (domain-based)
+      → If still no claim after retry → fall back to GET /api/tenant/current
+        (domain-based)
       │
       ▼
 BrandProvider (client component, mounted in root layout)
