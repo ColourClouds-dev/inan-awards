@@ -14,7 +14,7 @@ import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { submitFeedback, hasIpSubmittedForm } from '../lib/firestore';
 import { getVisitorInfo } from '../lib/visitorInfo';
 import { computeAllTags, isNegativeResponse, hasCustomTags } from '../lib/tagEngine';
-import type { FeedbackForm, FeedbackQuestion, Tenant } from '../types';
+import type { FeedbackForm, FeedbackQuestion, Tenant, FormSection } from '../types';
 import type { VisitorInfo } from '../lib/visitorInfo';
 import ShareResponseButton from './ShareResponseButton';
 import { getTenantById } from '../lib/tenantFirestore';
@@ -447,7 +447,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
           </svg>
           <h2 className="text-xl font-semibold text-gray-800 mb-2">Already Submitted</h2>
-          <p className="text-gray-600">You have already submitted a response for this form. Only one submission per device is allowed.</p>
+          <p className="text-gray-600">You have already submitted a response for this form. Only one submission per device is allowed. You can submit again in 24 hours</p>
         </div>
       </div>
     );
@@ -585,7 +585,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
         <Toast toasts={toasts} onDismiss={dismissToast} />
         <FormHeader />
 
-        {/* Progress bar */}
+        {/* Progress bar with section context */}
         <div className="mb-6">
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
@@ -593,12 +593,21 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
               style={{ width: `${progress}%`, backgroundColor: 'var(--brand)' }}
             />
           </div>
-          <p className="text-xs text-gray-500 text-right mt-1">{currentStep + 1} of {total}</p>
+          <div className="flex items-center justify-between text-xs text-gray-500 mt-1">
+            <span>{currentStep + 1} of {total}</span>
+            {(() => {
+              const currentQuestion = form.questions[currentStep];
+              const section = form.sections?.find(s => s.id === currentQuestion?.sectionId);
+              return section ? (
+                <span className="text-right">Section: {section.name}</span>
+              ) : null;
+            })()}
+          </div>
         </div>
 
         <form onSubmit={handleStepSubmit} className="space-y-6">
-          {/* Fixed-height container prevents layout shift between steps */}
-          <div className="relative overflow-hidden min-h-[280px]">
+          {/* Question container with proper spacing */}
+          <div className="relative min-h-[200px]">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={currentStep}
@@ -606,6 +615,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -40 }}
                 transition={{ type: 'tween' as const, ease: 'easeInOut' as const, duration: 0.22 }}
+                className="w-full"
               >
                 {/* Render only the current question — RHF keeps all values via hidden inputs */}
                 {form.questions.map((q, i) => (
@@ -679,6 +689,28 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
 
   // ── All-at-once mode (default) ────────────────────────────────────────────
 
+  // Group questions by sections for rendering
+  const groupedQuestions = useMemo(() => {
+    const sections = form.sections || [];
+    const groups: Array<{ section: FormSection | null; questions: FeedbackQuestion[] }> = [];
+    
+    // Add sections with their questions
+    sections.forEach(section => {
+      const sectionQuestions = form.questions.filter(q => q.sectionId === section.id);
+      if (sectionQuestions.length > 0) {
+        groups.push({ section, questions: sectionQuestions });
+      }
+    });
+    
+    // Add unsectioned questions
+    const unsectionedQuestions = form.questions.filter(q => !q.sectionId);
+    if (unsectionedQuestions.length > 0) {
+      groups.push({ section: null, questions: unsectionedQuestions });
+    }
+    
+    return groups;
+  }, [form.questions, form.sections]);
+
   return (
     <div className="max-w-2xl mx-auto p-6">
       <Toast toasts={toasts} onDismiss={dismissToast} />
@@ -687,14 +719,35 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* min-h prevents the form from collapsing while questions render */}
         <div className="space-y-8 min-h-[320px]">
-          {form.questions.map((question, index) => (
-            <QuestionBlock
-              key={question.id}
-              question={question}
-              index={index}
-              control={control}
-              errors={errors}
-            />
+          {groupedQuestions.map((group, groupIndex) => (
+            <div key={group.section?.id || 'unsectioned'}>
+              {/* Section header */}
+              {group.section && (
+                <div className="mb-6">
+                  <h2 className="text-lg font-semibold text-gray-800 mb-2">{group.section.name}</h2>
+                  {group.section.description && (
+                    <p className="text-sm text-gray-600 mb-4">{group.section.description}</p>
+                  )}
+                  <hr className="border-gray-200" />
+                </div>
+              )}
+              
+              {/* Questions in this section */}
+              <div className="space-y-6">
+                {group.questions.map((question, questionIndex) => {
+                  const overallIndex = form.questions.findIndex(q => q.id === question.id);
+                  return (
+                    <QuestionBlock
+                      key={question.id}
+                      question={question}
+                      index={overallIndex}
+                      control={control}
+                      errors={errors}
+                    />
+                  );
+                })}
+              </div>
+            </div>
           ))}
         </div>
 

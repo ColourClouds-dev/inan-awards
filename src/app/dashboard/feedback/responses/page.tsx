@@ -15,6 +15,7 @@ import PaginationBar from '../../../../components/PaginationBar';
 import { FilterBarSkeleton, TableRowSkeleton } from '../../../../components/Skeleton';
 import { useWithTimeout } from '../../../../hooks/useWithTimeout';
 import { usePagination } from '../../../../hooks/usePagination';
+import ResponseDetailModal from '../../../../components/ResponseDetailModal';
 import type { FeedbackForm, FeedbackResponse, ResponseTag } from '../../../../types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -67,11 +68,33 @@ const ChevronIcon = ({ open }: { open: boolean }) => (
 
 function ResponseRow({ response, form }: { response: FeedbackResponse; form: FeedbackForm | undefined }) {
   const [open, setOpen] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const submittedAt = toDate(response.submittedAt).toLocaleString();
+
+  // Group questions by sections for preview
+  const groupedQuestions = React.useMemo(() => {
+    if (!form) return [];
+    const sections = form.sections || [];
+    const groups: Array<{ section: any; questions: any[] }> = [];
+    
+    sections.forEach(section => {
+      const sectionQuestions = form.questions.filter(q => q.sectionId === section.id);
+      if (sectionQuestions.length > 0) {
+        groups.push({ section, questions: sectionQuestions });
+      }
+    });
+    
+    const unsectionedQuestions = form.questions.filter(q => !q.sectionId);
+    if (unsectionedQuestions.length > 0) {
+      groups.push({ section: null, questions: unsectionedQuestions });
+    }
+    
+    return groups;
+  }, [form]);
 
   return (
     <>
-      <tr className="hover:bg-gray-50 cursor-pointer" onClick={() => setOpen(o => !o)}>
+      <tr className="hover:bg-gray-50">
         <td className="px-4 py-3 text-sm text-gray-700 font-medium">
           {form?.title ?? <span className="text-gray-400 italic">Unknown form</span>}
         </td>
@@ -90,30 +113,73 @@ function ResponseRow({ response, form }: { response: FeedbackResponse; form: Fee
             ? `${Math.floor(response.timeSpentSeconds / 60)}m ${response.timeSpentSeconds % 60}s`
             : '—'}
         </td>
-        <td className="px-4 py-3 text-gray-400"><ChevronIcon open={open} /></td>
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowModal(true)}
+              className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+            >
+              View Details
+            </button>
+            <button
+              onClick={() => setOpen(o => !o)}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <ChevronIcon open={open} />
+            </button>
+          </div>
+        </td>
       </tr>
 
       {open && (
         <tr className="bg-purple-50">
           <td colSpan={7} className="px-6 py-4">
-            <div className="space-y-2">
-              {form?.questions.map(q => {
-                const val = response.responses[q.id];
-                return val !== undefined ? (
-                  <div key={q.id} className="text-sm">
-                    <span className="font-medium text-gray-700">{q.question}: </span>
-                    <span className="text-gray-600">{String(val)}</span>
+            <div className="space-y-4">
+              {groupedQuestions.map((group, groupIndex) => (
+                <div key={group.section?.id || 'unsectioned'}>
+                  {/* Section header for grouped display */}
+                  {group.section && (
+                    <div className="mb-2">
+                      <h4 className="text-sm font-semibold text-gray-700">{group.section.name}</h4>
+                      {group.section.description && (
+                        <p className="text-xs text-gray-500">{group.section.description}</p>
+                      )}
+                      <hr className="mt-1 border-gray-300" />
+                    </div>
+                  )}
+                  
+                  {/* Questions in this section */}
+                  <div className="space-y-2">
+                    {group.questions.map(q => {
+                      const val = response.responses[q.id];
+                      return val !== undefined ? (
+                        <div key={q.id} className="text-sm">
+                          <span className="font-medium text-gray-700">{q.question}: </span>
+                          <span className="text-gray-600">{String(val)}</span>
+                        </div>
+                      ) : null;
+                    })}
                   </div>
-                ) : null;
-              })}
+                </div>
+              ))}
               {response.visitorIp && (
-                <p className="text-xs text-gray-400 pt-1">
+                <p className="text-xs text-gray-400 pt-2 mt-2 border-t border-gray-200">
                   IP: {response.visitorIp} · ISP: {response.visitorIsp ?? '—'}
                 </p>
               )}
             </div>
           </td>
         </tr>
+      )}
+
+      {/* Response Detail Modal */}
+      {showModal && form && (
+        <ResponseDetailModal
+          response={response}
+          form={form}
+          isOpen={showModal}
+          onClose={() => setShowModal(false)}
+        />
       )}
     </>
   );
@@ -395,7 +461,7 @@ export default function ResponsesPage() {
             <table className="min-w-full divide-y divide-gray-100 text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Form', 'Submitted', 'Country', 'City', 'Tags', 'Time Spent', ''].map(h => (
+                  {['Form', 'Submitted', 'Country', 'City', 'Tags', 'Time Spent', 'Actions'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                       {h}
                     </th>

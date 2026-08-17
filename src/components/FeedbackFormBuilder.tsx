@@ -16,7 +16,7 @@ import ImageUpload from './ImageUpload';
 import { useToast } from '../hooks/useToast';
 import { useTenant } from '../contexts/TenantContext';
 import { sanitizeAndLimit, sanitizeText } from '../lib/sanitize';
-import type { FeedbackForm, FeedbackQuestion, CustomTagRule, LocationSettings } from '../types';
+import type { FeedbackForm, FeedbackQuestion, CustomTagRule, LocationSettings, FormSection } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -102,6 +102,7 @@ function PreviewPanel({
   location,
   ogImageUrl,
   questions,
+  sections,
   stepByStep,
   onClose,
 }: {
@@ -110,6 +111,7 @@ function PreviewPanel({
   location: string;
   ogImageUrl: string;
   questions: FeedbackQuestion[];
+  sections: FormSection[];
   stepByStep: boolean;
   onClose: () => void;
 }) {
@@ -174,51 +176,92 @@ function PreviewPanel({
             No questions added yet
           </div>
         ) : (
-          questions.map((q, i) => (
-            <div key={q.id} className="bg-white rounded-xl shadow-sm p-4">
-              <div className="flex items-start gap-3 mb-3">
-                <span
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
-                  style={{ backgroundColor: 'var(--brand)' }}
-                >
-                  {i + 1}
-                </span>
-                <p className="text-sm font-medium text-gray-900">
-                  {q.question || <span className="text-gray-400 italic">Question text…</span>}
-                  {q.required && <span className="text-red-500 ml-1">*</span>}
-                </p>
-              </div>
-
-              {q.type === 'rating' && (
-                <div className="flex gap-2 ml-9">
-                  {[1, 2, 3, 4, 5].map(r => (
-                    <div key={r} className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-sm text-gray-500">
-                      {r}
+          <div className="space-y-6">
+            {(() => {
+              // Group questions by sections for preview
+              const sectionsList = sections || [];
+              const groups: Array<{ section: any; questions: any[] }> = [];
+              
+              sectionsList.forEach(section => {
+                const sectionQuestions = questions.filter(q => q.sectionId === section.id);
+                if (sectionQuestions.length > 0) {
+                  groups.push({ section, questions: sectionQuestions });
+                }
+              });
+              
+              const unsectionedQuestions = questions.filter(q => !q.sectionId);
+              if (unsectionedQuestions.length > 0) {
+                groups.push({ section: null, questions: unsectionedQuestions });
+              }
+              
+              return groups.map((group, groupIndex) => (
+                <div key={group.section?.id || 'unsectioned'}>
+                  {/* Section header */}
+                  {group.section && (
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold text-gray-800 mb-1">{group.section.name}</h3>
+                      {group.section.description && (
+                        <p className="text-xs text-gray-600 mb-2">{group.section.description}</p>
+                      )}
+                      <hr className="border-gray-200" />
                     </div>
-                  ))}
-                </div>
-              )}
+                  )}
+                  
+                  {/* Questions in this section */}
+                  <div className="space-y-4">
+                    {group.questions.map((q, i) => {
+                      const overallIndex = questions.findIndex(ques => ques.id === q.id);
+                      return (
+                        <div key={q.id} className="bg-white rounded-xl shadow-sm p-4">
+                          <div className="flex items-start gap-3 mb-3">
+                            <span
+                              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
+                              style={{ backgroundColor: 'var(--brand)' }}
+                            >
+                              {overallIndex + 1}
+                            </span>
+                            <p className="text-sm font-medium text-gray-900">
+                              {q.question || <span className="text-gray-400 italic">Question text…</span>}
+                              {q.required && <span className="text-red-500 ml-1">*</span>}
+                            </p>
+                          </div>
 
-              {q.type === 'text' && (
-                <div className="ml-9">
-                  <div className="w-full h-16 rounded-lg bg-gray-50 border border-gray-200" />
-                </div>
-              )}
+                          {q.type === 'rating' && (
+                            <div className="flex gap-2 ml-9">
+                              {[1, 2, 3, 4, 5].map(r => (
+                                <div key={r} className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-sm text-gray-500">
+                                  {r}
+                                </div>
+                              ))}
+                            </div>
+                          )}
 
-              {q.type === 'multiChoice' && q.options && (
-                <div className="ml-9 space-y-2">
-                  {q.options.map((opt, oi) => (
-                    <div key={oi} className="flex items-center gap-2">
-                      <div className={`w-4 h-4 rounded-${q.multiSelect ? 'sm' : 'full'} border-2 border-gray-300 shrink-0`} />
-                      <span className="text-xs text-gray-600">
-                        {opt === '__others__' ? 'Others (Please Specify)' : opt || `Option ${oi + 1}`}
-                      </span>
-                    </div>
-                  ))}
+                          {q.type === 'text' && (
+                            <div className="ml-9">
+                              <div className="w-full h-16 rounded-lg bg-gray-50 border border-gray-200" />
+                            </div>
+                          )}
+
+                          {q.type === 'multiChoice' && q.options && (
+                            <div className="ml-9 space-y-2">
+                              {q.options.map((opt, oi) => (
+                                <div key={oi} className="flex items-center gap-2">
+                                  <div className={`w-4 h-4 rounded-${q.multiSelect ? 'sm' : 'full'} border-2 border-gray-300 shrink-0`} />
+                                  <span className="text-xs text-gray-600">
+                                    {opt === '__others__' ? 'Others (Please Specify)' : opt || `Option ${oi + 1}`}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              )}
-            </div>
-          ))
+              ));
+            })()}
+          </div>
         )}
 
         {/* Submit button preview */}
@@ -265,9 +308,152 @@ function PreviewPanel({
   );
 }
 
+// ── Sections Management Modal ─────────────────────────────────────────────────
+
+function SectionsModal({ 
+  sections, 
+  onAdd, 
+  onUpdate, 
+  onRemove, 
+  onMove, 
+  onClose 
+}: {
+  sections: FormSection[];
+  onAdd: (name: string, description?: string) => void;
+  onUpdate: (id: string, updates: Partial<FormSection>) => void;
+  onRemove: (id: string) => void;
+  onMove: (id: string, direction: 'up' | 'down') => void;
+  onClose: () => void;
+}) {
+  const [newSectionName, setNewSectionName] = useState('');
+  const [newSectionDescription, setNewSectionDescription] = useState('');
+
+  const handleAdd = () => {
+    if (!newSectionName.trim()) return;
+    onAdd(newSectionName.trim(), newSectionDescription.trim() || undefined);
+    setNewSectionName('');
+    setNewSectionDescription('');
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <h2 className="text-lg font-bold text-gray-900">Manage Sections</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          {/* Add new section */}
+          <div className="mb-6 p-4 bg-gray-50 rounded-xl">
+            <h3 className="text-sm font-medium text-gray-800 mb-3">Add New Section</h3>
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={newSectionName}
+                onChange={e => setNewSectionName(e.target.value)}
+                placeholder="Section name (e.g., General Experience)"
+                maxLength={100}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2"
+                style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
+              />
+              <input
+                type="text"
+                value={newSectionDescription}
+                onChange={e => setNewSectionDescription(e.target.value)}
+                placeholder="Description (optional)"
+                maxLength={200}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2"
+                style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
+              />
+              <button
+                onClick={handleAdd}
+                disabled={!newSectionName.trim()}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-40"
+                style={{ backgroundColor: 'var(--brand)' }}
+              >
+                Add Section
+              </button>
+            </div>
+          </div>
+
+          {/* Existing sections */}
+          <div className="space-y-3">
+            {sections.length === 0 ? (
+              <p className="text-sm text-gray-400 italic text-center py-8">No sections yet. Add one above.</p>
+            ) : (
+              sections.map((section, index) => (
+                <div key={section.id} className="bg-white border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 space-y-2">
+                      <input
+                        type="text"
+                        value={section.name}
+                        onChange={e => onUpdate(section.id, { name: e.target.value })}
+                        placeholder="Section name"
+                        maxLength={100}
+                        className="w-full font-medium text-gray-900 bg-transparent border-none p-0 focus:outline-none focus:ring-1 focus:ring-gray-300 rounded px-2 py-1"
+                      />
+                      <input
+                        type="text"
+                        value={section.description || ''}
+                        onChange={e => onUpdate(section.id, { description: e.target.value || undefined })}
+                        placeholder="Description (optional)"
+                        maxLength={200}
+                        className="w-full text-sm text-gray-600 bg-transparent border-none p-0 focus:outline-none focus:ring-1 focus:ring-gray-300 rounded px-2 py-1"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 ml-3">
+                      <button
+                        onClick={() => onMove(section.id, 'up')}
+                        disabled={index === 0}
+                        className="p-1.5 rounded-md hover:bg-gray-200 disabled:opacity-30 text-gray-500 transition-colors"
+                        title="Move up"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => onMove(section.id, 'down')}
+                        disabled={index === sections.length - 1}
+                        className="p-1.5 rounded-md hover:bg-gray-200 disabled:opacity-30 text-gray-500 transition-colors"
+                        title="Move down"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => onRemove(section.id)}
+                        className="p-1.5 rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
+                        title="Remove section"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Floating add-question tray ────────────────────────────────────────────────
 
-function FloatingAddTray({ onAdd }: { onAdd: (type: FeedbackQuestion['type']) => void }) {
+function FloatingAddTray({ onAdd, sectionId }: { onAdd: (type: FeedbackQuestion['type'], sectionId?: string) => void; sectionId?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -282,7 +468,7 @@ function FloatingAddTray({ onAdd }: { onAdd: (type: FeedbackQuestion['type']) =>
   }, [open]);
 
   const handleAdd = (type: FeedbackQuestion['type']) => {
-    onAdd(type);
+    onAdd(type, sectionId);
     setOpen(false);
   };
 
@@ -346,11 +532,13 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [questions, setQuestions] = useState<FeedbackQuestion[]>([]);
+  const [sections, setSections] = useState<FormSection[]>([]);
   const [showQR, setShowQR] = useState(false);
   const [formUrl, setFormUrl] = useState('');
   const [currentStep, setCurrentStep] = useState<Step>('basics');
   const [direction, setDirection] = useState(1);
   const [showPreview, setShowPreview] = useState(false);
+  const [showSectionsModal, setShowSectionsModal] = useState(false);
   const [customTagRules, setCustomTagRules] = useState<CustomTagRule[]>([]);
   const [locations, setLocations] = useState<string[]>([]);
   const [ogImageUrl, setOgImageUrl] = useState('');
@@ -377,6 +565,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         if (d.description) setDescription(d.description);
         if (d.location) setLocation(d.location);
         if (d.questions) setQuestions(d.questions);
+        if (d.sections) setSections(d.sections);
         if (d.currentStep) setCurrentStep(d.currentStep);
         if (d.customTagRules) setCustomTagRules(d.customTagRules);
         if (d.ogImageUrl) setOgImageUrl(d.ogImageUrl);
@@ -389,10 +578,10 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
     if (showQR) return;
     try {
       sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
-        title, description, location, questions, currentStep, customTagRules, ogImageUrl, stepByStep,
+        title, description, location, questions, sections, currentStep, customTagRules, ogImageUrl, stepByStep,
       }));
     } catch { /* ignore */ }
-  }, [title, description, location, questions, currentStep, customTagRules, ogImageUrl, stepByStep, showQR]);
+  }, [title, description, location, questions, sections, currentStep, customTagRules, ogImageUrl, stepByStep, showQR]);
 
   // ── Locations ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -409,10 +598,11 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
   }, [tenantId]);
 
   // ── Question helpers ───────────────────────────────────────────────────────
-  const addQuestion = (type: FeedbackQuestion['type']) => {
+  const addQuestion = (type: FeedbackQuestion['type'], sectionId?: string) => {
     setQuestions(prev => [...prev, {
       id: uuidv4(), type, question: '', required: true,
       ...(type === 'multiChoice' ? { options: [''] } : {}),
+      ...(sectionId ? { sectionId } : {}),
     }]);
   };
 
@@ -440,6 +630,36 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
   const removeOption = (qId: string, i: number) =>
     setQuestions(prev => prev.map(q => q.id === qId ? { ...q, options: q.options?.filter((_, j) => j !== i) } : q));
 
+  // ── Section helpers ────────────────────────────────────────────────────────
+  const addSection = (name: string, description?: string) => {
+    setSections(prev => [...prev, { id: uuidv4(), name, description }]);
+  };
+
+  const updateSection = (id: string, updates: Partial<FormSection>) =>
+    setSections(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+
+  const removeSection = (id: string) => {
+    // Remove the section and unassign questions from it
+    setSections(prev => prev.filter(s => s.id !== id));
+    setQuestions(prev => prev.map(q => q.sectionId === id ? { ...q, sectionId: undefined } : q));
+  };
+
+  const moveSection = (id: string, dir: 'up' | 'down') => {
+    const idx = sections.findIndex(s => s.id === id);
+    if ((dir === 'up' && idx === 0) || (dir === 'down' && idx === sections.length - 1)) return;
+    const next = [...sections];
+    const swap = dir === 'up' ? idx - 1 : idx + 1;
+    [next[idx], next[swap]] = [next[swap], next[idx]];
+    setSections(next);
+  };
+
+  // Group questions by section for display
+  const getQuestionsBySection = (sectionId: string | null) =>
+    questions.filter(q => q.sectionId === sectionId);
+
+  const getUnsectionedQuestions = () =>
+    questions.filter(q => !q.sectionId);
+
   // ── Submit ─────────────────────────────────────────────────────────────────
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -457,6 +677,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         options: q.options?.map(o => sanitizeAndLimit(o, 100)),
       })),
       createdAt: new Date(), isActive: true, stepByStep,
+      ...(sections.length > 0 ? { sections } : {}),
       ...(customTagRules.length > 0 ? { customTagRules } : {}),
       ...(ogImageUrl ? { ogImageUrl } : {}),
       ...(currentUid ? { createdBy: currentUid } : {}),
@@ -556,8 +777,8 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         </div>
       </div>
       <div className="flex justify-between items-center">
-        {(title || description || location || questions.length > 0) ? (
-          <button onClick={() => { sessionStorage.removeItem(DRAFT_KEY); setTitle(''); setDescription(''); setLocation(''); setQuestions([]); setCustomTagRules([]); setStepByStep(false); setCurrentStep('basics'); }} className="text-sm text-gray-400 hover:text-red-500 transition-colors">Clear draft</button>
+        {(title || description || location || questions.length > 0 || sections.length > 0) ? (
+          <button onClick={() => { sessionStorage.removeItem(DRAFT_KEY); setTitle(''); setDescription(''); setLocation(''); setQuestions([]); setSections([]); setCustomTagRules([]); setStepByStep(false); setCurrentStep('basics'); }} className="text-sm text-gray-400 hover:text-red-500 transition-colors">Clear draft</button>
         ) : <span />}
         <Button fullWidth={false} onClick={() => goToStep('questions')} disabled={!title || !location || isOverFormLimit}>Next: Add Questions →</Button>
       </div>
@@ -569,16 +790,27 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Questions</h2>
-        <button
-          onClick={() => setShowPreview(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-          </svg>
-          Preview
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSectionsModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            Manage Sections
+          </button>
+          <button
+            onClick={() => setShowPreview(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            Preview
+          </button>
+        </div>
       </div>
 
       {/* Empty state — show type cards */}
@@ -623,6 +855,17 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
                     <span className="text-xs text-gray-400">#{index + 1}</span>
                   </div>
                   <div className="flex items-center gap-1">
+                    {/* Section selector */}
+                    <select
+                      value={question.sectionId || ''}
+                      onChange={e => updateQuestion(question.id, { sectionId: e.target.value || undefined })}
+                      className="text-xs border border-gray-200 rounded px-2 py-1 mr-2"
+                    >
+                      <option value="">No Section</option>
+                      {sections.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
                     <button onClick={() => moveQuestion(question.id, 'up')} disabled={index === 0} className="p-1.5 rounded-md hover:bg-gray-200 disabled:opacity-30 text-gray-500 transition-colors" title="Move up">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
                     </button>
@@ -829,6 +1072,18 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
     <div className="max-w-2xl mx-auto">
       <Toast toasts={toasts} onDismiss={dismissToast} />
 
+      {/* Sections management modal */}
+      {showSectionsModal && (
+        <SectionsModal
+          sections={sections}
+          onAdd={addSection}
+          onUpdate={updateSection}
+          onRemove={removeSection}
+          onMove={moveSection}
+          onClose={() => setShowSectionsModal(false)}
+        />
+      )}
+
       {/* Preview panel */}
       <AnimatePresence>
         {showPreview && (
@@ -838,6 +1093,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
             location={location}
             ogImageUrl={ogImageUrl}
             questions={questions}
+            sections={sections}
             stepByStep={stepByStep}
             onClose={() => setShowPreview(false)}
           />

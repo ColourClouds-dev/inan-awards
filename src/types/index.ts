@@ -55,12 +55,19 @@ export interface Tenant {
   };
 }
 
+export interface FormSection {
+  id: string;
+  name: string;
+  description?: string;
+}
+
 export interface FeedbackForm {
   id: string;
   title: string;
   description?: string;
   location: string;
   questions: FeedbackQuestion[];
+  sections?: FormSection[];   // optional sections for grouping questions
   createdAt: Date | Timestamp;
   isActive: boolean;
   stepByStep?: boolean;
@@ -78,6 +85,7 @@ export interface FeedbackQuestion {
   required: boolean;
   multiSelect?: boolean;      // true = checkboxes (multiple answers), false/undefined = radio (single answer)
   minSelections?: number;     // minimum number of selections required when multiSelect is true
+  sectionId?: string;         // optional section ID this question belongs to
 }
 
 export interface FeedbackResponse {
