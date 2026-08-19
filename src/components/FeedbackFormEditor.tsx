@@ -290,6 +290,7 @@ const FeedbackFormEditor: React.FC<FeedbackFormEditorProps> = ({ form, onSave, o
   const [sections, setSections] = useState<FormSection[]>(form.sections || []);
   const [ogImageUrl, setOgImageUrl] = useState(form.ogImageUrl ?? '');
   const [stepByStep, setStepByStep] = useState(form.stepByStep ?? false);
+  const [collectName, setCollectName] = useState(form.collectName ?? false);
   const [customTagRules, setCustomTagRules] = useState<CustomTagRule[]>(form.customTagRules ?? []);
   const [locations, setLocations] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -389,6 +390,7 @@ const FeedbackFormEditor: React.FC<FeedbackFormEditorProps> = ({ form, onSave, o
           options: q.options?.map(o => sanitizeAndLimit(o, 100)),
         })),
         stepByStep,
+        collectName: collectName || undefined,
         sections: sections.length > 0 ? sections : undefined,
         customTagRules: customTagRules.length > 0 ? customTagRules : undefined,
         ogImageUrl: ogImageUrl || undefined,
@@ -431,6 +433,18 @@ const FeedbackFormEditor: React.FC<FeedbackFormEditorProps> = ({ form, onSave, o
           </div>
           <p className="mt-1.5 text-xs text-gray-400">{stepByStep ? 'Respondents answer one question per screen.' : 'All questions on a single scrollable page.'}</p>
         </div>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={collectName}
+            onChange={e => setCollectName(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-gray-300 focus:ring-2"
+          />
+          <div>
+            <span className="block text-sm font-medium text-gray-700">Collect respondent name</span>
+            <span className="block text-xs text-gray-400 mt-0.5">An optional name field will appear at the top of the form.</span>
+          </div>
+        </label>
       </div>
       <div className="flex justify-end pt-2">
         <Button fullWidth={false} onClick={() => goToStep('questions')} disabled={!title || !location}>Next: Questions →</Button>

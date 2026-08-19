@@ -98,6 +98,9 @@ function ResponseRow({ response, form }: { response: FeedbackResponse; form: Fee
         <td className="px-4 py-3 text-sm text-gray-700 font-medium">
           {form?.title ?? <span className="text-gray-400 italic">Unknown form</span>}
         </td>
+        <td className="px-4 py-3 text-sm text-gray-500">
+          {response.respondentName ?? <span className="text-gray-300">—</span>}
+        </td>
         <td className="px-4 py-3 text-sm text-gray-500">{submittedAt}</td>
         <td className="px-4 py-3 text-sm text-gray-500">{response.visitorCountry ?? '—'}</td>
         <td className="px-4 py-3 text-sm text-gray-500">{response.visitorCity ?? '—'}</td>
@@ -133,7 +136,7 @@ function ResponseRow({ response, form }: { response: FeedbackResponse; form: Fee
 
       {open && (
         <tr className="bg-purple-50">
-          <td colSpan={7} className="px-6 py-4">
+          <td colSpan={8} className="px-6 py-4">
             <div className="space-y-4">
               {groupedQuestions.map((group, groupIndex) => (
                 <div key={group.section?.id || 'unsectioned'}>
@@ -319,13 +322,13 @@ export default function ResponsesPage() {
           <table className="min-w-full divide-y divide-gray-100 text-sm">
             <thead className="bg-gray-50">
               <tr>
-                {['Form','Submitted','Country','City','Tags','Time Spent',''].map(h => (
+                {['Form','Respondent','Submitted','Country','City','Tags','Time Spent',''].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
-              {[1,2,3,4,5].map(i => <TableRowSkeleton key={i} cols={7} />)}
+              {[1,2,3,4,5].map(i => <TableRowSkeleton key={i} cols={8} />)}
             </tbody>
           </table>
         </div>
@@ -461,7 +464,7 @@ export default function ResponsesPage() {
             <table className="min-w-full divide-y divide-gray-100 text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  {['Form', 'Submitted', 'Country', 'City', 'Tags', 'Time Spent', 'Actions'].map(h => (
+                  {['Form', 'Respondent', 'Submitted', 'Country', 'City', 'Tags', 'Time Spent', 'Actions'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
                       {h}
                     </th>

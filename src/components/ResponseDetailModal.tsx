@@ -100,6 +100,12 @@ const ResponseDetailModal: React.FC<ResponseDetailModalProps> = ({ response, for
             {/* Response Metadata */}
             <div className="bg-gray-50 rounded-xl p-4 mb-6 print:bg-gray-100">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                {response.respondentName && (
+                  <div className="md:col-span-2 lg:col-span-3">
+                    <span className="text-gray-500 font-medium">Respondent</span>
+                    <p className="text-gray-900 font-semibold">{response.respondentName}</p>
+                  </div>
+                )}
                 <div>
                   <span className="text-gray-500 font-medium">Submitted</span>
                   <p className="text-gray-900">{submittedAt.toLocaleString()}</p>

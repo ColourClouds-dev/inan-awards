@@ -104,6 +104,7 @@ function PreviewPanel({
   questions,
   sections,
   stepByStep,
+  collectName,
   onClose,
 }: {
   title: string;
@@ -113,6 +114,7 @@ function PreviewPanel({
   questions: FeedbackQuestion[];
   sections: FormSection[];
   stepByStep: boolean;
+  collectName: boolean;
   onClose: () => void;
 }) {
   const [isMobile, setIsMobile] = useState(false);
@@ -169,6 +171,16 @@ function PreviewPanel({
             </span>
           )}
         </div>
+
+        {/* Name field preview */}
+        {collectName && (
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <label className="block text-xs font-medium text-gray-700 mb-1.5">
+              Your Name <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <div className="w-full h-8 rounded-lg bg-gray-50 border border-gray-200" />
+          </div>
+        )}
 
         {/* Questions */}
         {questions.length === 0 ? (
@@ -543,6 +555,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
   const [locations, setLocations] = useState<string[]>([]);
   const [ogImageUrl, setOgImageUrl] = useState('');
   const [stepByStep, setStepByStep] = useState(false);
+  const [collectName, setCollectName] = useState(false);
   const { toasts, showToast, dismissToast } = useToast();
   const { tenant, tenantId, currentUid } = useTenant();
 
@@ -570,6 +583,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         if (d.customTagRules) setCustomTagRules(d.customTagRules);
         if (d.ogImageUrl) setOgImageUrl(d.ogImageUrl);
         if (d.stepByStep !== undefined) setStepByStep(d.stepByStep);
+        if (d.collectName !== undefined) setCollectName(d.collectName);
       }
     } catch { /* ignore */ }
   }, []);
@@ -578,7 +592,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
     if (showQR) return;
     try {
       sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
-        title, description, location, questions, sections, currentStep, customTagRules, ogImageUrl, stepByStep,
+        title, description, location, questions, sections, currentStep, customTagRules, ogImageUrl, stepByStep, collectName,
       }));
     } catch { /* ignore */ }
   }, [title, description, location, questions, sections, currentStep, customTagRules, ogImageUrl, stepByStep, showQR]);
@@ -677,6 +691,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         options: q.options?.map(o => sanitizeAndLimit(o, 100)),
       })),
       createdAt: new Date(), isActive: true, stepByStep,
+      ...(collectName ? { collectName: true } : {}),
       ...(sections.length > 0 ? { sections } : {}),
       ...(customTagRules.length > 0 ? { customTagRules } : {}),
       ...(ogImageUrl ? { ogImageUrl } : {}),
@@ -774,11 +789,23 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
             </div>
             <p className="mt-1.5 text-xs text-gray-400">{stepByStep ? 'Respondents answer one question per screen.' : 'All questions on a single scrollable page.'}</p>
           </div>
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={collectName}
+              onChange={e => setCollectName(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 focus:ring-2"
+            />
+            <div>
+              <span className="block text-sm font-medium text-gray-700">Collect respondent name</span>
+              <span className="block text-xs text-gray-400 mt-0.5">An optional name field will appear at the top of the form.</span>
+            </div>
+          </label>
         </div>
       </div>
       <div className="flex justify-between items-center">
         {(title || description || location || questions.length > 0 || sections.length > 0) ? (
-          <button onClick={() => { sessionStorage.removeItem(DRAFT_KEY); setTitle(''); setDescription(''); setLocation(''); setQuestions([]); setSections([]); setCustomTagRules([]); setStepByStep(false); setCurrentStep('basics'); }} className="text-sm text-gray-400 hover:text-red-500 transition-colors">Clear draft</button>
+          <button onClick={() => { sessionStorage.removeItem(DRAFT_KEY); setTitle(''); setDescription(''); setLocation(''); setQuestions([]); setSections([]); setCustomTagRules([]); setStepByStep(false); setCollectName(false); setCurrentStep('basics'); }} className="text-sm text-gray-400 hover:text-red-500 transition-colors">Clear draft</button>
         ) : <span />}
         <Button fullWidth={false} onClick={() => goToStep('questions')} disabled={!title || !location || isOverFormLimit}>Next: Add Questions →</Button>
       </div>
@@ -1095,6 +1122,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
             questions={questions}
             sections={sections}
             stepByStep={stepByStep}
+            collectName={collectName}
             onClose={() => setShowPreview(false)}
           />
         )}

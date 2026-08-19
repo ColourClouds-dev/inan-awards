@@ -257,6 +257,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
 
   // Step-by-step state
   const [currentStep, setCurrentStep] = useState(0);
+  const [respondentName, setRespondentName] = useState('');
   const [formOpenedAt] = useState<number>(Date.now());
 
   const { toasts, showToast, dismissToast } = useToast();
@@ -372,6 +373,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
         id: crypto.randomUUID(),
         formId: form.id,
         location: form.location,
+        ...(form.collectName && respondentName.trim() ? { respondentName: respondentName.trim() } : {}),
         responses,
         submittedAt: new Date(),
         timeSpentSeconds,
@@ -606,6 +608,22 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
         </div>
 
         <form onSubmit={handleStepSubmit} className="space-y-6">
+          {/* Optional name field — shown only on the first step */}
+          {form.collectName && currentStep === 0 && (
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Your Name <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={respondentName}
+                onChange={e => setRespondentName(e.target.value)}
+                placeholder="Enter your name"
+                maxLength={100}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+          )}
           {/* Question container with proper spacing */}
           <div className="relative min-h-[200px]">
             <AnimatePresence mode="wait" initial={false}>
@@ -717,6 +735,22 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
       <FormHeader />
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+        {/* Optional name field */}
+        {form.collectName && (
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Your Name <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={respondentName}
+              onChange={e => setRespondentName(e.target.value)}
+              placeholder="Enter your name"
+              maxLength={100}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
+          </div>
+        )}
         {/* min-h prevents the form from collapsing while questions render */}
         <div className="space-y-8 min-h-[320px]">
           {groupedQuestions.map((group, groupIndex) => (

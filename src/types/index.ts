@@ -71,6 +71,7 @@ export interface FeedbackForm {
   createdAt: Date | Timestamp;
   isActive: boolean;
   stepByStep?: boolean;
+  collectName?: boolean;      // whether to show a Name field on the form
   customTagRules?: CustomTagRule[];
   ogImageUrl?: string;
   createdBy?: string;  // UID of the user who created this form
@@ -92,6 +93,7 @@ export interface FeedbackResponse {
   id: string;
   formId: string;
   location: string;
+  respondentName?: string;    // optional — collected when form.collectName is true
   responses: {
     [questionId: string]: string | number;
   };
