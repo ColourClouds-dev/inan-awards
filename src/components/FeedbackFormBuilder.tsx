@@ -256,7 +256,7 @@ function PreviewPanel({
 
                           {q.type === 'multiChoice' && q.options && (
                             <div className="ml-9 space-y-2">
-                              {q.options.map((opt, oi) => (
+                              {(q.options as string[]).map((opt: string, oi: number) => (
                                 <div key={oi} className="flex items-center gap-2">
                                   <div className={`w-4 h-4 rounded-${q.multiSelect ? 'sm' : 'full'} border-2 border-gray-300 shrink-0`} />
                                   <span className="text-xs text-gray-600">
