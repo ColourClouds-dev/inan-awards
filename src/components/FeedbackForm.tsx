@@ -18,11 +18,27 @@ import type { FeedbackForm, FeedbackQuestion, Tenant, FormSection } from '../typ
 import type { VisitorInfo } from '../lib/visitorInfo';
 import ShareResponseButton from './ShareResponseButton';
 import { getTenantById } from '../lib/tenantFirestore';
+import DOMPurify from 'dompurify';
+
+/** Safely render stored HTML. Falls back to plain text if DOMPurify isn't available (SSR). */
+function SafeHtml({ html, className }: { html: string; className?: string }) {
+  if (typeof window === 'undefined') {
+    // SSR: strip tags for safety, render as plain text
+    return <p className={className}>{html.replace(/<[^>]+>/g, '')}</p>;
+  }
+  return (
+    <div
+      className={`rte-content ${className ?? ''}`}
+      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}
+    />
+  );
+}
 
 
 interface FeedbackFormProps {
   form: FeedbackForm;
   tenantBranding?: Tenant['branding'];
+  tenantFeatures?: Tenant['features'];
 }
 
 // ── Reusable question renderer ────────────────────────────────────────────────
@@ -134,7 +150,10 @@ function QuestionBlock({
                   defaultValue={[] as never}
                   render={({ field }) => {
                     const selected: string[] = Array.isArray(field.value) ? field.value : [];
-                    const [othersText, setOthersText] = useState('');
+                    const othersEntry = selected.find(v => v.startsWith('__others__:'));
+                    const othersChecked = othersEntry !== undefined;
+                    const othersText = othersEntry ? othersEntry.slice('__others__:'.length) : '';
+
                     const toggle = (val: string) => {
                       const next = selected.includes(val)
                         ? selected.filter(v => v !== val)
@@ -146,10 +165,8 @@ function QuestionBlock({
                         field.onChange([...selected.filter(v => !v.startsWith('__others__:')), '__others__:']);
                       } else {
                         field.onChange(selected.filter(v => !v.startsWith('__others__:')));
-                        setOthersText('');
                       }
                     };
-                    const othersChecked = selected.some(v => v.startsWith('__others__:'));
                     return (
                       <>
                         {question.options!.map((option, i) => {
@@ -160,7 +177,7 @@ function QuestionBlock({
                                 <span className="ml-3 text-gray-700 mr-3">Others</span>
                                 {othersChecked && (
                                   <input type="text" placeholder="Please specify..." value={othersText}
-                                    onChange={e => { setOthersText(e.target.value); field.onChange([...selected.filter(v => !v.startsWith('__others__:')), `__others__:${e.target.value}`]); }}
+                                    onChange={e => { field.onChange([...selected.filter(v => !v.startsWith('__others__:')), `__others__:${e.target.value}`]); }}
                                     className="flex-1 border-b border-gray-400 focus:outline-none focus:border-purple-500 text-sm py-1" autoFocus onClick={e => e.stopPropagation()} />
                                 )}
                               </label>
@@ -227,7 +244,7 @@ function QuestionBlock({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBranding }) => {
+const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBranding, tenantFeatures }) => {
   const [submitted, setSubmitted] = useState(false);
   const [submittedResponseId, setSubmittedResponseId] = useState<string | null>(null);
   const [submittedAnswers, setSubmittedAnswers] = useState<any>(null);
@@ -267,14 +284,15 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
 
 
   useEffect(() => {
-    if (form.tenantId) {
-      getTenantById(form.tenantId)
-        .then(t => {
-          if (t) setFormTenant(t);
+    if (!tenantFeatures && !formTenant) {
+      fetch('/api/tenant/current')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.tenant) setFormTenant(data.tenant);
         })
-        .catch(console.error);
+        .catch(() => {});
     }
-  }, [form.tenantId]);
+  }, [tenantFeatures, formTenant]);
 
   useEffect(() => {
     // If the user already submitted this form (stored locally) within 24 hours, block immediately
@@ -311,29 +329,85 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
   const schema = useMemo(() => {
     const schemaShape = form.questions.reduce((acc, q) => {
       let base: z.ZodTypeAny;
+
       if (q.type === 'rating') {
-        base = z.number().min(1).max(5);
+        // Required: must be 1–5. Optional: undefined is fine (field never touched).
+        base = q.required
+          ? z.number().min(1).max(5)
+          : z.number().min(1).max(5).optional();
+
       } else if (q.type === 'multiChoice' && q.multiSelect) {
         const min = q.minSelections ?? 1;
-        base = z.array(z.string()).min(min, { message: `Please select at least ${min} option${min > 1 ? 's' : ''}` });
+        // Required: must have at least `min` selections.
+        // Optional: empty array is acceptable.
+        base = q.required
+          ? z.array(z.string()).min(min, { message: `Please select at least ${min} option${min > 1 ? 's' : ''}` })
+          : z.array(z.string()).optional();
+
       } else if (q.type === 'multiChoice' && q.options?.includes('__others__')) {
-        base = z.preprocess(
-          val => (val == null ? '' : val),
-          z.string().min(1).refine(val => val !== '__others__', { message: 'You selected "Others" — please type your answer in the box provided.' })
-        );
+        // Required: non-empty and must not be the bare sentinel.
+        // Optional: empty string, undefined, or bare '__others__' (unanswered Others) all pass.
+        base = q.required
+          ? z.preprocess(
+              val => (val == null ? '' : val),
+              z.string().min(1, { message: 'Please answer this question before continuing.' }).refine(
+                val => val !== '__others__',
+                { message: 'You selected "Others" — please type your answer in the box provided.' }
+              )
+            )
+          : z.preprocess(
+              val => (val == null ? '' : val),
+              z.string().refine(
+                // Allow empty string or bare sentinel (user opened Others but didn't type — treated as skipped)
+                val => val === '' || val === '__others__' || true,
+                { message: 'You selected "Others" — please type your answer in the box provided.' }
+              )
+            );
+
       } else {
-        base = z.preprocess(
-          val => (val == null ? '' : val),
-          z.string()
-            .min(1, { message: 'Please answer this question before continuing.' })
-            .max(256, { message: 'Your answer is too long — please keep it under 256 characters.' })
-        );
+        // text or plain multiChoice (no __others__)
+        // Required: non-empty string, max 256.
+        // Optional: empty string or undefined both pass.
+        base = q.required
+          ? z.preprocess(
+              val => (val == null ? '' : val),
+              z.string()
+                .min(1, { message: 'Please answer this question before continuing.' })
+                .max(256, { message: 'Your answer is too long — please keep it under 256 characters.' })
+            )
+          : z.preprocess(
+              val => (val == null ? '' : val),
+              z.string().max(256, { message: 'Your answer is too long — please keep it under 256 characters.' })
+            );
       }
-      acc[q.id] = q.required ? base : base.optional();
+
+      acc[q.id] = base;
       return acc;
     }, {} as Record<string, z.ZodTypeAny>);
     return z.object(schemaShape);
   }, [form.questions]);
+
+  // Group questions by sections for rendering
+  const groupedQuestions = useMemo(() => {
+    const sections = form.sections || [];
+    const groups: Array<{ section: FormSection | null; questions: FeedbackQuestion[] }> = [];
+
+    // Add sections with their questions
+    sections.forEach(section => {
+      const sectionQuestions = form.questions.filter(q => q.sectionId === section.id);
+      if (sectionQuestions.length > 0) {
+        groups.push({ section, questions: sectionQuestions });
+      }
+    });
+
+    // Add unsectioned questions
+    const unsectionedQuestions = form.questions.filter(q => !q.sectionId);
+    if (unsectionedQuestions.length > 0) {
+      groups.push({ section: null, questions: unsectionedQuestions });
+    }
+
+    return groups;
+  }, [form.questions, form.sections]);
 
   type FormValues = z.infer<typeof schema>;
 
@@ -499,7 +573,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
 
           <h2 className="text-xl font-bold text-green-600 mb-4">Thank You!</h2>
           <p className="text-gray-600 mb-6">Your feedback has been submitted successfully.</p>
-          {(formTenant?.features?.allowResponseSharing ?? tenant?.features?.allowResponseSharing) && submittedResponseId && submittedAnswers && (
+          {(tenantFeatures?.allowResponseSharing ?? formTenant?.features?.allowResponseSharing ?? tenant?.features?.allowResponseSharing) && submittedResponseId && submittedAnswers && (
             <div className="mt-6 flex justify-center">
               <ShareResponseButton
                 responseId={submittedResponseId}
@@ -540,7 +614,9 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
           </svg>
           <span>{form.location}</span>
         </div>
-        {form.description && <p className="text-gray-700 text-sm mb-4">{form.description}</p>}
+        {form.description && (
+          <SafeHtml html={form.description} className="text-gray-700 text-sm mb-4" />
+        )}
       </div>
     </>
   );
@@ -578,6 +654,12 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
 
     const handleStepSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
+      // If not on the last step (e.g. Enter key inside an input triggered the form),
+      // treat it as a Next press rather than a submit.
+      if (!isLast) {
+        handleNext();
+        return;
+      }
       const valid = await trigger();
       if (valid) handleSubmit(onSubmit)(e);
     };
@@ -597,22 +679,31 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
           </div>
           <div className="flex items-center justify-between text-xs text-gray-500 mt-1">
             <span>{currentStep + 1} of {total}</span>
-            {(() => {
-              const currentQuestion = form.questions[currentStep];
-              const section = form.sections?.find(s => s.id === currentQuestion?.sectionId);
-              return section ? (
-                <span className="text-right">Section: {section.name}</span>
-              ) : null;
-            })()}
           </div>
         </div>
+
+        {/* Section header — shown above the form card whenever the current question belongs to a section */}
+        {(() => {
+          const currentQuestion = form.questions[currentStep];
+          const section = form.sections?.find(s => s.id === currentQuestion?.sectionId);
+          if (!section) return null;
+          return (
+            <div className="mb-2">
+              <h2 className="text-lg font-semibold text-gray-800 mb-1">{section.name}</h2>
+              {section.description && (
+                <SafeHtml html={section.description} className="text-sm text-gray-600 mb-2" />
+              )}
+              <hr className="border-gray-200" />
+            </div>
+          );
+        })()}
 
         <form onSubmit={handleStepSubmit} className="space-y-6">
           {/* Optional name field — shown only on the first step */}
           {form.collectName && currentStep === 0 && (
             <div className="bg-white rounded-lg shadow-lg p-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Your Name <span className="text-gray-400 font-normal">(optional)</span>
+                Your Name
               </label>
               <input
                 type="text"
@@ -669,11 +760,23 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
             ) : <span />}
 
             {isLast ? (
-              <Button type="submit" isLoading={submitting} loadingText="Submitting…" disabled={submitting} fullWidth={false}>
+              <Button
+                key="step-submit-btn"
+                type="submit"
+                isLoading={submitting}
+                loadingText="Submitting…"
+                disabled={submitting}
+                fullWidth={false}
+              >
                 Submit Feedback
               </Button>
             ) : (
-              <Button type="button" onClick={handleNext} fullWidth={false}>
+              <Button
+                key="step-next-btn"
+                type="button"
+                onClick={handleNext}
+                fullWidth={false}
+              >
                 Next →
               </Button>
             )}
@@ -707,28 +810,6 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
 
   // ── All-at-once mode (default) ────────────────────────────────────────────
 
-  // Group questions by sections for rendering
-  const groupedQuestions = useMemo(() => {
-    const sections = form.sections || [];
-    const groups: Array<{ section: FormSection | null; questions: FeedbackQuestion[] }> = [];
-    
-    // Add sections with their questions
-    sections.forEach(section => {
-      const sectionQuestions = form.questions.filter(q => q.sectionId === section.id);
-      if (sectionQuestions.length > 0) {
-        groups.push({ section, questions: sectionQuestions });
-      }
-    });
-    
-    // Add unsectioned questions
-    const unsectionedQuestions = form.questions.filter(q => !q.sectionId);
-    if (unsectionedQuestions.length > 0) {
-      groups.push({ section: null, questions: unsectionedQuestions });
-    }
-    
-    return groups;
-  }, [form.questions, form.sections]);
-
   return (
     <div className="max-w-2xl mx-auto p-6">
       <Toast toasts={toasts} onDismiss={dismissToast} />
@@ -739,7 +820,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
         {form.collectName && (
           <div className="bg-white rounded-lg shadow-lg p-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Your Name <span className="text-gray-400 font-normal">(optional)</span>
+              Your Name
             </label>
             <input
               type="text"
@@ -760,7 +841,7 @@ const FeedbackFormComponent: React.FC<FeedbackFormProps> = ({ form, tenantBrandi
                 <div className="mb-6">
                   <h2 className="text-lg font-semibold text-gray-800 mb-2">{group.section.name}</h2>
                   {group.section.description && (
-                    <p className="text-sm text-gray-600 mb-4">{group.section.description}</p>
+                    <SafeHtml html={group.section.description} className="text-sm text-gray-600 mb-4" />
                   )}
                   <hr className="border-gray-200" />
                 </div>

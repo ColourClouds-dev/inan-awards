@@ -12,6 +12,7 @@ import { useWithTimeout } from '../../../../hooks/useWithTimeout';
 import { useToast } from '../../../../hooks/useToast';
 import Toast from '../../../../components/Toast';
 import type { FeedbackForm, FeedbackResponse } from '../../../../types';
+
 export default function FormsPage() {
   const router = useRouter();
   const { tenantId, isLoading: tenantLoading, isStaff, currentUid } = useTenant();
@@ -34,15 +35,15 @@ export default function FormsPage() {
     setLoading(true);
     setError(null);
     try {
-      // Staff see only their own forms and only responses for those forms.
-      // Owners see everything in the tenant.
       const createdBy = isStaff && currentUid ? currentUid : undefined;
+      
       const [f, r] = await withTimeout(async () => {
         const forms = await getAllForms(tenantId, createdBy);
         const formIds = createdBy ? forms.map(form => form.id) : undefined;
         const responses = await getAllResponses(tenantId, formIds);
         return [forms, responses] as const;
       });
+      
       setForms(f);
       setResponses(r);
     } catch (err) {
@@ -54,7 +55,7 @@ export default function FormsPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, tenantLoading, authReady, isStaff, currentUid]);
+  }, [tenantId, tenantLoading, authReady, isStaff, currentUid, withTimeout]);
 
   // Manual refresh — re-fetches from Firestore and confirms the updated count
   const handleRefresh = useCallback(async () => {
@@ -62,7 +63,6 @@ export default function FormsPage() {
     setRefreshing(true);
     setError(null);
     try {
-      // Same staff scoping as fetchData — keep them in sync.
       const createdBy = isStaff && currentUid ? currentUid : undefined;
       const [f, r] = await withTimeout(async () => {
         const forms = await getAllForms(tenantId, createdBy);
@@ -88,7 +88,7 @@ export default function FormsPage() {
     } finally {
       setRefreshing(false);
     }
-  }, [tenantId, tenantLoading, authReady, refreshing, withTimeout, showToast, isStaff, currentUid]);
+  }, [tenantId, tenantLoading, authReady, refreshing, isStaff, currentUid, withTimeout, showToast]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 

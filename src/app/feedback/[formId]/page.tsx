@@ -20,9 +20,17 @@ export async function generateMetadata(
     const headersList = headers();
     const tenantId = headersList.get('x-tenant-id') || 'inan';
 
-    // Fetch form and per-tenant SEO settings in parallel
-    const [formSnap, seoSnap] = await Promise.all([
-      db.doc(`feedback-forms/${params.formId}`).get(),
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.formId);
+
+    const [formResult, seoSnap] = await Promise.all([
+      isUUID
+        ? db.doc(`feedback-forms/${params.formId}`).get().then(snap => snap.exists ? snap.data() : null)
+        : db.collection('feedback-forms')
+            .where('tenantId', '==', tenantId)
+            .where('slug', '==', params.formId)
+            .limit(1)
+            .get()
+            .then(snap => !snap.empty ? snap.docs[0].data() : null),
       db.doc(`tenant-settings/${tenantId}/config/seo`).get(),
     ]);
 
@@ -34,9 +42,9 @@ export async function generateMetadata(
     const siteName = seo.siteName || 'Inan Feedback';
     const defaultOgImage = seo.ogImageUrl || '/inan.svg';
 
-    if (!formSnap.exists) return { title: 'Feedback Form' };
+    if (!formResult) return { title: 'Feedback Form' };
 
-    const data = formSnap.data() as {
+    const data = formResult as {
       title?: string; description?: string; location?: string; ogImageUrl?: string;
     };
 

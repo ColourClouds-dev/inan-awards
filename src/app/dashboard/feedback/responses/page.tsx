@@ -58,11 +58,11 @@ function TagBadge({ tag }: { tag: ResponseTag }) {
   );
 }
 
-const ChevronIcon = ({ open }: { open: boolean }) => (
-  <svg className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-  </svg>
-);
+// const ChevronIcon = ({ open }: { open: boolean }) => (
+//   <svg className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+//     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+//   </svg>
+// );
 
 // ── Expandable response row ───────────────────────────────────────────────────
 
@@ -128,7 +128,7 @@ function ResponseRow({ response, form }: { response: FeedbackResponse; form: Fee
               onClick={() => setOpen(o => !o)}
               className="text-gray-400 hover:text-gray-600 transition-colors"
             >
-              <ChevronIcon open={open} />
+              {/* <ChevronIcon open={open} /> */}
             </button>
           </div>
         </td>

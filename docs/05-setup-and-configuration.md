@@ -151,6 +151,19 @@ firebase deploy --only firestore:rules
 firebase deploy --only firestore:indexes
 ```
 
+> **Important — indexes must be deployed.** Several features depend on composite Firestore indexes defined in `firestore.indexes.json`. If indexes are not deployed, the following queries will silently return empty results or throw an error in production:
+>
+> | Index | Used by |
+> |---|---|
+> | `feedback-forms (tenantId ASC, slug ASC)` | `isSlugTaken()` — slug uniqueness check in form builder |
+> | `feedback-forms (tenantId ASC, slug ASC, isActive ASC)` | Reserved for future server-side slug queries |
+> | `feedback-forms (tenantId ASC, createdBy ASC)` | `getAllForms()` with `createdBy` filter — **Staff role forms page** |
+> | `polls (tenantId ASC, createdAt DESC)` | `getAllPolls()` — polls list page |
+> | `polls (tenantId ASC, createdBy ASC, createdAt DESC)` | `getAllPolls()` with staff filter — polls scoped to creator |
+> | `poll-responses (tenantId ASC, pollId ASC, submittedAt DESC)` | Poll response queries |
+>
+> Run `firebase deploy --only firestore:indexes` after every change to `firestore.indexes.json`.
+
 ### 4.6 Generate a service account key
 
 1. Go to **Project Settings → Service Accounts**
@@ -357,3 +370,39 @@ node scripts/setup-admin.js
 ```
 
 Used during first-time setup to bootstrap an admin user. Review the script before running to confirm the target user details are correct.
+
+---
+
+### `backfill-form-created-by.js`
+
+**Purpose:** Stamps a `createdBy` field onto legacy `feedback-forms` documents that were created before the Staff RBAC system was introduced.
+
+```bash
+# Dry run — shows which forms would be updated (safe, no writes)
+node scripts/backfill-form-created-by.js
+
+# Confirm and apply
+CONFIRM_BACKFILL=yes node scripts/backfill-form-created-by.js
+```
+
+Iterates all `feedback-forms` documents that have no `createdBy` field. For each one, it looks up the tenant owner from `tenant-admins` and assigns the form to them. Forms where no owner is found are assigned to the sentinel value `"system"`, which makes them visible only to Admins/Owners and not to any Staff user.
+
+Run this once when deploying the Staff RBAC feature to an existing tenant that already has forms.
+
+---
+
+### `validate-rbac-implementation.js`
+
+**Purpose:** Diagnostic script that checks the current state of RBAC implementation across the database.
+
+```bash
+node scripts/validate-rbac-implementation.js
+```
+
+Reports:
+- Total forms and how many are missing the `createdBy` field
+- Breakdown of forms by creator UID
+- Role distribution across all users in `tenant-admins`
+- Per-tenant user counts (owners vs staff)
+
+Use this before and after running `backfill-form-created-by.js` to confirm the data is in the expected state.

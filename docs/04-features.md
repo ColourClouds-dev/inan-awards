@@ -152,11 +152,13 @@ Once created, the form gets a unique link and QR code that can be shared with gu
 **Step 1 — Details:**
 1. Go to Dashboard → Feedback
 2. Enter a form title (required)
-3. Optionally add a description
-4. Select the location this form is for
-5. Optionally upload a banner image
-6. Choose display mode: "All at once" or "One at a time"
-7. Click "Next: Add Questions"
+3. Optionally add a description — the description field supports **rich text** (bold, italic, bullet lists, links). Formatting is stored as HTML and rendered on the public form.
+4. Optionally set a **Custom Link** (slug) — a short human-readable alias for the form URL (e.g. `guest-survey` gives `/feedback/guest-survey`). Slugs must be unique within the organisation. Leave blank to use the default UUID-based URL.
+5. Select the location this form is for
+6. Optionally upload a banner image — shown at the top of the public form and as the social share image
+7. Choose display mode: "All at once" or "One at a time"
+8. Optionally tick "Collect respondent name" to add an optional name field at the top of the form
+9. Click "Next: Add Questions"
 
 **Step 2 — Questions:**
 1. Click the "+" button to add a question
@@ -182,11 +184,13 @@ Once created, the form gets a unique link and QR code that can be shared with gu
 ### Technical Detail
 
 - Form draft is auto-saved to `sessionStorage` between steps — navigating away does not lose progress
-- All text inputs pass through `sanitizeAndLimit()` before saving to Firestore
-- `saveForm()` writes to `feedback-forms/{uuid}` and calls `incrementFormCount` on the tenant document
+- All text inputs pass through `sanitizeAndLimit()` before saving to Firestore; rich-text description is sanitized with DOMPurify before storage
+- `saveForm()` writes to `feedback-forms/{uuid}`, stamps `tenantId` and `createdBy` (the creating user's UID), and calls `incrementFormCount` on the tenant document
 - The form limit (`tenant.formLimit`) is checked before saving — attempting to create a form beyond the limit is blocked
+- **Custom slug** — validated on blur via `isSlugTaken(slug, tenantId)`. The slug is URL-safe (lowercase, hyphens only) and must be unique per tenant among active forms. Inactive forms do not block slug reuse.
 - The `FeedbackFormBuilder` component manages all three steps and the post-save QR screen
 - A live preview panel is available on Step 2: slides in from the right on desktop, from the bottom on mobile
+- **Sections** — questions can be grouped under named sections via "Manage Sections" on Step 2. Each section has a name and an optional rich-text description.
 
 ---
 
@@ -206,16 +210,17 @@ Go to Dashboard → Forms. Use the filter bar to search by title or location, fi
 
 **Toggle active/inactive** — click the toggle icon to close or reopen a form to new submissions. Guests visiting a deactivated form's link see a "no longer active" message.
 
-**Delete a form** — click the delete icon. A confirmation modal appears before anything is removed.
+**Delete a form** — click the delete icon. A confirmation modal appears before anything is removed. Deleting a form also permanently deletes all of its responses.
 
 ### Technical Detail
 
-- `getAllForms(tenantId)` and `getAllResponses(tenantId)` run in parallel (both with 10-second timeout via `useWithTimeout`)
+- `getAllForms(tenantId, createdBy?)` and `getAllResponses(tenantId, formIds?)` run in parallel (both with 10-second timeout via `useWithTimeout`)
+- Staff users see only forms they created (`createdBy` filter applied at query time). Owners see all tenant forms.
 - Response counts per form are computed client-side by grouping `feedback-responses` by `formId`
 - `FilterSortBar` drives the filter state — text search, status pills, date range, and sort field/direction
 - Edit uses `FeedbackFormEditor` (same UI as builder, but calls `updateForm()` / `updateDoc` — does not increment `formCount`)
 - Toggle active: `deactivateForm()` / `reactivateForm()` update the `isActive` field only
-- Delete: `deleteForm()` removes the `feedback-forms` document (responses are NOT deleted automatically)
+- Delete: `deleteForm()` removes the `feedback-forms` document **and** batch-deletes all associated `feedback-responses` documents in chunks of 499
 
 ---
 
@@ -239,8 +244,12 @@ Guests simply open the link or scan the QR code, answer the questions, and click
 - **"Others" option** — any multiple-choice question can include an "Others" option that, when selected, reveals a text input for a free-text answer
 
 **Display modes:**
-- **All at once** — all questions are shown on a single page
-- **Step-by-step** — one question per screen with forward/back navigation and a progress indicator
+- **All at once** — all questions are shown on a single page, grouped under section headings if sections are defined. Each section shows its name, optional rich-text description, and a divider before its questions.
+- **Step-by-step** — one question per screen with forward/back navigation and a progress indicator. When the current question belongs to a section, the section name and description are displayed above the question card before the form card.
+
+**URL formats:**
+- Default: `/feedback/{uuid}` — always works
+- Custom slug: `/feedback/{slug}` — works when the form has a `slug` set and `isActive === true`
 
 **Duplicate prevention:**
 1. Check `localStorage` for `submitted_{formId}` — if present, show the "already submitted" screen immediately with no network call
@@ -255,6 +264,11 @@ Guests simply open the link or scan the QR code, answer the questions, and click
 6. If the response has a negative sentiment tag or any custom tag, `POST /api/notify-negative` is called (non-blocking)
 7. `localStorage.setItem('submitted_{formId}', '1')` to prevent future duplicates
 8. Animated "Thank You" screen shown
+
+**Form resolution (slug vs UUID):**
+- The `FeedbackPageClient` inspects the URL segment. If it matches the UUID v4 pattern it calls `getFormById()` directly.
+- If it looks like a slug, it waits for `tenantId` to resolve from `/api/tenant/current`, then calls `GET /api/forms/lookup?idOrSlug={slug}&tenantId={id}`. That route uses the Admin SDK so it bypasses Firestore client rules and composite-index requirements.
+- A server-side fallback in `page.tsx` (`generateMetadata`) also resolves the form for Open Graph tags using the Admin SDK.
 
 ---
 
@@ -321,7 +335,7 @@ hasCustomTags(tags)        // true if any tag has type='custom'
 
 The responses page shows every submission the organisation has received in an expandable table. Each row shows which form the response belongs to, when it was submitted, the guest's country and city, the tags assigned, and how long it took. Clicking a row expands it to show the full question-and-answer detail.
 
-Responses can be filtered by form, tag type, date range, and text search. The filtered results can be exported to an Excel file.
+Responses can be filtered by form, tag type, date range, and text search. The filtered results can be exported to CSV or Excel.
 
 ### How to use it
 
@@ -332,17 +346,19 @@ Go to Dashboard → Responses.
 - **Filter by form** — use the form selector dropdown
 - **Filter by date** — set a date range for the submission date
 - **Sort** — click the sort controls to order by date, form name, country, or time spent
-- **Expand a row** — click any row to see the full responses for each question, plus visitor IP and ISP in small text
-- **Export** — click the Export button to download the current filtered view as an `.xlsx` file (button is disabled when there are no results)
+- **Expand a row** — click "View Details" on any row to open a modal with the full responses grouped by section (if the form used sections), plus visitor IP and ISP
+- **Export CSV** — click "Export CSV" to download the current filtered view as a `.csv` file
+- **Export Excel** — click the chevron next to "Export CSV" and choose "Export to Excel" to download as `.xlsx`
 
 The page pre-filters to a specific form when navigated to from a "View Responses" link elsewhere in the dashboard (via the `?formId=` query parameter).
 
 ### Technical Detail
 
-- Uses `ResponsesTable` component built on **TanStack Table v8** for sorting and row expansion
-- `getAllForms(tenantId)` and `getAllResponses(tenantId)` run in parallel with a 10-second timeout
-- `FeedbackFilterBar` handles the filter state specific to responses (separate from the generic `FilterSortBar`)
-- Export calls `exportToExcel(filteredResponses, forms)` from `src/lib/exportToExcel.ts`, which uses SheetJS to build and download an `.xlsx` file
+- `getAllForms(tenantId, createdBy?)` and `getAllResponses(tenantId, formIds?)` run in parallel with a 10-second timeout; Staff users see only responses tied to their own forms
+- `FilterSortBar` handles all filter state
+- Export has two paths: `exportFeedbackToCSV()` from `src/lib/exportToCSV.ts` (primary button) and `exportToExcel()` from `src/lib/exportToExcel.ts` (dropdown). Both operate on the current filtered result set.
+- The expanded row in the table groups questions by their `sectionId`, showing the section name and description above each group. Unsectioned questions appear last.
+- `ResponseDetailModal` is opened by "View Details" — it renders the full question/answer list with section grouping.
 - The `?formId=` query param is read on mount to pre-populate the form filter
 
 ---
@@ -418,12 +434,11 @@ Go to Dashboard → Settings. The page is divided into sections:
 - Edit existing records inline
 - Toggle active/inactive status per employee
 - Delete an employee with a confirmation prompt
-- Import employees in bulk by uploading a `.csv` file with at least `Employee` and `Email` columns
+- Import employees in bulk by uploading a `.csv` or Excel (`.xlsx`, `.xls`) file with at least `Employee` and `Email` columns
 
 **Danger Zone**
-- "Delete All Responses" permanently deletes every response document for this organisation
-- A confirmation modal must be accepted before deletion proceeds
-- This action is irreversible
+- "Delete All Forms & Responses" permanently deletes every feedback form **and all associated responses** for this organisation. A confirmation modal must be accepted before deletion proceeds. This action is irreversible.
+- Individual form deletion (from the Forms List) also cascades — it deletes the form and all of its responses atomically.
 
 ### Technical Detail
 
@@ -433,9 +448,9 @@ Go to Dashboard → Settings. The page is divided into sections:
 | Locations | `tenant-settings/{tenantId}/config/locations` via `setDoc` |
 | Notifications | `tenant-settings/{tenantId}/config/notifications` via `setDoc` |
 | SEO | `tenant-settings/{tenantId}/config/seo` via `setDoc` |
-| Employees (add/edit) | `employees/{employeeId}` |
-| Employees (import) | `POST /api/import-employees` (bulk write) |
-| Delete All Responses | Batch delete of all `feedback-responses` where `tenantId == tenantId` |
+| Employees (add/edit) | `employees/{tenantId}_{employeeId}` via `saveEmployee()` |
+| Employees (import CSV/Excel) | `employees/{tenantId}_{employeeId}` via `bulkSaveEmployees()` (client-side batch) |
+| Delete All Forms & Responses | Batch delete of all `feedback-forms` and `feedback-responses` where `tenantId == tenantId` via `DELETE /api/delete-all-forms` |
 
 Logo and OG image uploads use the `ImageUpload` component with the Cloudinary signed upload flow (see [02-architecture.md](./02-architecture.md#6-branding-system)).
 
@@ -546,3 +561,53 @@ Four layers work together:
 **Layer 4 — `FeedbackForm` submit guard**
 - The `onSubmit` handler in the public form checks `isOnline` as its first step
 - If offline, an inline error is shown immediately — no network calls are attempted
+
+---
+
+## 13. Employee Polls
+
+### Business Overview
+
+Employee Polls let administrators run internal surveys and Staff of the Month nominations within the organisation. There are two poll types:
+
+- **Opinion Poll** — one or more multiple-choice questions, each with single or multi-select answers. Used for gathering staff opinions, quick team votes, or any question-and-answer format.
+- **Staff Nomination** — a special poll type where the answer options are drawn from the organisation's employee directory. Voters pick the employee they wish to nominate. The results display a leaderboard ranked by vote count.
+
+Polls have a public voting URL (or QR code) that can be shared with staff. Voting does not require a dashboard account — anyone with the link can vote, subject to duplicate-vote prevention.
+
+### How to use it
+
+**Creating a poll:**
+1. Go to Dashboard → Polls
+2. Click "Create Poll"
+3. Enter a title and optional description
+4. Choose the poll type: Opinion Poll or Staff Nomination
+5. For Opinion Poll: add one or more questions, each with its answer options
+6. For Staff Nomination: select the employees who are eligible nominees
+7. Set whether to allow multiple votes per person
+8. Choose when results are shown: After Voting, Always, or Never
+9. Optionally set an end date
+10. Click "Create Poll"
+
+**Sharing a poll:**
+- Click the Share icon on any poll card to open a modal with the voting link, a QR code, and direct share buttons for WhatsApp and Email.
+
+**Viewing results:**
+- Click a poll to open the results view — bar charts show vote percentages per option, and for Staff Nominations the top nominee is highlighted.
+- Click "Export Results" to download the raw vote data as `.xlsx`.
+
+**Activating / deactivating a poll:**
+- Use the toggle on the poll card. Inactive polls do not accept new votes and show "Poll Closed" to voters.
+
+### Technical Detail
+
+- Polls are stored in the `polls` Firestore collection, scoped by `tenantId` and `createdBy`
+- Voting writes two documents atomically in a single `writeBatch`:
+  - One `poll-responses` document (all answers for this voter)
+  - One `poll-votes` document per question answered (used for results aggregation)
+- **Duplicate prevention** — the voting interface checks `localStorage` for a prior vote flag and matches the `voterUid` against existing `poll-responses`. A voter who has already submitted sees a "You have already voted" message.
+- **Real-time results** — `usePollResults(pollId, tenantId)` subscribes to the `poll-votes` collection via `onSnapshot`. The chart updates live as votes arrive without a page refresh.
+- **Staff Nomination nominees** — the poll creator selects employees by Employee ID. `validateEmployeeNominees()` in `pollsFirestore.ts` confirms every ID exists in the `employees` collection for the tenant before the poll is saved.
+- **Export** — `exportPollResultsToExcel(poll, votes)` in `src/lib/pollsExport.ts` flattens vote documents into rows and triggers an `.xlsx` download via SheetJS. Filename: `poll-results-{pollId}-{YYYY-MM-DD}.xlsx`.
+- Routes: `src/app/dashboard/feedback/polls/` (list), `src/app/dashboard/feedback/polls/create/` (builder), `src/app/dashboard/feedback/polls/[pollId]/` (results), `src/app/poll/[pollId]/` (public voting page)
+

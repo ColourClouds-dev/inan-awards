@@ -74,6 +74,7 @@ export interface FeedbackForm {
   collectName?: boolean;      // whether to show a Name field on the form
   customTagRules?: CustomTagRule[];
   ogImageUrl?: string;
+  slug?: string;               // optional human-readable URL alias e.g. "hr-survey"
   createdBy?: string;  // UID of the user who created this form
   tenantId?: string;   // denormalised for query scoping
 }
@@ -180,3 +181,53 @@ export interface Category {
   title: string;
   description: string;
 }
+
+export interface Poll {
+  id: string;
+  title: string;
+  description?: string;
+  type: 'opinion' | 'staff_nomination';
+  questions: PollQuestion[];
+  nominees?: string[]; // Employee IDs for Staff of the Month
+  createdAt: Date | Timestamp;
+  isActive: boolean;
+  allowMultipleVotes?: boolean;
+  showResults: 'after_voting' | 'always' | 'never';
+  endDate?: Date | Timestamp | string; // Support string for simple input representation if needed
+  createdBy: string; // UID of creator
+  tenantId: string;
+  slug?: string; // Optional URL slug
+}
+
+export interface PollQuestion {
+  id: string;
+  question: string;
+  type: 'single_choice' | 'multiple_choice';
+  options: string[];
+  maxSelections?: number; // For multiple choice
+  required: boolean;
+}
+
+export interface PollResponse {
+  id: string;
+  pollId: string;
+  employeeId?: string; // If voting as employee
+  voterUid: string; // Firebase Auth UID
+  responses: {
+    [questionId: string]: string | string[];
+  };
+  submittedAt: Date | Timestamp;
+  tenantId: string;
+}
+
+export interface PollVote {
+  id: string;
+  pollId: string;
+  questionId: string;
+  optionId: string;
+  voterUid: string;
+  employeeId?: string;
+  submittedAt: Date | Timestamp;
+  tenantId: string;
+}
+

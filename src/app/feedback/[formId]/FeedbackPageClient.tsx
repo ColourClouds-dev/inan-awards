@@ -2,9 +2,12 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { getFormById } from '../../../lib/firestore';
+import { getFormById, getFormBySlug } from '../../../lib/firestore';
 import FeedbackForm from '../../../components/FeedbackForm';
 import type { FeedbackForm as FeedbackFormType, Tenant } from '../../../types';
+
+/** Simple UUID v4 shape check — slugs never look like this */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function FeedbackPageClient() {
   const params = useParams();
@@ -14,7 +17,9 @@ export default function FeedbackPageClient() {
   const [notFound, setNotFound] = useState(false);
   const [inactive, setInactive] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [tenantBranding, setTenantBranding] = useState<Tenant['branding']>(undefined);
+  const [tenantBranding, setTenantBranding] = useState<Tenant['branding'] | undefined>(undefined);
+  const [tenantFeatures, setTenantFeatures] = useState<Tenant['features'] | undefined>(undefined);
+  const [tenantId, setTenantId] = useState<string | null>(null);
 
   useEffect(() => {
     // Fetch tenant branding for public page styling
@@ -27,16 +32,51 @@ export default function FeedbackPageClient() {
             document.documentElement.style.setProperty('--brand', data.tenant.branding.primaryColor);
           }
         }
+        if (data?.tenant?.features) {
+          setTenantFeatures(data.tenant.features);
+        }
+        const resolvedId = data?.tenant?.id || data?.tenantId || 'inan';
+        setTenantId(resolvedId);
       })
-      .catch(() => {});
+      .catch(() => {
+        setTenantId('inan');
+      });
   }, []);
 
   useEffect(() => {
     if (!formId) return;
 
+    const isUUID = UUID_RE.test(formId);
+
+    // For UUID: fetch immediately
+    // For slug: wait for tenantId
+    if (!isUUID && !tenantId) return;
+
     const fetchForm = async () => {
       try {
-        const fetchedForm = await getFormById(formId);
+        // 1. Try server Admin API lookup (bypasses client security rules and index limitations)
+        const lookupUrl = `/api/forms/lookup?idOrSlug=${encodeURIComponent(formId)}${tenantId ? `&tenantId=${encodeURIComponent(tenantId)}` : ''}`;
+        const res = await fetch(lookupUrl);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.form) {
+            if (data.form.isActive === false) {
+              setInactive(true);
+              return;
+            }
+            setForm(data.form);
+            return;
+          }
+        }
+
+        // 2. Fallback to client-side Firestore SDK
+        let fetchedForm: FeedbackFormType | null = null;
+        if (isUUID) {
+          fetchedForm = await getFormById(formId);
+        } else if (tenantId) {
+          fetchedForm = await getFormBySlug(formId, tenantId);
+        }
+
         if (fetchedForm === null) {
           setNotFound(true);
           return;
@@ -55,7 +95,7 @@ export default function FeedbackPageClient() {
     };
 
     fetchForm();
-  }, [formId]);
+  }, [formId, tenantId]);
 
   if (loading) {
     return (
@@ -89,5 +129,5 @@ export default function FeedbackPageClient() {
     return null;
   }
 
-  return <FeedbackForm form={form} tenantBranding={tenantBranding} />;
+  return <FeedbackForm form={form} tenantBranding={tenantBranding} tenantFeatures={tenantFeatures} />;
 }

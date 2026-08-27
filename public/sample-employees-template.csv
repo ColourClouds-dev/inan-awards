@@ -1,0 +1,6 @@
+Employee ID,Employee,Email,Role,Reporting To,Joining Date,Status,Employment Type
+EMP001,John Smith,john.smith@company.com,Software Engineer,Jane Doe,2024-01-15,Active,Full-time
+EMP002,Sarah Johnson,sarah.johnson@company.com,Product Manager,Mike Wilson,2024-02-01,Active,Full-time
+EMP003,Mike Wilson,mike.wilson@company.com,Engineering Director,CEO,2023-05-10,Active,Full-time
+EMP004,Lisa Chen,lisa.chen@company.com,UX Designer,Sarah Johnson,2024-03-01,Active,Full-time
+EMP005,David Brown,david.brown@company.com,QA Engineer,Mike Wilson,2024-01-20,Active,Full-time

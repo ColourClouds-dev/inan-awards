@@ -87,7 +87,7 @@ Super admin access is granted via a server-side script and is not self-serviceab
 | **Branding** | Each organisation can set its logo, brand colour, and email display name |
 | **Locations** | Forms are assigned to specific branches or locations |
 | **SEO & Open Graph** | Custom page titles, descriptions, and social share images per organisation |
-| **Employee Records** | Import and manage staff records (plan-dependent feature) |
+| **Employee Records** | Import and manage staff records via CSV or Excel files (plan-dependent feature) |
 | **Multi-Tenancy** | Multiple organisations on one platform, fully data-isolated |
 | **Offline Resilience** | The app detects network loss and protects users from data loss |
 

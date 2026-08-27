@@ -207,6 +207,50 @@ service cloud.firestore {
       allow update, delete: if isSuperAdmin() || ownsTenant(resource.data.tenantId);
     }
 
+    // ── Polls & Voting ───────────────────────────────────────────────────────
+    match /polls/{pollId} {
+      allow read: if resource.data.isActive == true
+                  || isSuperAdmin()
+                  || isOwnerOf(resource.data.tenantId)
+                  || (isAuthenticated()
+                      && request.auth.token.role == 'staff'
+                      && request.auth.token.tenantId != null);
+
+      allow create: if isSuperAdmin()
+                    || isOwnerOf(request.resource.data.tenantId)
+                    || (isStaffOf(request.resource.data.tenantId) && isSelfCreating());
+
+      allow update: if isSuperAdmin()
+                    || isOwnerOf(resource.data.tenantId)
+                    || (isStaffOf(resource.data.tenantId) && isCreator());
+
+      allow delete: if isSuperAdmin()
+                    || isOwnerOf(resource.data.tenantId)
+                    || (isStaffOf(resource.data.tenantId) && isCreator());
+    }
+
+    match /poll-responses/{responseId} {
+      allow create: if isMemberOf(request.resource.data.tenantId);
+      allow read: if isSuperAdmin()
+                  || isOwnerOf(resource.data.tenantId)
+                  || (isAuthenticated() && request.auth.uid == resource.data.voterUid);
+      allow list: if isSuperAdmin()
+                  || (isAuthenticated()
+                      && request.auth.token.tenantId == resource.data.tenantId);
+      allow update, delete: if isSuperAdmin() || isOwnerOf(resource.data.tenantId);
+    }
+
+    match /poll-votes/{voteId} {
+      allow create: if isMemberOf(request.resource.data.tenantId);
+      allow read: if isSuperAdmin()
+                  || isOwnerOf(resource.data.tenantId)
+                  || (isAuthenticated() && request.auth.uid == resource.data.voterUid);
+      allow list: if isSuperAdmin()
+                  || (isAuthenticated()
+                      && request.auth.token.tenantId == resource.data.tenantId);
+      allow update, delete: if isSuperAdmin() || isOwnerOf(resource.data.tenantId);
+    }
+
     // ── Legacy collections ──────────────────────────────────────────────────
 
     match /settings/{settingId} {

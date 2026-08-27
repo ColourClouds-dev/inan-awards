@@ -118,3 +118,103 @@ body {
 .phone-input-container .flag-dropdown:not(:first-child) {
   @apply hidden;
 }
+
+/* ── RichTextEditor ───────────────────────────────────────────────────────── */
+
+/* Placeholder via CSS data attribute */
+.rte-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #9ca3af; /* gray-400 */
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
+/* Override Tailwind preflight list reset */
+.rte-content ul,
+.rte-content ol {
+  padding-left: 1.5rem !important;
+  margin: 0.25rem 0 !important;
+}
+
+.rte-content ul {
+  list-style-type: disc !important;
+}
+
+.rte-content ol {
+  list-style-type: decimal !important;
+}
+
+.rte-content ul li,
+.rte-content ol li {
+  display: list-item !important;
+  list-style: inherit !important;
+}
+
+/* Nested lists */
+.rte-content ul ul {
+  list-style-type: circle !important;
+}
+
+.rte-content p {
+  margin: 0 0 0.25rem 0;
+}
+
+.rte-content p:last-child {
+  margin-bottom: 0;
+}
+
+.rte-content a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.rte-content strong {
+  font-weight: 600;
+}
+
+.rte-content em {
+  font-style: italic;
+}
+
+/* TipTap editor content (editing mode) — same list rules applied to .ProseMirror */
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-left: 1.5rem !important;
+  margin: 0.25rem 0 !important;
+}
+
+.ProseMirror ul {
+  list-style-type: disc !important;
+}
+
+.ProseMirror ol {
+  list-style-type: decimal !important;
+}
+
+.ProseMirror ul li,
+.ProseMirror ol li {
+  display: list-item !important;
+  list-style: inherit !important;
+}
+
+.ProseMirror ul ul {
+  list-style-type: circle !important;
+}
+
+.ProseMirror p {
+  margin: 0 0 0.25rem 0;
+}
+
+.ProseMirror p:last-child {
+  margin-bottom: 0;
+}
+
+/* Placeholder — TipTap sets this on the first empty p */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  pointer-events: none;
+  float: left;
+  height: 0;
+}

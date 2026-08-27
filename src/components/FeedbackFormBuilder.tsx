@@ -13,9 +13,12 @@ import Input from './Input';
 import Button from './Button';
 import Toast from './Toast';
 import ImageUpload from './ImageUpload';
+import RichTextEditor from './RichTextEditor';
 import { useToast } from '../hooks/useToast';
 import { useTenant } from '../contexts/TenantContext';
 import { sanitizeAndLimit, sanitizeText } from '../lib/sanitize';
+import { isSlugTaken } from '../lib/firestore';
+import DOMPurify from 'dompurify';
 import type { FeedbackForm, FeedbackQuestion, CustomTagRule, LocationSettings, FormSection } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -164,7 +167,14 @@ function PreviewPanel({
               {location}
             </div>
           )}
-          {description && <p className="text-xs text-gray-600">{description}</p>}
+          {description && (
+            <div
+              className="rte-content text-xs text-gray-600"
+              dangerouslySetInnerHTML={{
+                __html: typeof window !== 'undefined' ? DOMPurify.sanitize(description) : description.replace(/<[^>]+>/g, ''),
+              }}
+            />
+          )}
           {stepByStep && (
             <span className="inline-flex mt-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
               Step-by-step
@@ -176,7 +186,7 @@ function PreviewPanel({
         {collectName && (
           <div className="bg-white rounded-xl shadow-sm p-4">
             <label className="block text-xs font-medium text-gray-700 mb-1.5">
-              Your Name <span className="text-gray-400 font-normal">(optional)</span>
+              Your Name
             </label>
             <div className="w-full h-8 rounded-lg bg-gray-50 border border-gray-200" />
           </div>
@@ -213,7 +223,12 @@ function PreviewPanel({
                     <div className="mb-4">
                       <h3 className="text-sm font-semibold text-gray-800 mb-1">{group.section.name}</h3>
                       {group.section.description && (
-                        <p className="text-xs text-gray-600 mb-2">{group.section.description}</p>
+                        <div
+                          className="rte-content text-xs text-gray-600 mb-2"
+                          dangerouslySetInnerHTML={{
+                            __html: typeof window !== 'undefined' ? DOMPurify.sanitize(group.section.description) : group.section.description.replace(/<[^>]+>/g, ''),
+                          }}
+                        />
                       )}
                       <hr className="border-gray-200" />
                     </div>
@@ -370,19 +385,26 @@ function SectionsModal({
                 type="text"
                 value={newSectionName}
                 onChange={e => setNewSectionName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (newSectionName.trim()) {
+                      // If description field is empty, just submit; otherwise we already have an RTE
+                      handleAdd();
+                    }
+                  }
+                }}
                 placeholder="Section name (e.g., General Experience)"
                 maxLength={100}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2"
                 style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
               />
-              <input
-                type="text"
+              <RichTextEditor
                 value={newSectionDescription}
-                onChange={e => setNewSectionDescription(e.target.value)}
+                onChange={setNewSectionDescription}
                 placeholder="Description (optional)"
                 maxLength={200}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2"
-                style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
+                compact
               />
               <button
                 onClick={handleAdd}
@@ -408,17 +430,17 @@ function SectionsModal({
                         type="text"
                         value={section.name}
                         onChange={e => onUpdate(section.id, { name: e.target.value })}
+                        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                         placeholder="Section name"
                         maxLength={100}
                         className="w-full font-medium text-gray-900 bg-transparent border-none p-0 focus:outline-none focus:ring-1 focus:ring-gray-300 rounded px-2 py-1"
                       />
-                      <input
-                        type="text"
+                      <RichTextEditor
                         value={section.description || ''}
-                        onChange={e => onUpdate(section.id, { description: e.target.value || undefined })}
+                        onChange={val => onUpdate(section.id, { description: val || undefined })}
                         placeholder="Description (optional)"
                         maxLength={200}
-                        className="w-full text-sm text-gray-600 bg-transparent border-none p-0 focus:outline-none focus:ring-1 focus:ring-gray-300 rounded px-2 py-1"
+                        compact
                       />
                     </div>
                     <div className="flex items-center gap-1 ml-3">
@@ -556,6 +578,9 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
   const [ogImageUrl, setOgImageUrl] = useState('');
   const [stepByStep, setStepByStep] = useState(false);
   const [collectName, setCollectName] = useState(false);
+  const [slug, setSlug] = useState('');
+  const [slugError, setSlugError] = useState('');
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const { toasts, showToast, dismissToast } = useToast();
   const { tenant, tenantId, currentUid } = useTenant();
 
@@ -584,6 +609,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
         if (d.ogImageUrl) setOgImageUrl(d.ogImageUrl);
         if (d.stepByStep !== undefined) setStepByStep(d.stepByStep);
         if (d.collectName !== undefined) setCollectName(d.collectName);
+        if (d.slug) { setSlug(d.slug); setSlugManuallyEdited(true); }
       }
     } catch { /* ignore */ }
   }, []);
@@ -592,10 +618,10 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
     if (showQR) return;
     try {
       sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
-        title, description, location, questions, sections, currentStep, customTagRules, ogImageUrl, stepByStep, collectName,
+        title, description, location, questions, sections, currentStep, customTagRules, ogImageUrl, stepByStep, collectName, slug,
       }));
     } catch { /* ignore */ }
-  }, [title, description, location, questions, sections, currentStep, customTagRules, ogImageUrl, stepByStep, showQR]);
+  }, [title, description, location, questions, sections, currentStep, customTagRules, ogImageUrl, stepByStep, showQR, slug]);
 
   // ── Locations ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -674,11 +700,52 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
   const getUnsectionedQuestions = () =>
     questions.filter(q => !q.sectionId);
 
+  // ── Slug helpers ───────────────────────────────────────────────────────────
+  const slugify = (val: string) =>
+    val
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .slice(0, 80);
+
+  const handleTitleChange = (val: string) => {
+    setTitle(val);
+    // Auto-populate slug from title only if the user hasn't manually edited the slug field yet
+    if (!slugManuallyEdited) {
+      setSlug(slugify(val));
+      setSlugError('');
+    }
+  };
+
+  const handleSlugChange = (val: string) => {
+    const clean = slugify(val);
+    setSlug(clean);
+    setSlugError('');
+    // Mark as manually edited so title changes no longer overwrite it
+    setSlugManuallyEdited(true);
+  };
+
   // ── Submit ─────────────────────────────────────────────────────────────────
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!title || !location || questions.length === 0) return;
     if (!tenant) { showToast('Still loading your account. Please try again.', 'error'); return; }
+
+    // Validate slug uniqueness if one was provided
+    if (slug) {
+      try {
+        const taken = await isSlugTaken(slug, tenantId);
+        if (taken) {
+          setSlugError('This custom link is already in use. Please choose a different one.');
+          goToStep('basics');
+          return;
+        }
+      } catch {
+        // Non-fatal — proceed without slug if the check fails
+      }
+    }
 
     const form: FeedbackForm = {
       id: uuidv4(),
@@ -696,11 +763,14 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
       ...(customTagRules.length > 0 ? { customTagRules } : {}),
       ...(ogImageUrl ? { ogImageUrl } : {}),
       ...(currentUid ? { createdBy: currentUid } : {}),
+      ...(slug ? { slug } : {}),
     };
 
     try {
       await onSave(form);
-      const url = `${window.location.origin}/feedback/${form.id}`;
+      const url = slug
+        ? `${window.location.origin}/feedback/${slug}`
+        : `${window.location.origin}/feedback/${form.id}`;
       setFormUrl(url);
       showToast('Form created successfully!', 'success');
       sessionStorage.removeItem(DRAFT_KEY);
@@ -774,8 +844,40 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
       <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-gray-100">
         <h2 className="text-lg font-semibold mb-4">Form Details</h2>
         <div className="space-y-4">
-          <Input label="Form Title" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g., Guest Satisfaction Survey" required maxLength={100} />
-          <Input label="Description" value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe what this form will do…" maxLength={500} />
+          <Input label="Form Title" value={title} onChange={e => handleTitleChange(e.target.value)} placeholder="e.g., Guest Satisfaction Survey" required maxLength={100} />
+          <RichTextEditor
+            label="Description"
+            value={description}
+            onChange={setDescription}
+            placeholder="Describe what this form will do…"
+            maxLength={500}
+          />
+          {/* Custom Link / Slug */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Custom Link <span className="font-normal text-gray-400">(optional)</span></label>
+            <div className="flex items-center rounded-md border border-gray-300 focus-within:ring-2 focus-within:ring-purple-500 overflow-hidden bg-white">
+              <span className="px-3 py-2 text-sm text-gray-400 bg-gray-50 border-r border-gray-300 whitespace-nowrap select-none">
+                {typeof window !== 'undefined' ? `${window.location.host}/feedback/` : '/feedback/'}
+              </span>
+              <input
+                type="text"
+                value={slug}
+                onChange={e => handleSlugChange(e.target.value)}
+                placeholder="e.g. guest-survey"
+                maxLength={80}
+                className="flex-1 px-3 py-2 text-sm focus:outline-none bg-white"
+              />
+            </div>
+            {slugError && <p className="text-xs text-red-500 mt-1">{slugError}</p>}
+            {!slugError && slug && (
+              <p className="text-xs text-gray-400 mt-1">
+                Public URL: <span className="font-mono">/feedback/{slug}</span>
+              </p>
+            )}
+            {!slugError && !slug && (
+              <p className="text-xs text-gray-400 mt-1">Leave blank to use the default ID-based URL.</p>
+            )}
+          </div>
           <Input label="Location" as="select" value={location} onChange={e => setLocation(e.target.value)} required>
             <option value="">Select Location</option>
             {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
@@ -805,7 +907,7 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
       </div>
       <div className="flex justify-between items-center">
         {(title || description || location || questions.length > 0 || sections.length > 0) ? (
-          <button onClick={() => { sessionStorage.removeItem(DRAFT_KEY); setTitle(''); setDescription(''); setLocation(''); setQuestions([]); setSections([]); setCustomTagRules([]); setStepByStep(false); setCollectName(false); setCurrentStep('basics'); }} className="text-sm text-gray-400 hover:text-red-500 transition-colors">Clear draft</button>
+          <button onClick={() => { sessionStorage.removeItem(DRAFT_KEY); setTitle(''); setDescription(''); setLocation(''); setQuestions([]); setSections([]); setCustomTagRules([]); setStepByStep(false); setCollectName(false); setSlug(''); setSlugError(''); setSlugManuallyEdited(false); setCurrentStep('basics'); }} className="text-sm text-gray-400 hover:text-red-500 transition-colors">Clear draft</button>
         ) : <span />}
         <Button fullWidth={false} onClick={() => goToStep('questions')} disabled={!title || !location || isOverFormLimit}>Next: Add Questions →</Button>
       </div>
@@ -907,7 +1009,24 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
 
                 {/* Question body */}
                 <div className="p-4 space-y-3">
-                  <Input value={question.question} onChange={e => updateQuestion(question.id, { question: e.target.value })} placeholder={QuestionTypeInfo[question.type].placeholder} required />
+                  <Input
+                    value={question.question}
+                    onChange={e => updateQuestion(question.id, { question: e.target.value })}
+                    placeholder={QuestionTypeInfo[question.type].placeholder}
+                    required
+                    onKeyDown={e => {
+                      if (e.key !== 'Enter') return;
+                      e.preventDefault();
+                      // For multiChoice, move focus to the first option input
+                      if (question.type === 'multiChoice') {
+                        const firstOption = document.querySelector<HTMLInputElement>(
+                          `[data-option-input="${question.id}-0"]`
+                        );
+                        firstOption?.focus();
+                      }
+                      // For rating/text, do nothing — just prevent accidental form submit
+                    }}
+                  />
 
                   {question.type === 'multiChoice' && (
                     <div className="space-y-2 pl-2">
@@ -929,7 +1048,37 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
                             <span className="flex-1 text-xs text-gray-400 italic px-2 py-1 bg-gray-50 rounded">Others (Please Specify)</span>
                           ) : (
                             <div className="flex-1">
-                              <Input value={option} onChange={e => updateOption(question.id, oi, e.target.value)} placeholder={`Option ${oi + 1}`} required />
+                              <Input
+                                value={option}
+                                onChange={e => updateOption(question.id, oi, e.target.value)}
+                                placeholder={`Option ${oi + 1}`}
+                                required
+                                data-option-input={`${question.id}-${oi}`}
+                                onKeyDown={e => {
+                                  if (e.key !== 'Enter') return;
+                                  e.preventDefault();
+                                  const opts = question.options ?? [];
+                                  const nextRealIndex = opts.findIndex((o, j) => j > oi && o !== '__others__');
+                                  if (nextRealIndex !== -1) {
+                                    // Focus the next option input
+                                    const nextInput = document.querySelector<HTMLInputElement>(
+                                      `[data-option-input="${question.id}-${nextRealIndex}"]`
+                                    );
+                                    nextInput?.focus();
+                                  } else {
+                                    // Last real option — add a new one and focus it
+                                    addOption(question.id);
+                                    // Focus happens after state update via useEffect-like timing
+                                    setTimeout(() => {
+                                      const newIndex = opts.filter(o => o !== '__others__').length;
+                                      const newInput = document.querySelector<HTMLInputElement>(
+                                        `[data-option-input="${question.id}-${newIndex}"]`
+                                      );
+                                      newInput?.focus();
+                                    }, 50);
+                                  }
+                                }}
+                              />
                             </div>
                           )}
                           <button onClick={() => removeOption(question.id, oi)} className="p-1 text-red-400 hover:text-red-600 transition-colors shrink-0">

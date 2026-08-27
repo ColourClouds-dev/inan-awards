@@ -74,21 +74,46 @@ export function TenantProvider({ children }: TenantProviderProps) {
           try {
             if (user) {
               setCurrentUid(user.uid);
+              
+              // Enhanced claims resolution with retry logic
               let tokenResult = await user.getIdTokenResult(true);
               let claimTenantId = tokenResult.claims.tenantId as string | undefined;
               let claimRole = tokenResult.claims.role as TenantRole | undefined;
 
-              // ── Stale claims retry ───────────────────────────────────────
-              // On first login, custom claims written server-side by
-              // /api/add-tenant-user may not have propagated to the client
-              // token yet. Wait 1500ms and retry once before falling back.
-              if (!claimTenantId) {
-                await new Promise(r => setTimeout(r, 1500));
+              // ── Enhanced stale claims retry with exponential backoff ──────────
+              // Custom claims can take time to propagate, especially on token refresh.
+              // Try multiple times with increasing delays to handle edge cases.
+              let retryCount = 0;
+              const maxRetries = 3;
+              const baseDelay = 1000; // Start with 1 second
+              
+              while ((!claimTenantId || !claimRole) && retryCount < maxRetries) {
+                const delay = baseDelay * Math.pow(2, retryCount); // Exponential backoff
+                console.log(`⏳ Claims missing (attempt ${retryCount + 1}), retrying in ${delay}ms...`);
+                
+                await new Promise(r => setTimeout(r, delay));
                 tokenResult = await user.getIdTokenResult(true);
                 claimTenantId = tokenResult.claims.tenantId as string | undefined;
                 claimRole = tokenResult.claims.role as TenantRole | undefined;
+                retryCount++;
               }
-              // ─────────────────────────────────────────────────────────────
+              
+              // If claims still missing after retries, fall back to Firestore
+              if (!claimRole && user.uid) {
+                console.log('🔄 Claims still missing, falling back to Firestore...');
+                try {
+                  const adminSnap = await getDoc(doc(db, 'tenant-admins', user.uid));
+                  if (adminSnap.exists()) {
+                    const adminData = adminSnap.data();
+                    claimRole = adminData.role as TenantRole | undefined;
+                    claimTenantId = claimTenantId || adminData.tenantId as string | undefined;
+                    console.log('✅ Retrieved role from Firestore:', { claimRole, claimTenantId });
+                  }
+                } catch (firestoreError) {
+                  console.warn('⚠️ Firestore fallback failed:', firestoreError);
+                }
+              }
+              // ──────────────────────────────────────────────────────────────────
 
               if (claimRole) setRole(claimRole);
 
@@ -99,17 +124,6 @@ export function TenantProvider({ children }: TenantProviderProps) {
                   setTenantId(claimTenantId);
                 } else {
                   setTenantId(claimTenantId);
-                }
-
-                // If role wasn't in the claim, fall back to reading tenant-admins doc
-                if (!claimRole) {
-                  try {
-                    const adminSnap = await getDoc(doc(db, 'tenant-admins', user.uid));
-                    if (adminSnap.exists()) {
-                      const r = adminSnap.data().role as TenantRole | undefined;
-                      if (r) setRole(r);
-                    }
-                  } catch { /* non-fatal */ }
                 }
               } else {
                 // No claim — fall back to domain-based resolution

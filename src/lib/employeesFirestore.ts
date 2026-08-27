@@ -17,25 +17,28 @@ import type { Employee } from '../types';
 const COL = 'employees';
 const DEFAULT_TENANT = 'inan';
 
-export async function getAllEmployees(tenantId: string = DEFAULT_TENANT): Promise<Employee[]> {
+export async function getAllEmployees(tenantId: string = DEFAULT_TENANT): Promise<(Employee & { firestoreDocId?: string })[]> {
   const q = query(collection(db, COL), where('tenantId', '==', tenantId));
   const snap = await getDocs(q);
-  const list = snap.docs.map(d => d.data() as Employee);
+  const list = snap.docs.map(d => ({ ...d.data() as Employee, firestoreDocId: d.id }));
   return list.sort((a, b) => a.Employee.localeCompare(b.Employee));
 }
 
-export async function saveEmployee(employee: Employee, tenantId: string = DEFAULT_TENANT): Promise<void> {
-  const id = String(employee['Employee ID']);
+export async function saveEmployee(employee: Employee & { firestoreDocId?: string }, tenantId: string = DEFAULT_TENANT): Promise<void> {
+  const id = employee.firestoreDocId || `${tenantId}_${String(employee['Employee ID'])}`;
   const clean = JSON.parse(JSON.stringify({ ...employee, tenantId }));
+  delete clean.firestoreDocId;
   await setDoc(doc(db, COL, id), clean);
 }
 
-export async function updateEmployee(employeeId: string, updates: Partial<Employee>): Promise<void> {
-  await updateDoc(doc(db, COL, employeeId), updates as Record<string, any>);
+export async function updateEmployee(firestoreDocId: string, updates: Partial<Employee & { firestoreDocId?: string }>): Promise<void> {
+  const clean = { ...updates };
+  delete clean.firestoreDocId;
+  await updateDoc(doc(db, COL, firestoreDocId), clean as Record<string, any>);
 }
 
-export async function deleteEmployee(employeeId: string): Promise<void> {
-  await deleteDoc(doc(db, COL, employeeId));
+export async function deleteEmployee(firestoreDocId: string): Promise<void> {
+  await deleteDoc(doc(db, COL, firestoreDocId));
 }
 
 /** Bulk import employees from a parsed list — used for CSV/Excel import */

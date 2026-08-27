@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { doc, setDoc, getDoc, updateDoc, collection, getDocs, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged, updateProfile, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { db, auth } from '../../../lib/firebase';
 import type { LocationSettings, NotificationSettings, SeoSettings, Tenant } from '../../../types';
 import { updateTenant } from '../../../lib/tenantFirestore';
@@ -17,8 +17,30 @@ import { useTenant } from '../../../contexts/TenantContext';
 import { SectionSkeleton } from '../../../components/Skeleton';
 import { sanitizeEmail, sanitizeAndLimit } from '../../../lib/sanitize';
 import TeamManagementSection from '../../../components/TeamManagementSection';
+import EmployeeManagementSection from '../../../components/EmployeeManagementSection';
 
-// ─── Section wrapper ──────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type Tab = 'account' | 'organisation' | 'notifications' | 'advanced' | 'team' | 'employees' | 'danger';
+
+// Tabs visible to owners vs staff
+const OWNER_TABS: { id: Tab; label: string }[] = [
+  { id: 'account',       label: 'Account' },
+  { id: 'organisation',  label: 'Organisation' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'advanced',      label: 'Advanced' },
+  { id: 'team',          label: 'Team' },
+  { id: 'employees',     label: 'Employees' },
+  { id: 'danger',        label: 'Danger Zone' },
+];
+
+const STAFF_TABS: { id: Tab; label: string }[] = [
+  { id: 'account',       label: 'Account' },
+  { id: 'notifications', label: 'Notifications' },
+];
+
+// ── Section wrapper ───────────────────────────────────────────────────────────
+
 const Section = ({ title, description, children }: {
   title: string;
   description: string;
@@ -33,11 +55,33 @@ const Section = ({ title, description, children }: {
   </div>
 );
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function SettingsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toasts, showToast, dismissToast } = useToast();
   const [pageLoading, setPageLoading] = useState(true);
   const { tenantId, tenant, isLoading: tenantLoading, isOwner, isStaff, currentUid } = useTenant();
+
+  // ── Active tab — persisted in URL hash ────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<Tab>('account');
+
+  useEffect(() => {
+    // Read tab from URL ?tab= on mount
+    const tabParam = searchParams?.get('tab') as Tab | null;
+    const tabs = isOwner ? OWNER_TABS : STAFF_TABS;
+    if (tabParam && tabs.some(t => t.id === tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams, isOwner]);
+
+  const navigateToTab = (tab: Tab) => {
+    setActiveTab(tab);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', tab);
+    window.history.replaceState(null, '', url.toString());
+  };
 
   // ── Profile ────────────────────────────────────────────────────────────────
   const [displayName, setDisplayName] = useState('');
@@ -88,7 +132,6 @@ export default function SettingsPage() {
   const [allowResponseSharing, setAllowResponseSharing] = useState(false);
   const [sharingSaving, setSharingSaving] = useState(false);
 
-
   // ── Auth guard + load ──────────────────────────────────────────────────────
   useEffect(() => {
     if (tenantLoading) return;
@@ -98,7 +141,6 @@ export default function SettingsPage() {
       setOriginalDisplayName(user.displayName || '');
       setEmail(user.email || '');
       try {
-        // Always load locations (both roles need them)
         const locSnap = await getDoc(doc(db, 'tenant-settings', tenantId, 'config', 'locations'));
         if (locSnap.exists()) setLocations((locSnap.data() as LocationSettings).locations || []);
 
@@ -162,19 +204,13 @@ export default function SettingsPage() {
         const credential = EmailAuthProvider.credential(user.email!, currentPassword);
         await reauthenticateWithCredential(user, credential);
         await updatePassword(user, newPassword);
-
-        // Fire-and-forget security notification — must not block or affect UX
         user.getIdToken().then(token => {
           fetch('/api/auth/password-changed', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ email: user.email }),
-          }).catch(() => { /* non-fatal — notification failure never blocks the user */ });
+          }).catch(() => {});
         }).catch(() => {});
-
         setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
       }
       showToast('Profile updated successfully.', 'success');
@@ -201,7 +237,7 @@ export default function SettingsPage() {
   };
   const removeLocation = (loc: string) => saveLocations(locations.filter(l => l !== loc));
 
-  // ── Org-wide notifications (owner) ─────────────────────────────────────────
+  // ── Org-wide notifications ─────────────────────────────────────────────────
   const saveNotifEmails = async (updated: string[]) => {
     setNotifSaving(true);
     try {
@@ -246,19 +282,11 @@ export default function SettingsPage() {
     const newValue = !allowResponseSharing;
     setSharingSaving(true);
     try {
-      await updateTenant(tenantId, {
-        features: {
-          ...tenant.features,
-          allowResponseSharing: newValue,
-        },
-      });
+      await updateTenant(tenantId, { features: { ...tenant.features, allowResponseSharing: newValue } });
       setAllowResponseSharing(newValue);
       showToast(`Response sharing ${newValue ? 'enabled' : 'disabled'}.`, 'success');
-    } catch {
-      showToast('Failed to update response sharing setting.', 'error');
-    } finally {
-      setSharingSaving(false);
-    }
+    } catch { showToast('Failed to update response sharing setting.', 'error'); }
+    finally { setSharingSaving(false); }
   };
 
   // ── Branding ───────────────────────────────────────────────────────────────
@@ -305,8 +333,6 @@ export default function SettingsPage() {
     setDangerLoading(true);
     try {
       if (dangerAction === 'all-forms') {
-        // Use the server-side API so we get Admin SDK batching, proper tenant
-        // scoping, and a formCount reset — none of which are safe client-side.
         const user = auth.currentUser;
         if (!user) throw new Error('Not authenticated');
         const token = await user.getIdToken();
@@ -329,6 +355,7 @@ export default function SettingsPage() {
     }
   };
 
+  // ── Loading skeleton ───────────────────────────────────────────────────────
   if (pageLoading) {
     return (
       <div className="space-y-8 max-w-3xl mx-auto p-4 sm:p-6">
@@ -340,12 +367,13 @@ export default function SettingsPage() {
       </div>
     );
   }
-  return (
-    <div className="space-y-8 max-w-3xl mx-auto">
-      <Toast toasts={toasts} onDismiss={dismissToast} />
-      <h1 className="text-xl font-bold text-gray-900">Settings</h1>
 
-      {/* ── Profile (both roles) ──────────────────────────────────────────── */}
+  const tabs = isOwner ? OWNER_TABS : STAFF_TABS;
+
+  // ── Tab content renderers ──────────────────────────────────────────────────
+
+  const renderAccount = () => (
+    <div className="space-y-6">
       <Section title="Profile" description="Update your display name and password.">
         <form onSubmit={handleProfileSave} className="space-y-4">
           <Input label="Display Name" value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Your name" />
@@ -363,102 +391,81 @@ export default function SettingsPage() {
           </div>
         </form>
       </Section>
+    </div>
+  );
 
-      {/* ── Branding (owner only) ─────────────────────────────────────────── */}
-      {isOwner && (
-        <Section title="Branding" description="Customise how your organisation appears across the platform — logo, brand color, and email display name.">
-          <form onSubmit={handleBrandingSave} className="space-y-5">
-            <ImageUpload label="Organisation Logo" hint="Shown in the nav bar, login page, and public forms. Recommended: PNG or SVG with transparent background." currentUrl={brandLogoUrl} folder={`${tenantId}/branding`} onUploaded={url => setBrandLogoUrl(url)} onRemoved={() => setBrandLogoUrl('')} />
-            <div>
-              <label className="block text-lg font-medium text-gray-700 mb-1">Brand Color</label>
-              <p className="text-xs text-gray-400 mb-2">Used on buttons, active nav links, and accents across the platform.</p>
-              <div className="flex items-center gap-3">
-                <input type="color" value={brandColor} onChange={e => setBrandColor(e.target.value)} className="h-11 w-14 rounded-lg border-2 border-gray-300 cursor-pointer p-0.5 bg-white" title="Pick a color" />
-                <input type="text" value={brandColor} onChange={e => setBrandColor(e.target.value)} maxLength={7} placeholder="#7C3AED" className="w-32 px-3 py-2.5 text-sm font-mono rounded-lg border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:border-transparent uppercase" />
-                <div className="flex items-center gap-2 ml-2">
-                  <div className="h-9 px-4 rounded-lg text-white text-sm font-medium flex items-center" style={{ backgroundColor: /^#[0-9A-Fa-f]{6}$/.test(brandColor) ? brandColor : '#7C3AED' }}>Preview</div>
-                  <span className="text-xs text-gray-400">Button preview</span>
-                </div>
+  const renderOrganisation = () => (
+    <div className="space-y-6">
+      {/* Branding */}
+      <Section title="Branding" description="Customise how your organisation appears across the platform — logo, brand color, and email display name.">
+        <form onSubmit={handleBrandingSave} className="space-y-5">
+          <ImageUpload label="Organisation Logo" hint="Shown in the nav bar, login page, and public forms. Recommended: PNG or SVG with transparent background." currentUrl={brandLogoUrl} folder={`${tenantId}/branding`} onUploaded={url => setBrandLogoUrl(url)} onRemoved={() => setBrandLogoUrl('')} />
+          <div>
+            <label className="block text-lg font-medium text-gray-700 mb-1">Brand Color</label>
+            <p className="text-xs text-gray-400 mb-2">Used on buttons, active nav links, and accents across the platform.</p>
+            <div className="flex items-center gap-3">
+              <input type="color" value={brandColor} onChange={e => setBrandColor(e.target.value)} className="h-11 w-14 rounded-lg border-2 border-gray-300 cursor-pointer p-0.5 bg-white" title="Pick a color" />
+              <input type="text" value={brandColor} onChange={e => setBrandColor(e.target.value)} maxLength={7} placeholder="#7C3AED" className="w-32 px-3 py-2.5 text-sm font-mono rounded-lg border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:border-transparent uppercase" />
+              <div className="flex items-center gap-2 ml-2">
+                <div className="h-9 px-4 rounded-lg text-white text-sm font-medium flex items-center" style={{ backgroundColor: /^#[0-9A-Fa-f]{6}$/.test(brandColor) ? brandColor : '#7C3AED' }}>Preview</div>
+                <span className="text-xs text-gray-400">Button preview</span>
               </div>
             </div>
-            <div>
-              <Input label="Email Display Name" value={brandEmailName} onChange={e => setBrandEmailName(e.target.value)} placeholder={`e.g. ${tenant?.name ?? 'Your Company'} Feedback`} />
-              <p className="text-xs text-gray-400 mt-1">Shown as the sender name in notification emails.</p>
-            </div>
-            <div className="flex justify-end">
-              <Button type="submit" fullWidth={false} disabled={brandSaving} isLoading={brandSaving} loadingText="Saving…">Save Branding</Button>
-            </div>
-          </form>
-        </Section>
-      )}
+          </div>
+          <div>
+            <Input label="Email Display Name" value={brandEmailName} onChange={e => setBrandEmailName(e.target.value)} placeholder={`e.g. ${tenant?.name ?? 'Your Company'} Feedback`} />
+            <p className="text-xs text-gray-400 mt-1">Shown as the sender name in notification emails.</p>
+          </div>
+          <div className="flex justify-end">
+            <Button type="submit" fullWidth={false} disabled={brandSaving} isLoading={brandSaving} loadingText="Saving…">Save Branding</Button>
+          </div>
+        </form>
+      </Section>
 
-      {/* ── Response Sharing (owner only) ─────────────────────────────────── */}
-      {isOwner && (
-        <Section title="Response Sharing" description="Allow respondents to share their form responses via text, PDF, CSV, or WhatsApp.">
-          <div className="flex items-center justify-between py-2">
-            <div>
-              <p className="text-sm font-medium text-gray-900">Enable Response Sharing</p>
-              <p className="text-xs text-gray-500 mt-0.5">Adds a "Share Response" button to the form completion screen, letting users download their response or share it directly.</p>
+      {/* Locations */}
+      <Section title="Locations" description="Manage the locations available when creating feedback forms.">
+        <div className="space-y-2">
+          {locations.length === 0 && <p className="text-sm text-gray-400 italic">No locations added yet.</p>}
+          {locations.map(loc => (
+            <div key={loc} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-md border border-gray-200">
+              <span className="text-sm text-gray-700">{loc}</span>
+              <button onClick={() => removeLocation(loc)} disabled={locationSaving} title="Remove location" className="text-red-400 hover:text-red-600 disabled:opacity-40 transition-colors">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </button>
             </div>
-            <button
-              onClick={handleToggleResponseSharing}
-              disabled={sharingSaving}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 ${
-                allowResponseSharing ? '' : 'bg-gray-200'
-              }`}
-              style={{
-                backgroundColor: allowResponseSharing
-                  ? (brandColor && /^#[0-9A-Fa-f]{6}$/.test(brandColor) ? brandColor : '#7C3AED')
-                  : undefined
-              }}
-            >
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                  allowResponseSharing ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
-        </Section>
-      )}
-      {/* ── Locations — owner: full controls ─────────────────────────────── */}
-      {isOwner && (
-        <Section title="Locations" description="Manage the locations available when creating feedback forms.">
-          <div className="space-y-2">
-            {locations.length === 0 && <p className="text-sm text-gray-400 italic">No locations added yet.</p>}
-            {locations.map(loc => (
-              <div key={loc} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-md border border-gray-200">
-                <span className="text-sm text-gray-700">{loc}</span>
-                <button onClick={() => removeLocation(loc)} disabled={locationSaving} title="Remove location" className="text-red-400 hover:text-red-600 disabled:opacity-40 transition-colors">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2 mt-2">
-            <div className="flex-1"><Input placeholder="e.g. Qaras Hotels: Lekki" value={newLocation} onChange={e => setNewLocation(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addLocation())} /></div>
-            <div className="sm:self-end"><Button onClick={addLocation} disabled={!newLocation.trim() || locationSaving}>Add Location</Button></div>
-          </div>
-        </Section>
-      )}
+          ))}
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2 mt-2">
+          <div className="flex-1"><Input placeholder="e.g. Qaras Hotels: Lekki" value={newLocation} onChange={e => setNewLocation(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addLocation())} /></div>
+          <div className="sm:self-end"><Button onClick={addLocation} disabled={!newLocation.trim() || locationSaving}>Add Location</Button></div>
+        </div>
+      </Section>
 
-      {/* ── Locations — staff: read-only ──────────────────────────────────── */}
-      {isStaff && (
-        <Section title="Locations" description="Locations available when creating feedback forms.">
-          <div className="space-y-2">
-            {locations.length === 0 && <p className="text-sm text-gray-400 italic">No locations configured yet.</p>}
-            {locations.map(loc => (
-              <div key={loc} className="flex items-center px-3 py-2 bg-gray-50 rounded-md border border-gray-200">
-                <span className="text-sm text-gray-700">{loc}</span>
-              </div>
-            ))}
+      {/* Response Sharing */}
+      <Section title="Response Sharing" description="Allow respondents to share their form responses via text, PDF, CSV, or WhatsApp.">
+        <div className="flex items-center justify-between py-2">
+          <div>
+            <p className="text-sm font-medium text-gray-900">Enable Response Sharing</p>
+            <p className="text-xs text-gray-500 mt-0.5">Adds a "Share Response" button to the form completion screen.</p>
           </div>
-        </Section>
-      )}
+          <button
+            onClick={handleToggleResponseSharing}
+            disabled={sharingSaving}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 ${allowResponseSharing ? '' : 'bg-gray-200'}`}
+            style={{ backgroundColor: allowResponseSharing ? (brandColor && /^#[0-9A-Fa-f]{6}$/.test(brandColor) ? brandColor : '#7C3AED') : undefined }}
+          >
+            <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${allowResponseSharing ? 'translate-x-5' : 'translate-x-0'}`} />
+          </button>
+        </div>
+      </Section>
+    </div>
+  );
 
-      {/* ── Notifications — owner: org-wide ──────────────────────────────── */}
+  const renderNotifications = () => (
+    <div className="space-y-6">
+      {/* Owner: org-wide alert recipients */}
       {isOwner && (
-        <Section title="Notifications" description="Email addresses that receive alerts when a negative feedback response is submitted.">
+        <Section title="Alert Recipients" description="Email addresses that receive alerts when a negative feedback response is submitted. You can add any address here — it doesn't need to be a registered account.">
           <div className="space-y-2">
             {notifEmails.length === 0 && <p className="text-sm text-gray-400 italic">No notification emails configured.</p>}
             {notifEmails.map(em => (
@@ -477,9 +484,9 @@ export default function SettingsPage() {
         </Section>
       )}
 
-      {/* ── Notifications — staff: personal ──────────────────────────────── */}
+      {/* Staff: personal alert recipients */}
       {isStaff && (
-        <Section title="Notifications" description="Your personal email addresses for negative feedback alerts on your forms.">
+        <Section title="Alert Recipients" description="Email addresses that receive negative feedback alerts for your forms. Add any address here — it doesn't need to be your registered email.">
           <div className="space-y-2">
             {staffNotifEmails.length === 0 && <p className="text-sm text-gray-400 italic">No notification emails configured.</p>}
             {staffNotifEmails.map(em => (
@@ -497,9 +504,12 @@ export default function SettingsPage() {
           </div>
         </Section>
       )}
+    </div>
+  );
 
-      {/* ── SEO (owner only) ─────────────────────────────────────────────── */}
-      {isOwner && tenant?.features?.seoSettings !== false && (
+  const renderAdvanced = () => (
+    <div className="space-y-6">
+      {tenant?.features?.seoSettings !== false && (
         <Section title="SEO & Open Graph" description="Control how your site appears in search engines and when links are shared on social media.">
           <form onSubmit={handleSeoSave} className="space-y-4">
             <Input label="Site URL" value={seoSiteUrl} onChange={e => setSeoSiteUrl(e.target.value)} placeholder="https://inan.com.ng" type="url" />
@@ -515,26 +525,116 @@ export default function SettingsPage() {
           </form>
         </Section>
       )}
+    </div>
+  );
 
-      {/* ── Team Management (owner only) ─────────────────────────────────── */}
-      {isOwner && <TeamManagementSection tenantId={tenantId} showToast={showToast} />}
+  const renderTeam = () => (
+    <div className="space-y-6">
+      <TeamManagementSection tenantId={tenantId} showToast={showToast} />
+    </div>
+  );
 
-      {/* ── Danger Zone (owner only) ─────────────────────────────────────── */}
-      {isOwner && (
-        <Section title="Danger Zone" description="Irreversible actions. Proceed with caution.">
-          <div className="border border-red-200 rounded-lg p-4 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-gray-900">Delete All Forms &amp; Responses</p>
-              <p className="text-xs text-gray-500 mt-0.5">Permanently removes every feedback form and all associated responses for your organisation. This cannot be undone.</p>
-            </div>
-            <button onClick={() => { setDangerAction('all-forms'); setModalOpen(true); }} disabled={dangerLoading} className="shrink-0 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors">
-              {dangerLoading ? 'Deleting…' : 'Delete All'}
-            </button>
+  const renderEmployees = () => (
+    <div className="space-y-6">
+      <EmployeeManagementSection tenantId={tenantId} showToast={showToast} />
+    </div>
+  );
+
+  const renderDanger = () => (
+    <div className="space-y-6">
+      <Section title="Danger Zone" description="Irreversible actions. Proceed with caution.">
+        <div className="border border-red-200 rounded-lg p-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-gray-900">Delete All Forms &amp; Responses</p>
+            <p className="text-xs text-gray-500 mt-0.5">Permanently removes every feedback form and all associated responses for your organisation. This cannot be undone.</p>
           </div>
-        </Section>
-      )}
+          <button onClick={() => { setDangerAction('all-forms'); setModalOpen(true); }} disabled={dangerLoading} className="shrink-0 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors">
+            {dangerLoading ? 'Deleting…' : 'Delete All'}
+          </button>
+        </div>
+      </Section>
+    </div>
+  );
 
-      {/* ── Danger zone confirmation modal ───────────────────────────────── */}
+  // Staff-only Locations view (read-only)
+  const renderStaffLocations = () => (
+    <div className="space-y-6">
+      <Section title="Locations" description="Locations available when creating feedback forms.">
+        <div className="space-y-2">
+          {locations.length === 0 && <p className="text-sm text-gray-400 italic">No locations configured yet.</p>}
+          {locations.map(loc => (
+            <div key={loc} className="flex items-center px-3 py-2 bg-gray-50 rounded-md border border-gray-200">
+              <span className="text-sm text-gray-700">{loc}</span>
+            </div>
+          ))}
+        </div>
+      </Section>
+    </div>
+  );
+
+  const renderTabContent = () => {
+    if (isStaff) {
+      if (activeTab === 'account') return renderAccount();
+      if (activeTab === 'notifications') return renderNotifications();
+      return null;
+    }
+    // Owner tabs
+    switch (activeTab) {
+      case 'account':       return renderAccount();
+      case 'organisation':  return renderOrganisation();
+      case 'notifications': return renderNotifications();
+      case 'advanced':      return renderAdvanced();
+      case 'team':          return renderTeam();
+      case 'employees':     return renderEmployees();
+      case 'danger':        return renderDanger();
+      default:              return null;
+    }
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  return (
+    <div className="max-w-3xl mx-auto space-y-6">
+      <Toast toasts={toasts} onDismiss={dismissToast} />
+      <h1 className="text-xl font-bold text-gray-900">Settings</h1>
+
+      {/* Staff read-only locations notice */}
+      {isStaff && activeTab === 'account' && locations.length > 0 && renderStaffLocations()}
+
+      {/* Tab strip */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex gap-1 overflow-x-auto" aria-label="Settings tabs">
+          {tabs.map(tab => {
+            const isActive = activeTab === tab.id;
+            const isDanger = tab.id === 'danger';
+            return (
+              <button
+                key={tab.id}
+                onClick={() => navigateToTab(tab.id)}
+                className={[
+                  'whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 transition-colors',
+                  isActive && isDanger
+                    ? 'border-red-500 text-red-600'
+                    : isActive
+                    ? 'border-transparent text-white rounded-t-md'
+                    : isDanger
+                    ? 'border-transparent text-red-400 hover:text-red-600 hover:border-red-300'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+                ].join(' ')}
+                style={isActive && !isDanger ? { borderColor: 'var(--brand)', backgroundColor: 'var(--brand)' } : undefined}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* Tab content */}
+      <div className="pb-12">
+        {renderTabContent()}
+      </div>
+
+      {/* Danger zone confirmation modal */}
       <Modal
         isOpen={modalOpen}
         variant="danger"
