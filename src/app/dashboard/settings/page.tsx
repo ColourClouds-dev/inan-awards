@@ -21,7 +21,7 @@ import EmployeeManagementSection from '../../../components/EmployeeManagementSec
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'account' | 'organisation' | 'notifications' | 'advanced' | 'team' | 'employees' | 'danger';
+type Tab = 'account' | 'organisation' | 'notifications' | 'advanced' | 'team' | 'employees' | 'danger' | 'locations';
 
 // Tabs visible to owners vs staff
 const OWNER_TABS: { id: Tab; label: string }[] = [
@@ -37,6 +37,7 @@ const OWNER_TABS: { id: Tab; label: string }[] = [
 const STAFF_TABS: { id: Tab; label: string }[] = [
   { id: 'account',       label: 'Account' },
   { id: 'notifications', label: 'Notifications' },
+  { id: 'locations',     label: 'Locations' },
 ];
 
 // ── Section wrapper ───────────────────────────────────────────────────────────
@@ -62,7 +63,7 @@ export default function SettingsPage() {
   const searchParams = useSearchParams();
   const { toasts, showToast, dismissToast } = useToast();
   const [pageLoading, setPageLoading] = useState(true);
-  const { tenantId, tenant, isLoading: tenantLoading, isOwner, isStaff, currentUid } = useTenant();
+  const { tenantId, tenant, isLoading: tenantLoading, isOwner, isStaff, currentUid, role } = useTenant();
 
   // ── Active tab — persisted in URL hash ────────────────────────────────────
   const [activeTab, setActiveTab] = useState<Tab>('account');
@@ -134,7 +135,7 @@ export default function SettingsPage() {
 
   // ── Auth guard + load ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (tenantLoading) return;
+    if (tenantLoading || !role) return;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) { router.push('/login'); return; }
       setDisplayName(user.displayName || '');
@@ -576,6 +577,7 @@ export default function SettingsPage() {
     if (isStaff) {
       if (activeTab === 'account') return renderAccount();
       if (activeTab === 'notifications') return renderNotifications();
+      if (activeTab === 'locations') return renderStaffLocations();
       return null;
     }
     // Owner tabs
@@ -596,9 +598,6 @@ export default function SettingsPage() {
     <div className="max-w-3xl mx-auto space-y-6">
       <Toast toasts={toasts} onDismiss={dismissToast} />
       <h1 className="text-xl font-bold text-gray-900">Settings</h1>
-
-      {/* Staff read-only locations notice */}
-      {isStaff && activeTab === 'account' && locations.length > 0 && renderStaffLocations()}
 
       {/* Tab strip */}
       <div className="border-b border-gray-200">
