@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { signInWithEmailAndPassword, onAuthStateChanged, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -22,7 +22,8 @@ function getErrorMessage(error: { code?: string } | null | undefined): string {
   }
 }
 
-export default function LoginPage() {
+// Inner component that safely uses useSearchParams() inside a Suspense boundary
+function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -58,7 +59,6 @@ export default function LoginPage() {
       if (user && user.emailVerified) {
         router.push(redirectTo);
       } else if (user && !user.emailVerified) {
-        // Unverified user — came from registration. Send to verify page.
         auth.signOut();
         router.push(`/verify-email?email=${encodeURIComponent(user.email ?? '')}`);
       } else {
@@ -74,8 +74,6 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const credential = await signInWithEmailAndPassword(auth, email, password);
-      // Force-refresh the token so custom claims (tenantId, role) are present
-      // before the user lands on a page that writes to Firestore.
       await credential.user.getIdToken(true);
       showToast('Signed in successfully!', 'success');
       setTimeout(() => router.push(redirectTo), 1000);
@@ -94,7 +92,6 @@ export default function LoginPage() {
     setResetLoading(true);
     try {
       if (isCustomDomainEmail(resetEmail.trim())) {
-        // Custom domain → our API → Brevo
         const res = await fetch('/api/auth/reset-password', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -105,7 +102,6 @@ export default function LoginPage() {
           throw new Error(data.error || 'Failed to send reset email.');
         }
       } else {
-        // Standard domain → Firebase native
         await sendPasswordResetEmail(auth, resetEmail.trim());
       }
       showToast('Password reset email sent! Check your inbox.', 'success');
@@ -154,7 +150,6 @@ export default function LoginPage() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow-lg sm:rounded-xl sm:px-10">
 
-          {/* ── Login form ─────────────────────────────────────────────── */}
           {mode === 'login' && (
             <form className="space-y-6" onSubmit={handleSubmit}>
               <Input
@@ -204,7 +199,6 @@ export default function LoginPage() {
             </form>
           )}
 
-          {/* ── Forgot password form ───────────────────────────────────── */}
           {mode === 'forgot' && (
             <form className="space-y-6" onSubmit={handlePasswordReset}>
               <div className="text-center space-y-1">
@@ -242,7 +236,6 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ── Create account link ─────────────────────────────────────────── */}
       {mode === 'login' && (
         <div className="mt-4 sm:mx-auto sm:w-full sm:max-w-md text-center">
           <p className="text-sm text-gray-600">
@@ -259,3 +252,18 @@ export default function LoginPage() {
     </div>
   );
 }
+
+// Outer page component wraps LoginForm in Suspense so useSearchParams()
+// is only called on the client, satisfying Next.js's SSR requirements.
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-indigo-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
