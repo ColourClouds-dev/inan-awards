@@ -12,6 +12,15 @@ import RichTextEditor from './RichTextEditor';
 import EmployeeSelector from './EmployeeSelector';
 import type { Poll, PollQuestion } from '../types';
 
+/** Trash icon for remove buttons */
+function TrashIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  );
+}
+
 interface PollBuilderProps {
   onSave?: (poll: Omit<Poll, 'id' | 'createdAt'>) => Promise<string>;
 }
@@ -47,6 +56,8 @@ export default function PollBuilder({ onSave }: PollBuilderProps) {
   // Nominees state (for staff nomination polls)
   const [nominees, setNominees] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [shareModal, setShareModal] = useState<{ open: boolean; url: string }>({ open: false, url: '' });
+  const [copied, setCopied] = useState(false);
 
   // Auto-generate a question for staff nomination if type is staff_nomination
   const getPreparedQuestions = (): PollQuestion[] => {
@@ -224,10 +235,9 @@ export default function PollBuilder({ onSave }: PollBuilderProps) {
 
       showToast('Poll created successfully!', 'success');
       
-      // Redirect to polls dashboard list
-      setTimeout(() => {
-        router.push('/dashboard/feedback/polls');
-      }, 1000);
+      // Show share modal instead of immediately redirecting
+      const pollUrl = `${window.location.origin}/poll/${newId}`;
+      setShareModal({ open: true, url: pollUrl });
     } catch (err) {
       console.error('Failed to save poll:', err);
       showToast('Failed to save poll.', 'error');
@@ -236,9 +246,81 @@ export default function PollBuilder({ onSave }: PollBuilderProps) {
     }
   };
 
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareModal.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      showToast('Could not copy to clipboard.', 'error');
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto bg-white p-4 sm:p-6 md:p-8 rounded-xl shadow border border-gray-100 space-y-6">
       <Toast toasts={toasts} onDismiss={dismissToast} />
+
+      {/* ── Share modal shown after successful poll creation ── */}
+      {shareModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 sm:p-8 space-y-5">
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-black text-gray-900">Poll Created!</h3>
+              <p className="text-sm text-gray-500">Share this link with your participants so they can vote.</p>
+            </div>
+
+            <div className="flex gap-2 items-center bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+              <span className="flex-1 text-xs text-gray-700 truncate select-all font-mono">{shareModal.url}</span>
+              <button
+                onClick={handleCopyLink}
+                className="shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors bg-purple-600 text-white hover:bg-purple-700"
+              >
+                {copied ? (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Copy Link
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+              <a
+                href={shareModal.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 inline-flex justify-center items-center gap-1.5 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Preview Poll
+              </a>
+              <button
+                onClick={() => { setShareModal({ open: false, url: '' }); router.push('/dashboard/feedback/polls'); }}
+                className="flex-1 inline-flex justify-center items-center py-2 rounded-lg text-sm font-semibold text-white transition-colors"
+                style={{ backgroundColor: 'var(--brand, #7c3aed)' }}
+              >
+                Go to Polls List
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Progress header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b pb-4">
@@ -358,9 +440,10 @@ export default function PollBuilder({ onSave }: PollBuilderProps) {
                     <button
                       type="button"
                       onClick={() => handleRemoveQuestion(q.id)}
-                      className="text-xs font-semibold text-red-500 hover:text-red-700 p-1"
+                      className="text-red-400 hover:text-red-600 transition-colors p-1.5 rounded-lg hover:bg-red-50"
+                      title="Remove question"
                     >
-                      Remove
+                      <TrashIcon />
                     </button>
                   )}
                 </div>

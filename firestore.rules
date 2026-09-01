@@ -235,8 +235,14 @@ service cloud.firestore {
                   || isOwnerOf(resource.data.tenantId)
                   || (isAuthenticated() && request.auth.uid == resource.data.voterUid);
       allow list: if isSuperAdmin()
-                  || (isAuthenticated()
-                      && request.auth.token.tenantId == resource.data.tenantId);
+                  // Owners and staff: use token claim only (resource.data is
+                  // unavailable during collection queries).
+                  || (isAuthenticated() && request.auth.token.tenantId != null
+                      && (request.auth.token.role == 'owner'
+                          || request.auth.token.role == 'staff'))
+                  // Any authenticated user can query their own responses
+                  // (e.g. the "have I already voted?" check).
+                  || isAuthenticated();
       allow update, delete: if isSuperAdmin() || isOwnerOf(resource.data.tenantId);
     }
 
@@ -246,8 +252,10 @@ service cloud.firestore {
                   || isOwnerOf(resource.data.tenantId)
                   || (isAuthenticated() && request.auth.uid == resource.data.voterUid);
       allow list: if isSuperAdmin()
-                  || (isAuthenticated()
-                      && request.auth.token.tenantId == resource.data.tenantId);
+                  || (isAuthenticated() && request.auth.token.tenantId != null
+                      && (request.auth.token.role == 'owner'
+                          || request.auth.token.role == 'staff'))
+                  || isAuthenticated();
       allow update, delete: if isSuperAdmin() || isOwnerOf(resource.data.tenantId);
     }
 

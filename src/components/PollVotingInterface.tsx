@@ -5,14 +5,28 @@ import { useRouter } from 'next/navigation';
 import { useTenant } from '../contexts/TenantContext';
 import { submitPollResponse } from '../lib/pollsFirestore';
 import { getAllEmployees } from '../lib/employeesFirestore';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { collection, query, where, getDocs, getDoc, doc as firestoreDoc } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase';
 import Button from './Button';
 import Toast from './Toast';
 import { useToast } from '../hooks/useToast';
 import PollResultsDisplay from './PollResultsDisplay';
 import { usePollResults } from '../hooks/usePollResults';
+import DOMPurify from 'dompurify';
 import type { Poll, PollResponse, PollVote, Employee } from '../types';
+
+/** Safely render stored HTML from the RichTextEditor. Falls back to plain text on SSR. */
+function SafeHtml({ html, className }: { html: string; className?: string }) {
+  if (typeof window === 'undefined') {
+    return <p className={className}>{html.replace(/<[^>]+>/g, '')}</p>;
+  }
+  return (
+    <div
+      className={`rte-content ${className ?? ''}`}
+      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}
+    />
+  );
+}
 
 interface PollVotingInterfaceProps {
   poll: Poll;
@@ -136,6 +150,28 @@ export default function PollVotingInterface({ poll }: PollVotingInterfaceProps) 
 
     setSubmitting(true);
     try {
+      // Force-refresh the token and read back claims to verify tenantId is set.
+      // getIdToken(true) alone doesn't let us inspect the claim value — we need
+      // getIdTokenResult(true) so we can validate before the Firestore write.
+      if (!auth.currentUser) {
+        showToast('Your session has expired. Please sign in again.', 'error');
+        setSubmitting(false);
+        return;
+      }
+      const tokenResult = await auth.currentUser.getIdTokenResult(true);
+      const claimTenantId = tokenResult.claims['tenantId'] as string | undefined;
+
+      if (!claimTenantId) {
+        showToast('Your account isn\'t fully set up yet. Please sign out and sign back in.', 'error');
+        setSubmitting(false);
+        return;
+      }
+
+      if (claimTenantId !== poll.tenantId) {
+        showToast('You are not a member of the organisation this poll belongs to.', 'error');
+        setSubmitting(false);
+        return;
+      }
       // Build response map
       const responsesMap: Record<string, string | string[]> = {};
       poll.questions.forEach(q => {
@@ -147,9 +183,8 @@ export default function PollVotingInterface({ poll }: PollVotingInterfaceProps) 
       
       // If we don't have finalEmployeeId, fetch tenant-admins email and look up
       if (!finalEmployeeId) {
-        const adminSnap = await getDocs(query(collection(db, 'tenant-admins')));
-        const userDoc = adminSnap.docs.find(d => d.id === currentUid);
-        if (userDoc) {
+        const userDoc = await getDoc(firestoreDoc(db, 'tenant-admins', currentUid));
+        if (userDoc.exists()) {
           const email = userDoc.data().email;
           if (email) {
             const match = employees.find(emp => emp.Email.toLowerCase() === email.toLowerCase());
@@ -273,7 +308,7 @@ export default function PollVotingInterface({ poll }: PollVotingInterfaceProps) 
         </span>
         <h2 className="text-xl sm:text-2xl font-black text-gray-900 leading-tight break-words">{poll.title}</h2>
         {poll.description && (
-          <p className="text-xs sm:text-sm text-gray-500 mt-2 break-words leading-relaxed">{poll.description}</p>
+          <SafeHtml html={poll.description} className="text-xs sm:text-sm text-gray-500 mt-2 break-words leading-relaxed" />
         )}
       </div>
 

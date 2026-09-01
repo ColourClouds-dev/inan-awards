@@ -14,6 +14,11 @@ import PollResultsDisplay from '../../../../../components/PollResultsDisplay';
 import PollStatusToggle from '../../../../../components/PollStatusToggle';
 import PollShareButton from '../../../../../components/PollShareButton';
 import { exportPollResultsToExcel } from '../../../../../lib/pollsExport';
+
+function stripHtml(html: string): string {
+  if (typeof window === 'undefined') return html.replace(/<[^>]+>/g, '');
+  return new DOMParser().parseFromString(html, 'text/html').body.textContent || '';
+}
 import type { Poll } from '../../../../../types';
 
 export default function PollDetailPage() {
@@ -144,7 +149,7 @@ export default function PollDetailPage() {
             {poll.title}
           </h1>
           {poll.description && (
-            <p className="text-xs sm:text-sm text-gray-500 max-w-xl break-words leading-relaxed">{poll.description}</p>
+            <p className="text-xs sm:text-sm text-gray-500 max-w-xl break-words leading-relaxed">{stripHtml(poll.description)}</p>
           )}
         </div>
 

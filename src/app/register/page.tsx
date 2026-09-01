@@ -25,6 +25,7 @@ function RegisterPageInner() {
   const [inviteValid, setInviteValid] = useState<boolean | null>(inviteToken ? null : false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteTenantName, setInviteTenantName] = useState('');
+  const [inviteTenantId, setInviteTenantId] = useState('');
   const [inviteError, setInviteError] = useState('');
 
   const [tenantName, setTenantName] = useState('');
@@ -48,6 +49,7 @@ function RegisterPageInner() {
           setInviteValid(true);
           setInviteEmail(data.email);
           setInviteTenantName(data.tenantName);
+          setInviteTenantId(data.tenantId);
           setWorkEmail(data.email);
         } else {
           setInviteValid(false);
@@ -90,7 +92,7 @@ function RegisterPageInner() {
         const res = await fetch('/api/add-tenant-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: user.uid, email: emailToUse, inviteToken }),
+          body: JSON.stringify({ uid: user.uid, email: emailToUse, inviteToken, tenantId: inviteTenantId }),
         });
         if (!res.ok) {
           const data = await res.json();

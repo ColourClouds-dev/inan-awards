@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { signInWithEmailAndPassword, onAuthStateChanged, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
@@ -37,6 +37,8 @@ export default function LoginPage() {
 
   const { toasts, showToast, dismissToast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams?.get('redirect') || '/dashboard';
 
   useEffect(() => {
     fetch('/api/tenant/current')
@@ -54,7 +56,7 @@ export default function LoginPage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user && user.emailVerified) {
-        router.push('/dashboard');
+        router.push(redirectTo);
       } else if (user && !user.emailVerified) {
         // Unverified user — came from registration. Send to verify page.
         auth.signOut();
@@ -64,16 +66,19 @@ export default function LoginPage() {
       }
     });
     return () => unsubscribe();
-  }, [router]);
+  }, [router, redirectTo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const credential = await signInWithEmailAndPassword(auth, email, password);
+      // Force-refresh the token so custom claims (tenantId, role) are present
+      // before the user lands on a page that writes to Firestore.
+      await credential.user.getIdToken(true);
       showToast('Signed in successfully!', 'success');
-      setTimeout(() => router.push('/dashboard'), 1000);
+      setTimeout(() => router.push(redirectTo), 1000);
     } catch (err: unknown) {
       const msg = getErrorMessage(err as { code?: string });
       setError(msg);

@@ -108,6 +108,27 @@ export function TenantProvider({ children }: TenantProviderProps) {
                     claimRole = adminData.role as TenantRole | undefined;
                     claimTenantId = claimTenantId || adminData.tenantId as string | undefined;
                     console.log('✅ Retrieved role from Firestore:', { claimRole, claimTenantId });
+
+                    // Re-stamp the correct claims server-side if they were wrong/missing,
+                    // then force a token refresh so future Firestore writes use the right tenant.
+                    if (claimRole && claimTenantId) {
+                      try {
+                        const idToken = await user.getIdToken();
+                        await fetch('/api/repair-claims', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${idToken}`,
+                          },
+                          body: JSON.stringify({ tenantId: claimTenantId, role: claimRole }),
+                        });
+                        // Force token refresh so the new claims are active immediately.
+                        tokenResult = await user.getIdTokenResult(true);
+                        console.log('✅ Claims repaired and token refreshed.');
+                      } catch (repairErr) {
+                        console.warn('⚠️ Claims repair request failed:', repairErr);
+                      }
+                    }
                   }
                 } catch (firestoreError) {
                   console.warn('⚠️ Firestore fallback failed:', firestoreError);

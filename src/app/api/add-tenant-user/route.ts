@@ -19,13 +19,17 @@ function getAdminAuth() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { uid, email, inviteToken } = await req.json();
+    const { uid, email, inviteToken, tenantId: bodyTenantId } = await req.json();
 
     if (!uid || !email) {
       return NextResponse.json({ error: 'uid and email are required.' }, { status: 400 });
     }
 
-    const tenantId = req.headers.get('x-tenant-id');
+    // Prefer the tenantId from the request body (sourced from the validated invite token
+    // on the client). The x-tenant-id middleware header is domain-derived and always
+    // resolves to the domain's mapped tenant (e.g. 'inan'), which is wrong for Staff
+    // accounts that belong to a different tenant like 'inan-management'.
+    const tenantId = bodyTenantId || req.headers.get('x-tenant-id');
     if (!tenantId) {
       return NextResponse.json({ error: 'Could not resolve tenant.' }, { status: 400 });
     }

@@ -12,6 +12,13 @@ import { useToast } from '../../../../hooks/useToast';
 import PollStatusToggle from '../../../../components/PollStatusToggle';
 import type { Poll } from '../../../../types';
 
+/** Strip HTML tags to plain text for the card description preview */
+function stripHtml(html: string): string {
+  if (typeof window === 'undefined') return html.replace(/<[^>]+>/g, '');
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return doc.body.textContent || '';
+}
+
 export default function PollsListPage() {
   const { tenantId, isOwner, currentUid, isLoading: tenantLoading } = useTenant();
   const { toasts, showToast, dismissToast } = useToast();
@@ -167,7 +174,7 @@ export default function PollsListPage() {
                     {poll.title}
                   </h3>
                   <p className="text-xs text-gray-500 line-clamp-2 mb-3 break-words">
-                    {poll.description || 'No description provided.'}
+                    {poll.description ? stripHtml(poll.description) : 'No description provided.'}
                   </p>
                 </div>
 
