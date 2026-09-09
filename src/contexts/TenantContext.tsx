@@ -113,7 +113,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
                 });
                 try {
                   const idToken = await user.getIdToken();
-                  await fetch('/api/repair-claims', {
+                  const repairRes = await fetch('/api/repair-claims', {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
@@ -121,8 +121,11 @@ export function TenantProvider({ children }: TenantProviderProps) {
                     },
                     body: JSON.stringify({ tenantId: effectiveTenantId, role: effectiveRole }),
                   });
-                  // Refresh token in background without blocking UI
-                  user.getIdTokenResult(true).catch(() => {});
+                  if (repairRes.ok) {
+                    // Force refresh user token so subsequent Firestore queries have valid claims
+                    await user.getIdTokenResult(true);
+                    console.log('✅ Custom claims successfully repaired and token refreshed');
+                  }
                 } catch (repairErr) {
                   console.warn('⚠️ Claims repair request failed:', repairErr);
                 }

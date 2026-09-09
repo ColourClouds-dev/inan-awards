@@ -13,7 +13,12 @@ import { useToast } from '../../hooks/useToast';
 import { isCustomDomainEmail } from '../../lib/emailUtils';
 
 function slugify(name: string): string {
-  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const slug = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  // Normalize Inan Management variations to the main tenant 'inan'
+  if (slug === 'inan-management' || slug === 'inan-management-ltd' || slug === 'inan-feedback') {
+    return 'inan';
+  }
+  return slug;
 }
 
 function RegisterPageInner() {

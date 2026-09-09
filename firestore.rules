@@ -187,11 +187,9 @@ service cloud.firestore {
       // Restrict collection-level queries/listings to authenticated tenant members
       allow list: if isSuperAdmin()
                   || (isAuthenticated()
-                      && request.auth.token.role == 'owner'
-                      && request.auth.token.tenantId == resource.data.tenantId)
-                  || (isAuthenticated()
-                      && request.auth.token.role == 'staff'
-                      && request.auth.token.tenantId == resource.data.tenantId);
+                      && request.auth.token.tenantId != null
+                      && (request.auth.token.role == 'owner'
+                          || request.auth.token.role == 'staff'));
 
       // Only owners and super admins can update or delete responses.
       allow update, delete: if isSuperAdmin()

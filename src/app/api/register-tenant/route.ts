@@ -32,10 +32,14 @@ function getAdminAuth() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { uid, tenantId, companyName, domain, email } = await req.json();
+    let { uid, tenantId, companyName, domain, email } = await req.json();
 
     if (!uid || !tenantId || !companyName || !email) {
       return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
+    }
+
+    if (tenantId === 'inan-management' || tenantId === 'inan-management-ltd' || tenantId === 'inan-feedback') {
+      tenantId = 'inan';
     }
 
     const db = getAdminDb();
