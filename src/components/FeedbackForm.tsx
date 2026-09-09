@@ -28,7 +28,7 @@ function SafeHtml({ html, className }: { html: string; className?: string }) {
   }
   return (
     <div
-      className={`rte-content ${className ?? ''}`}
+      className={`prose prose-sm max-w-none rte-content ${className ?? ''}`}
       dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}
     />
   );

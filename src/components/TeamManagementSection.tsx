@@ -191,7 +191,7 @@ export default function TeamManagementSection({ tenantId, showToast }: Props) {
             <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden mt-2">
               <div className="flex flex-col" style={{ minHeight: `${5 * 56}px` }}>
                 {paginatedMembers.map(member => (
-                  <div key={member.uid} className="flex items-center justify-between px-4 bg-white hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0" style={{ height: 56 }}>
+                  <div key={member.uid} className="flex items-center justify-between px-4 bg-white hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 min-h-[56px] py-2">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{member.email}</p>
                       <p className="text-xs text-gray-400">
@@ -213,9 +213,9 @@ export default function TeamManagementSection({ tenantId, showToast }: Props) {
                     )}
                   </div>
                 ))}
-                {/* Phantom rows fill remaining space so the container height stays fixed */}
+                {/* Phantom rows fill remaining space */}
                 {Array.from({ length: Math.max(0, 5 - paginatedMembers.length) }).map((_, i) => (
-                  <div key={`phantom-${i}`} style={{ height: 56 }} className="border-b border-gray-100 last:border-b-0 bg-white" aria-hidden />
+                  <div key={`phantom-${i}`} style={{ minHeight: 56 }} className="border-b border-gray-100 last:border-b-0 bg-white" aria-hidden />
                 ))}
               </div>
             </div>

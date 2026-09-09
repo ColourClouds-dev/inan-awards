@@ -77,64 +77,59 @@ export function TenantProvider({ children }: TenantProviderProps) {
               
               // Enhanced claims resolution with retry logic
               let tokenResult = await user.getIdTokenResult(true);
+              // Check token claims
               let claimTenantId = tokenResult.claims.tenantId as string | undefined;
               let claimRole = tokenResult.claims.role as TenantRole | undefined;
 
-              // ── Enhanced stale claims retry with exponential backoff ──────────
-              // Custom claims can take time to propagate, especially on token refresh.
-              // Try multiple times with increasing delays to handle edge cases.
-              let retryCount = 0;
-              const maxRetries = 3;
-              const baseDelay = 1000; // Start with 1 second
-              
-              while ((!claimTenantId || !claimRole) && retryCount < maxRetries) {
-                const delay = baseDelay * Math.pow(2, retryCount); // Exponential backoff
-                console.log(`⏳ Claims missing (attempt ${retryCount + 1}), retrying in ${delay}ms...`);
-                
-                await new Promise(r => setTimeout(r, delay));
-                tokenResult = await user.getIdTokenResult(true);
-                claimTenantId = tokenResult.claims.tenantId as string | undefined;
-                claimRole = tokenResult.claims.role as TenantRole | undefined;
-                retryCount++;
-              }
-              
-              // If claims still missing after retries, fall back to Firestore
-              if (!claimRole && user.uid) {
-                console.log('🔄 Claims still missing, falling back to Firestore...');
-                try {
-                  const adminSnap = await getDoc(doc(db, 'tenant-admins', user.uid));
-                  if (adminSnap.exists()) {
-                    const adminData = adminSnap.data();
-                    claimRole = adminData.role as TenantRole | undefined;
-                    claimTenantId = claimTenantId || adminData.tenantId as string | undefined;
-                    console.log('✅ Retrieved role from Firestore:', { claimRole, claimTenantId });
+              // Always fetch tenant-admins doc as authoritative source of truth for the user's role and tenantId
+              let firestoreTenantId: string | undefined;
+              let firestoreRole: TenantRole | undefined;
 
-                    // Re-stamp the correct claims server-side if they were wrong/missing,
-                    // then force a token refresh so future Firestore writes use the right tenant.
-                    if (claimRole && claimTenantId) {
-                      try {
-                        const idToken = await user.getIdToken();
-                        await fetch('/api/repair-claims', {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${idToken}`,
-                          },
-                          body: JSON.stringify({ tenantId: claimTenantId, role: claimRole }),
-                        });
-                        // Force token refresh so the new claims are active immediately.
-                        tokenResult = await user.getIdTokenResult(true);
-                        console.log('✅ Claims repaired and token refreshed.');
-                      } catch (repairErr) {
-                        console.warn('⚠️ Claims repair request failed:', repairErr);
-                      }
-                    }
-                  }
-                } catch (firestoreError) {
-                  console.warn('⚠️ Firestore fallback failed:', firestoreError);
+              try {
+                const adminSnap = await getDoc(doc(db, 'tenant-admins', user.uid));
+                if (adminSnap.exists()) {
+                  const adminData = adminSnap.data();
+                  firestoreRole = adminData.role as TenantRole | undefined;
+                  firestoreTenantId = adminData.tenantId as string | undefined;
+                }
+              } catch (err) {
+                console.warn('⚠️ Could not check tenant-admins document:', err);
+              }
+
+              // Authoritative assignment: prefer Firestore record if available, fallback to claim
+              const effectiveRole = firestoreRole || claimRole;
+              const effectiveTenantId = firestoreTenantId || claimTenantId;
+
+              // Check if custom claims are missing or mismatched
+              const needsRepair = Boolean(
+                effectiveRole && effectiveTenantId &&
+                (claimRole !== effectiveRole || claimTenantId !== effectiveTenantId)
+              );
+
+              if (needsRepair && effectiveRole && effectiveTenantId) {
+                console.log('🔄 Repairing claims: current claims do not match authoritative record', {
+                  expected: { tenantId: effectiveTenantId, role: effectiveRole },
+                  actual: { tenantId: claimTenantId, role: claimRole }
+                });
+                try {
+                  const idToken = await user.getIdToken();
+                  await fetch('/api/repair-claims', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${idToken}`,
+                    },
+                    body: JSON.stringify({ tenantId: effectiveTenantId, role: effectiveRole }),
+                  });
+                  // Refresh token in background without blocking UI
+                  user.getIdTokenResult(true).catch(() => {});
+                } catch (repairErr) {
+                  console.warn('⚠️ Claims repair request failed:', repairErr);
                 }
               }
-              // ──────────────────────────────────────────────────────────────────
+
+              claimRole = effectiveRole;
+              claimTenantId = effectiveTenantId;
 
               if (claimRole) setRole(claimRole);
 

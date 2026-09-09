@@ -372,7 +372,7 @@ export default function SuperAdminPage() {
   if (!authorized) return null;
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-8">
+    <div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-8">
       <Toast toasts={toasts} onDismiss={dismissToast} />
 
       <div className="flex items-center justify-between">
@@ -435,7 +435,7 @@ export default function SuperAdminPage() {
 
             {/* ── Tenant card header ─────────────────────────────────────── */}
             <div className="p-5 space-y-2">
-              <div className="flex items-start justify-between gap-4 flex-nowrap">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-semibold text-gray-900">{tenant.name}</h3>
@@ -547,7 +547,7 @@ export default function SuperAdminPage() {
                     {tenantUsers[tenant.id].map(user => (
                       <div
                         key={user.uid}
-                        className="flex items-center justify-between bg-white rounded-md border border-gray-200 px-4 py-2.5 gap-4"
+                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white rounded-md border border-gray-200 px-4 py-3 gap-2 sm:gap-4"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -586,7 +586,7 @@ export default function SuperAdminPage() {
                               e.target.value as 'owner' | 'staff',
                               tenant.id
                             )}
-                            className="text-xs border border-gray-200 rounded-md px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 disabled:opacity-50"
+                            className="text-xs border border-gray-200 rounded-md px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-1 disabled:opacity-50 w-20 sm:w-auto"
                           >
                             <option value="owner">Owner</option>
                             <option value="staff">Staff</option>

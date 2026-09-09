@@ -319,18 +319,20 @@ export default function ResponsesPage() {
         <div className="h-7 w-32 skeleton-shimmer rounded" />
         <FilterBarSkeleton />
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-100 text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                {['Form','Respondent','Submitted','Country','City','Tags','Time Spent',''].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
-              {[1,2,3,4,5].map(i => <TableRowSkeleton key={i} cols={8} />)}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-100 text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  {['Form','Respondent','Submitted','Country','City','Tags','Time Spent',''].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {[1,2,3,4,5].map(i => <TableRowSkeleton key={i} cols={8} />)}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     );
@@ -364,20 +366,21 @@ export default function ResponsesPage() {
       )}
 
       {/* Responses header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl font-bold text-gray-900 truncate">
             {activeFormName ? `Responses — ${activeFormName}` : 'Responses'}
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
             Showing <span className="font-medium text-gray-700">{filteredAndSorted.length}</span> of{' '}
             <span className="font-medium text-gray-700">{responses.length}</span> total responses
-          </p>        </div>
-        <div className="relative inline-flex align-middle shadow-sm rounded-lg">
+          </p>
+        </div>
+        <div className="relative inline-flex w-full sm:w-auto align-middle shadow-sm rounded-lg">
           <button
             onClick={() => exportFeedbackToCSV(filteredAndSorted, forms)}
             disabled={filteredAndSorted.length === 0}
-            className="flex items-center gap-2 px-4 py-2 rounded-l-lg text-sm font-medium text-white transition-colors disabled:opacity-40"
+            className="flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-2 rounded-l-lg text-sm font-medium text-white transition-colors disabled:opacity-40"
             style={{ backgroundColor: 'var(--brand)' }}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

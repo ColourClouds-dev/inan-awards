@@ -169,7 +169,7 @@ function PreviewPanel({
           )}
           {description && (
             <div
-              className="rte-content text-xs text-gray-600"
+              className="prose prose-sm max-w-none rte-content text-xs text-gray-600"
               dangerouslySetInnerHTML={{
                 __html: typeof window !== 'undefined' ? DOMPurify.sanitize(description) : description.replace(/<[^>]+>/g, ''),
               }}
@@ -224,7 +224,7 @@ function PreviewPanel({
                       <h3 className="text-sm font-semibold text-gray-800 mb-1">{group.section.name}</h3>
                       {group.section.description && (
                         <div
-                          className="rte-content text-xs text-gray-600 mb-2"
+                          className="prose prose-sm max-w-none rte-content text-xs text-gray-600 mb-2"
                           dangerouslySetInnerHTML={{
                             __html: typeof window !== 'undefined' ? DOMPurify.sanitize(group.section.description) : group.section.description.replace(/<[^>]+>/g, ''),
                           }}
@@ -856,8 +856,11 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Custom Link <span className="font-normal text-gray-400">(optional)</span></label>
             <div className="flex items-center rounded-md border border-gray-300 focus-within:ring-2 focus-within:ring-purple-500 overflow-hidden bg-white">
-              <span className="px-3 py-2 text-sm text-gray-400 bg-gray-50 border-r border-gray-300 whitespace-nowrap select-none">
-                {typeof window !== 'undefined' ? `${window.location.host}/feedback/` : '/feedback/'}
+              <span className="px-3 py-2 text-sm text-gray-400 bg-gray-50 border-r border-gray-300 select-none truncate max-w-[120px] sm:max-w-none">
+                <span className="sm:hidden">/feedback/</span>
+                <span className="hidden sm:inline">
+                  {typeof window !== 'undefined' ? `${window.location.host}/feedback/` : '/feedback/'}
+                </span>
               </span>
               <input
                 type="text"
@@ -977,33 +980,51 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
                 className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden"
               >
                 {/* Question header */}
-                <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <span style={{ color: 'var(--brand)' }}>{QuestionTypeInfo[question.type].icon}</span>
-                    <span className="text-sm font-medium text-gray-700">{QuestionTypeInfo[question.type].label}</span>
-                    <span className="text-xs text-gray-400">#{index + 1}</span>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 bg-gray-50 border-b border-gray-100 gap-2">
+                  {/* Label row */}
+                  <div className="flex items-center justify-between sm:justify-start gap-2">
+                    <div className="flex items-center gap-2">
+                      <span style={{ color: 'var(--brand)' }}>{QuestionTypeInfo[question.type].icon}</span>
+                      <span className="text-sm font-medium text-gray-700">{QuestionTypeInfo[question.type].label}</span>
+                      <span className="text-xs text-gray-400">#{index + 1}</span>
+                    </div>
+                    {/* Action buttons — visible inline on mobile alongside label */}
+                    <div className="flex items-center gap-1 sm:hidden">
+                      <button onClick={() => moveQuestion(question.id, 'up')} disabled={index === 0} className="p-1.5 rounded-md hover:bg-gray-200 disabled:opacity-30 text-gray-500 transition-colors" title="Move up">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                      </button>
+                      <button onClick={() => moveQuestion(question.id, 'down')} disabled={index === questions.length - 1} className="p-1.5 rounded-md hover:bg-gray-200 disabled:opacity-30 text-gray-500 transition-colors" title="Move down">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </button>
+                      <button onClick={() => removeQuestion(question.id)} className="p-1.5 rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors" title="Remove question">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
                   </div>
+                  {/* Section selector + actions row (desktop keeps them right-aligned) */}
                   <div className="flex items-center gap-1">
-                    {/* Section selector */}
                     <select
                       value={question.sectionId || ''}
                       onChange={e => updateQuestion(question.id, { sectionId: e.target.value || undefined })}
-                      className="text-xs border border-gray-200 rounded px-2 py-1 mr-2"
+                      className="flex-1 sm:flex-none text-xs border border-gray-200 rounded px-2 py-1"
                     >
                       <option value="">No Section</option>
                       {sections.map(s => (
                         <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </select>
-                    <button onClick={() => moveQuestion(question.id, 'up')} disabled={index === 0} className="p-1.5 rounded-md hover:bg-gray-200 disabled:opacity-30 text-gray-500 transition-colors" title="Move up">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
-                    </button>
-                    <button onClick={() => moveQuestion(question.id, 'down')} disabled={index === questions.length - 1} className="p-1.5 rounded-md hover:bg-gray-200 disabled:opacity-30 text-gray-500 transition-colors" title="Move down">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                    </button>
-                    <button onClick={() => removeQuestion(question.id)} className="p-1.5 rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors" title="Remove question">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
+                    {/* Action buttons — hidden on mobile (shown above), visible on sm+ */}
+                    <div className="hidden sm:flex items-center gap-1">
+                      <button onClick={() => moveQuestion(question.id, 'up')} disabled={index === 0} className="p-1.5 rounded-md hover:bg-gray-200 disabled:opacity-30 text-gray-500 transition-colors" title="Move up">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                      </button>
+                      <button onClick={() => moveQuestion(question.id, 'down')} disabled={index === questions.length - 1} className="p-1.5 rounded-md hover:bg-gray-200 disabled:opacity-30 text-gray-500 transition-colors" title="Move down">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </button>
+                      <button onClick={() => removeQuestion(question.id)} className="p-1.5 rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors" title="Remove question">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1110,9 +1131,9 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
       )}
 
       {/* Navigation */}
-      <div className="flex justify-between gap-3 pt-2">
+      <div className="flex flex-wrap justify-between gap-3 pt-2">
         <Button fullWidth={false} onClick={() => goToStep('basics')}>← Back</Button>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button fullWidth={false} onClick={handleSubmit} disabled={questions.length === 0 || isOverFormLimit}>Create Form</Button>
           <Button fullWidth={false} onClick={() => goToStep('tags')} disabled={questions.length === 0}>Logic Tags →</Button>
         </div>
@@ -1198,7 +1219,9 @@ const FeedbackFormBuilder: React.FC<FeedbackFormBuilderProps> = ({ onSave }) => 
                           {colorOptions.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
-                      <button onClick={() => removeRule(rule.id)} className="text-red-400 hover:text-red-600 text-xs pb-2 transition-colors">Remove</button>
+                      <button onClick={() => removeRule(rule.id)} className="p-1.5 rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors shrink-0" title="Remove rule">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
                     </div>
                     <div className="space-y-2">
                       {conditions.map((cond, ci) => (

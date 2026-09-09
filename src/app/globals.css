@@ -170,11 +170,11 @@ body {
 }
 
 .rte-content strong {
-  font-weight: 600;
+  font-weight: 600 !important;
 }
 
 .rte-content em {
-  font-style: italic;
+  font-style: italic !important;
 }
 
 /* TipTap editor content (editing mode) — same list rules applied to .ProseMirror */

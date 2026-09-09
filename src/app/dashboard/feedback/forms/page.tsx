@@ -122,12 +122,12 @@ export default function FormsPage() {
       <Toast toasts={toasts} onDismiss={dismissToast} />
 
       {/* Page header with buttons */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-y-2 gap-x-3 mb-4">
         <h1 className="text-xl font-bold text-gray-900">
           Forms
           <span className="ml-2 text-sm font-normal text-gray-400">({forms.length})</span>
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => router.push('/dashboard/feedback')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-transparent bg-purple-600 text-white hover:bg-purple-700 transition-colors"
