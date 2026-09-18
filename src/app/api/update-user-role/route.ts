@@ -3,7 +3,6 @@ import { getAdminDb } from '../../../lib/firebaseAdmin';
 import { getAuth } from 'firebase-admin/auth';
 import type { TenantRole } from '../../../types';
 
-export const dynamic = 'force-dynamic';
 
 async function verifyAuthorized(req: NextRequest): Promise<{
   isSuperAdmin: boolean;

@@ -4,7 +4,6 @@ import { getAdminDb } from '../../../lib/firebaseAdmin';
 import { createVerificationToken } from '../../../lib/auth';
 import { isCustomDomainEmail } from '../../../lib/emailUtils';
 
-export const dynamic = 'force-dynamic';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 const BREVO_API_KEY = process.env.BREVO_API_KEY;

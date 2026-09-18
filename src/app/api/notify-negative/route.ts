@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '../../../lib/firebaseAdmin';
 
-export const dynamic = 'force-dynamic';
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 

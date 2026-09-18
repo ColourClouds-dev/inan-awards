@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '../../../../lib/firebaseAdmin';
-export const dynamic = 'force-dynamic';
 
 
 export async function GET(req: NextRequest) {
@@ -44,6 +43,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ tenantId: 'inan', tenant: null, isImpersonating: false });
   } catch (err) {
+    // Suppress NEXT_PRERENDER_INTERRUPTED — this route bails out of prerendering
+    // at build time (expected), and works correctly at request time.
+    if (err && typeof err === 'object' && (err as { digest?: string }).digest === 'NEXT_PRERENDER_INTERRUPTED') throw err;
     console.error('Tenant lookup error:', err);
     return NextResponse.json({ tenantId: 'inan', tenant: null, isImpersonating: false });
   }

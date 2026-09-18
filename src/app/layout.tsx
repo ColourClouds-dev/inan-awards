@@ -1,12 +1,14 @@
 import { Inter } from "next/font/google";
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import "../styles/globals.css";
 import RecaptchaProvider from "../components/RecaptchaProvider";
 import { TenantProvider } from "../contexts/TenantContext";
 import BrandProvider from "../components/BrandProvider";
 import OfflineBanner from "../components/OfflineBanner";
-import { getAdminDb } from "../lib/firebaseAdmin";
+
+// TODO: Cache Components adoption. Refactor this route so this opt-out can be removed.
+// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
+export const instant = false;
 
 const inter = Inter({
   subsets: ["latin"],
@@ -15,63 +17,30 @@ const inter = Inter({
 
 const FALLBACK_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://inan.com.ng';
 
-export async function generateMetadata(): Promise<Metadata> {
-  let siteUrl = FALLBACK_URL;
-  let siteName = 'Inan Feedback';
-  let description = 'Collect, manage and analyse guest feedback across all Inan hotel locations.';
-  let ogImage = '/inan.svg';
-  let faviconUrl = '/favicon.png';
-
-  try {
-    const headersList = headers();
-    const tenantId = headersList.get('x-tenant-id') || 'inan';
-    const db = getAdminDb();
-    const [seoSnap, tenantSnap] = await Promise.all([
-      db.doc(`tenant-settings/${tenantId}/config/seo`).get(),
-      db.doc(`tenants/${tenantId}`).get(),
-    ]);
-    if (seoSnap.exists) {
-      const seo = seoSnap.data() as {
-        siteUrl?: string; siteName?: string; defaultDescription?: string; ogImageUrl?: string;
-      };
-      if (seo.siteUrl) siteUrl = seo.siteUrl;
-      if (seo.siteName) siteName = seo.siteName;
-      if (seo.defaultDescription) description = seo.defaultDescription;
-      if (seo.ogImageUrl) ogImage = seo.ogImageUrl;
-    }
-    if (tenantSnap.exists) {
-      const branding = (tenantSnap.data() as { branding?: { logoUrl?: string } }).branding;
-      if (branding?.logoUrl) faviconUrl = branding.logoUrl;
-    }
-  } catch {
-    // Fall back to defaults silently
-  }
-
-  return {
-    metadataBase: new URL(siteUrl),
-    title: {
-      default: siteName,
-      template: `%s | ${siteName}`,
-    },
-    description,
-    icons: { icon: faviconUrl, apple: faviconUrl },
-    openGraph: {
-      siteName,
-      type: 'website',
-      locale: 'en_NG',
-      url: siteUrl,
-      title: siteName,
-      description,
-      images: [{ url: ogImage, width: 1200, height: 630, alt: siteName }],
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: siteName,
-      description,
-      images: [ogImage],
-    },
-  };
-}
+export const metadata: Metadata = {
+  metadataBase: new URL(FALLBACK_URL),
+  title: {
+    default: 'Inan Feedback',
+    template: '%s | Inan Feedback',
+  },
+  description: 'Collect, manage and analyse guest feedback across all Inan hotel locations.',
+  icons: { icon: '/favicon.png', apple: '/favicon.png' },
+  openGraph: {
+    siteName: 'Inan Feedback',
+    type: 'website',
+    locale: 'en_NG',
+    url: FALLBACK_URL,
+    title: 'Inan Feedback',
+    description: 'Collect, manage and analyse guest feedback across all Inan hotel locations.',
+    images: [{ url: '/inan.svg', width: 1200, height: 630, alt: 'Inan Feedback' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Inan Feedback',
+    description: 'Collect, manage and analyse guest feedback across all Inan hotel locations.',
+    images: ['/inan.svg'],
+  },
+};
 
 export default function RootLayout({
   children,

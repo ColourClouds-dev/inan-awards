@@ -11,7 +11,7 @@ const DOMAIN_TO_TENANT: Record<string, string> = {
 
 const IMPERSONATE_COOKIE = 'sa-impersonate';
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const host = req.headers.get('host') ?? '';
   const domain = host.replace(/^www\./, '');
 

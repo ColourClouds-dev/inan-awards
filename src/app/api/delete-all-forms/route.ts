@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '../../../lib/firebaseAdmin';
 import { getAuth } from 'firebase-admin/auth';
 
-export const dynamic = 'force-dynamic';
 
 /** Verify the request is from a verified tenant owner and return their tenantId. */
 async function verifyOwner(req: NextRequest): Promise<string | null> {

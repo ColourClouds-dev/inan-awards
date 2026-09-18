@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "../../../lib/firebaseAdmin";
 import { getAuth } from "firebase-admin/auth";
 
-export const dynamic = "force-dynamic";
 
 /**
  * POST /api/repair-claims

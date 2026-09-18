@@ -4,7 +4,6 @@ import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import type { Tenant, TenantFeatures } from '../../../types';
 
-export const dynamic = 'force-dynamic';
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const BREVO_FROM_EMAIL = process.env.BREVO_FROM_EMAIL || 'noreply@inan.com.ng';

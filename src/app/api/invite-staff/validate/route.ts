@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '../../../../lib/firebaseAdmin';
 
-export const dynamic = 'force-dynamic';
 
 // GET /api/invite-staff/validate?token=xxx
 // Returns the invitation details so the register page can pre-fill email

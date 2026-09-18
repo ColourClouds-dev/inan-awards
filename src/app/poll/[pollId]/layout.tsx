@@ -5,10 +5,9 @@ import type { Metadata } from 'next';
 export const instant = false;
 
 export const metadata: Metadata = {
-  title: 'Feedback',
-  description: 'Create and manage guest feedback forms across all Inan hotel locations.',
+  title: 'Poll',
 };
 
-export default function FeedbackLayout({ children }: { children: React.ReactNode }) {
+export default function PublicPollLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }

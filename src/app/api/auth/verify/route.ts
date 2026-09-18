@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { validateVerificationToken } from '../../../../lib/auth';
 
-export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {

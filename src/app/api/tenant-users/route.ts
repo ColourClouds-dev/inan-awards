@@ -3,7 +3,6 @@ import { getAdminDb } from '../../../lib/firebaseAdmin';
 import { getAuth } from 'firebase-admin/auth';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase-admin/firestore';
 
-export const dynamic = 'force-dynamic';
 
 async function verifySuperAdmin(req: NextRequest): Promise<boolean> {
   try {

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { getAdminDb } from '../../../lib/firebaseAdmin';
 
-export const dynamic = 'force-dynamic';
 
 async function verifyAuth(req: NextRequest): Promise<{ uid: string; tenantId: string; role: string; superAdmin?: boolean } | null> {
   try {

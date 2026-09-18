@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '../../../../lib/firebaseAdmin';
 
-export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
@@ -55,6 +54,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ form: null, error: 'Form not found' }, { status: 404 });
   } catch (err) {
+    // Suppress NEXT_PRERENDER_INTERRUPTED — this route bails out of prerendering
+    // at build time (expected), and works correctly at request time.
+    if (err && typeof err === 'object' && (err as { digest?: string }).digest === 'NEXT_PRERENDER_INTERRUPTED') throw err;
     console.error('Error in form lookup API:', err);
     return NextResponse.json({ error: 'Failed to look up form' }, { status: 500 });
   }

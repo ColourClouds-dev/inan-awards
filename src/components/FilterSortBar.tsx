@@ -91,7 +91,7 @@ const CheckIcon = () => (
 
 // ── Hook: close on outside click ──────────────────────────────────────────────
 
-function useOutsideClick(ref: React.RefObject<HTMLElement>, onClose: () => void) {
+function useOutsideClick(ref: React.RefObject<HTMLElement | null>, onClose: () => void) {
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();

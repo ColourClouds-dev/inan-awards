@@ -3,7 +3,6 @@ import { getAdminDb } from '../../../lib/firebaseAdmin';
 import { getAuth } from 'firebase-admin/auth';
 import { v4 as uuidv4 } from 'uuid';
 
-export const dynamic = 'force-dynamic';
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const BREVO_FROM_EMAIL = process.env.BREVO_FROM_EMAIL || 'noreply@inan.com.ng';
