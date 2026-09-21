@@ -7,6 +7,6 @@ export const instant = false;
 
 export const metadata: Metadata = { title: 'Poll Details' };
 
-export default function PollDetailPage() {
+export default function PollDetailPage(_props: { params: Promise<{ pollId: string }> }) {
   return <PollDetailClient />;
 }

@@ -3,6 +3,11 @@ const nextConfig = {
   cacheComponents: true,
   reactStrictMode: true,
   images: { unoptimized: true },
+  // Next.js 16 removed `next lint` from the build pipeline.
+  // This flag suppresses the legacy ESLint runner that Vercel's platform
+  // injects, which fails with "Unknown options: useEslintrc, extensions"
+  // because it uses the old ESLint v8 API against our ESLint v10 flat config.
+  eslint: { ignoreDuringBuilds: true },
   env: {
     NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
     NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,

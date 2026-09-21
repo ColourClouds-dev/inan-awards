@@ -7,6 +7,6 @@ export const instant = false;
 
 export const metadata: Metadata = { title: 'Response' };
 
-export default function PublicResponsePage() {
+export default function PublicResponsePage(_props: { params: Promise<{ responseId: string }> }) {
   return <PublicResponseClient />;
 }

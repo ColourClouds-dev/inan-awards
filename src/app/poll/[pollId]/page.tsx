@@ -7,6 +7,6 @@ export const instant = false;
 
 export const metadata: Metadata = { title: 'Poll' };
 
-export default function PublicPollPage() {
+export default function PublicPollPage(_props: { params: Promise<{ pollId: string }> }) {
   return <PublicPollClient />;
 }

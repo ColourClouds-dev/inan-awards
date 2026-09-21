@@ -15,6 +15,8 @@ export const metadata: Metadata = {
   description: 'Share your experience. Your feedback helps us improve.',
 };
 
-export default function FeedbackPage() {
+// params is a Promise in Next.js 15+ — the client component reads formId via useParams()
+// so the page shell doesn't consume params at all.
+export default function FeedbackPage(_props: { params: Promise<{ formId: string }> }) {
   return <FeedbackPageClient />;
 }
